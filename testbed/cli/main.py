@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives import hashes
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
+from trogon import tui
 
 from dotbot.logger import LOGGER
 from dotbot.hdlc import hdlc_encode, HDLCHandler, HDLCState
@@ -468,6 +469,7 @@ def swarmit_status(port, baudrate, display=True):
     return result
 
 
+@tui()
 @click.group()
 @click.option(
     "-p",
