@@ -51,6 +51,7 @@ class RequestType(Enum):
     SWARMIT_REQ_EXPERIMENT_STATUS = 3
     SWARMIT_REQ_OTA_START = 4
     SWARMIT_REQ_OTA_CHUNK = 5
+    SWARMIT_MESSAGE = 0xff
 
 
 class StatusType(Enum):
@@ -70,14 +71,14 @@ class DataChunk:
     data: bytes
 
 
-def _header():
+def _header(swarmit=True):
     """Return the header for the protocol."""
     buffer = bytearray()
     for field in ProtocolHeader().fields:
         buffer += int(field.value).to_bytes(
             length=field.length, byteorder="little", signed=field.signed
         )
-    buffer += int(16).to_bytes(length=1, byteorder="little")
+    buffer += int(16 if swarmit is True else 0xff).to_bytes(length=1, byteorder="little")
     return buffer
 
 
@@ -99,7 +100,7 @@ class SwarmitFlash:
         self.hdlc_handler.handle_byte(byte)
         if self.hdlc_handler.state == HDLCState.READY:
             payload = self.hdlc_handler.payload[25:]
-            if not payload:
+            if not payload or len(payload) < 9:
                 return
             deviceid_ack = hex(int.from_bytes(payload[0:8], byteorder="little"))
             if deviceid_ack not in self.acked_ids:
@@ -299,7 +300,7 @@ class SwarmitMonitor:
         self.hdlc_handler.handle_byte(byte)
         if self.hdlc_handler.state == HDLCState.READY:
             payload = self.hdlc_handler.payload[25:]
-            if not payload:
+            if not payload or len(payload) < 9:
                 return
             deviceid = int.from_bytes(payload[0:8], byteorder="little")
             if self.device_ids and deviceid not in self.device_ids:
@@ -347,7 +348,7 @@ class SwarmitStatus:
         self.hdlc_handler.handle_byte(byte)
         if self.hdlc_handler.state == HDLCState.READY:
             payload = self.hdlc_handler.payload[25:]
-            if not payload:
+            if not payload or len(payload) < 9:
                 return
             deviceid_resp = hex(int.from_bytes(payload[0:8], byteorder="little"))
             if deviceid_resp not in self.resp_ids:
@@ -381,6 +382,37 @@ class SwarmitStatus:
                         continue
                     self.table.add_row(device_id, f"[bold red]{status.name}")
         return self.status_data
+
+
+class SwarmitMessage:
+    """Class used to send a message to devices running a non-secure image."""
+
+    def __init__(self, port, baudrate, device_ids):
+        self.logger = LOGGER.bind(context=__name__)
+        self.hdlc_handler = HDLCHandler()
+        self.serial = SerialInterface(port, baudrate, lambda x: None)
+        self.last_deviceid_notification = None
+        self.device_ids = device_ids
+        # Just write a single byte to fake a DotBot gateway handshake
+        self.serial.write(int(PROTOCOL_VERSION).to_bytes(length=1))
+
+    def _send_message(self, device_id, message):
+        buffer = bytearray()
+        buffer += _header(swarmit=False)
+        buffer += int(device_id, 16).to_bytes(length=8, byteorder="little")
+        buffer += int(RequestType.SWARMIT_MESSAGE.value).to_bytes(length=1, byteorder="little")
+        buffer += bytearray(message.encode("utf-8"))
+        buffer += b"\x00"
+        self.serial.write(hdlc_encode(buffer))
+
+    def send(self, message):
+        if not self.device_ids:
+            self._send_message("0", message)
+        else:
+            for device_id in self.device_ids:
+                if device_id not in self.known_devices:
+                    continue
+                self._send_message(device_id, message)
 
 
 def swarmit_flash(port, baudrate, firmware, yes, devices, ready_devices):
@@ -477,6 +509,20 @@ def swarmit_status(port, baudrate, display=True):
     result = experiment.status(display)
     experiment.serial.stop()
     return result
+
+
+def swarmit_message(port, baudrate, devices, message):
+    try:
+        experiment = SwarmitMessage(port, baudrate, devices)
+    except (
+        SerialInterfaceException,
+        serial.serialutil.SerialException,
+    ) as exc:
+        console = Console()
+        console.print(f"[bold red]Error:[/] {exc}")
+        return {}
+    experiment.send(message)
+    print(f"Message '{message}' sent.")
 
 
 @click.group()
@@ -606,6 +652,13 @@ def monitor(ctx):
 def status(ctx):
     if not swarmit_status(ctx.obj["port"], ctx.obj["baudrate"]):
         click.echo("No devices found.")
+
+
+@main.command()
+@click.argument("message", type=str, required=True)
+@click.pass_context
+def message(ctx, message):
+    swarmit_message(ctx.obj["port"], ctx.obj["baudrate"], ctx.obj["devices"], message)
 
 
 if __name__ == "__main__":
