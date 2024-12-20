@@ -28,6 +28,7 @@
 
 typedef struct {
     bool        req_received;
+    bool        data_received;
     uint8_t     req_buffer[255];
     uint8_t     notification_buffer[255];
     ipc_req_t   ipc_req;
@@ -48,22 +49,29 @@ static void _handle_packet(uint8_t *packet, uint8_t length) {
     memcpy(_buffer, packet + sizeof(protocol_header_t) - 1, length - sizeof(protocol_header_t) + 1);
     uint8_t packet_type = _buffer[0];
 
-    if (packet_type != PROTOCOL_SWARMIT_PACKET) {
-        // Ignore non swarmit packets
+    if (packet_type == PROTOCOL_SWARMIT_PACKET) {
+        uint8_t *ptr = &_buffer[1];
+        uint64_t target_device_id;
+        memcpy(&target_device_id, ptr, sizeof(uint64_t));
+        if (target_device_id != _app_vars.device_id && target_device_id != 0) {
+            // Ignore packet not targetting this device
+            return;
+        }
+
+        ptr += sizeof(uint64_t);
+        memcpy(_app_vars.req_buffer, ptr, length - sizeof(protocol_header_t) - 1 - sizeof(uint64_t) + 1);
+        _app_vars.req_received = true;
         return;
     }
 
-    uint8_t *ptr = &_buffer[1];
-    uint64_t target_device_id;
-    memcpy(&target_device_id, ptr, sizeof(uint64_t));
-    if (target_device_id != _app_vars.device_id && target_device_id != 0) {
-        // Ignore packet not targetting this device
+    // ignore other types of packet if not in running mode
+    if (ipc_shared_data.status != SWRMT_EXPERIMENT_RUNNING) {
         return;
     }
 
-    ptr += sizeof(uint64_t);
-    memcpy(_app_vars.req_buffer, ptr, length - sizeof(protocol_header_t) - 1 - sizeof(uint64_t) + 1);
-    _app_vars.req_received = true;
+    ipc_shared_data.data_pdu.length = length - 2;
+    memcpy((uint8_t *)ipc_shared_data.data_pdu.buffer, packet, length - 2);
+    _app_vars.data_received = true;
 }
 
 uint64_t _deviceid(void) {
@@ -77,6 +85,7 @@ int main(void) {
     _app_vars.device_id = _deviceid();
 
     NRF_IPC_NS->INTENSET                            = (1 << IPC_CHAN_REQ) | (1 << IPC_CHAN_LOG_EVENT);
+    NRF_IPC_NS->SEND_CNF[IPC_CHAN_RADIO_RX]         = 1 << IPC_CHAN_RADIO_RX;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_EXPERIMENT_START] = 1 << IPC_CHAN_EXPERIMENT_START;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_EXPERIMENT_STOP]  = 1 << IPC_CHAN_EXPERIMENT_STOP;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_START]        = 1 << IPC_CHAN_OTA_START;
@@ -187,6 +196,11 @@ int main(void) {
             }
             ipc_shared_data.net_ack = true;
             _app_vars.ipc_req      = IPC_REQ_NONE;
+        }
+
+        if (_app_vars.data_received) {
+            _app_vars.data_received = false;
+            NRF_IPC_NS->TASKS_SEND[IPC_CHAN_RADIO_RX] = 1;
         }
 
         if (_app_vars.ipc_log_received) {

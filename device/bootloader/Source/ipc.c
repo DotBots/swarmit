@@ -25,7 +25,7 @@ void mutex_unlock(void) {
 void ipc_network_call(ipc_req_t req) {
     if (req != IPC_REQ_NONE) {
         ipc_shared_data.req                 = req;
-        NRF_IPC_S->TASKS_SEND[IPC_CHAN_REQ] = 1;
+        NRF_IPC_NS->TASKS_SEND[IPC_CHAN_REQ] = 1;
     }
     while (!ipc_shared_data.net_ack) {}
     ipc_shared_data.net_ack = false;
@@ -57,5 +57,5 @@ __attribute__((cmse_nonsecure_entry)) void log_data(uint8_t *data, size_t length
 
     ipc_shared_data.log.length = length;
     memcpy((void *)ipc_shared_data.log.data, data, length);
-    NRF_IPC_S->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
+    NRF_IPC_NS->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
 }

@@ -20,7 +20,7 @@
 void protocol_header_to_buffer(uint8_t *buffer, uint64_t dst,
                                   application_type_t application, command_type_t command_type) {
 
-    protocol_header_t header = {
+    __attribute__((aligned(4))) protocol_header_t header = {
         .dst         = dst,
         .src         = db_device_id(),
         .swarm_id    = SWARM_ID,

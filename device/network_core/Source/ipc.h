@@ -63,14 +63,14 @@ typedef struct __attribute__((packed)) {
 } ipc_ota_data_t;
 
 typedef struct __attribute__((packed)) {
-    radio_mode_t              mode;                ///< radio_init function parameters
-    application_type_t           default_radio_app;   ///< radio_init function parameters
-    uint8_t                      frequency;           ///< db_set_frequency function parameters
-    tdma_client_table_t          table_set;           ///< db_tdma_client_set_table function parameter
-    tdma_client_table_t          table_get;           ///< db_tdma_client_get_table function parameter
-    ipc_radio_pdu_t              tx_pdu;              ///< PDU to send
-    ipc_radio_pdu_t              rx_pdu;              ///< Received pdu
-    tdma_registration_state_t registration_state;  ///< db_tdma_client_get_status return value
+    radio_mode_t                mode;                ///< radio_init function parameters
+    application_type_t          default_radio_app;   ///< radio_init function parameters
+    uint8_t                     frequency;           ///< db_set_frequency function parameters
+    tdma_client_table_t         table_set;           ///< db_tdma_client_set_table function parameter
+    tdma_client_table_t         table_get;           ///< db_tdma_client_get_table function parameter
+    ipc_radio_pdu_t             tx_pdu;              ///< PDU to send
+    ipc_radio_pdu_t             rx_pdu;              ///< Received pdu
+    tdma_registration_state_t   registration_state;  ///< db_tdma_client_get_status return value
 } ipc_tdma_client_data_t;
 
 
@@ -82,6 +82,7 @@ typedef struct __attribute__((packed)) {
     ipc_log_data_t   log;       ///< Log data
     ipc_ota_data_t   ota;       ///< OTA data
     ipc_tdma_client_data_t tdma_client;  ///< TDMA client drv shared data
+    ipc_radio_pdu_t             data_pdu;            ///< User data pdu
 } ipc_shared_data_t;
 
 /**
