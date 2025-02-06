@@ -27,6 +27,7 @@ dependencies = [
     "rich           == 13.8.1",
     "structlog      == 24.4.0",
     "tqdm           == 4.66.5",
+    "paho-mqtt      >= 2.1.0",
 ]
 description = "Run Your Own Robot Swarm Testbed."
 readme = "README.md"
