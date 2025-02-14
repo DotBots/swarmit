@@ -61,6 +61,7 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
     uint32_t image_size;                        ///< User image size in bytes
+    uint32_t chunk_count;
     uint8_t hash[SWRMT_OTA_SHA256_LENGTH];      ///< SHA256 hash of the firmware
 } swrmt_ota_start_pkt_t;
 

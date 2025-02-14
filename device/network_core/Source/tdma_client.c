@@ -33,7 +33,7 @@
 #define TDMA_CLIENT_HF_TIMER_CC_TX         0                                   ///< Which timer channel will be used for the TX state machine.
 #define TDMA_CLIENT_HF_TIMER_CC_RX         1                                   ///< Which timer channel will be used for the RX state machine.
 #define TDMA_CLIENT_MAX_DELAY_WITHOUT_TX   500000                              ///< Max amount of time that can pass without TXing anything
-#define TDMA_CLIENT_RING_BUFFER_SIZE       10                                  ///< Amount of TX packets the buffer can contain
+#define TDMA_CLIENT_RING_BUFFER_SIZE       128                                 ///< Amount of TX packets the buffer can contain
 #define RADIO_MESSAGE_MAX_SIZE             255                                 ///< Size of buffers used for SPI communications
 #define RADIO_TX_RAMP_UP_TIME              140                                 ///< time it takes the radio to start a transmission
 #define TDMA_CLIENT_TIMER_HF               2

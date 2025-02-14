@@ -53,7 +53,7 @@
       link_time_optimization="No"
       linker_additional_options="--gc-sections"
       linker_memory_map_file="$(ProjectDir)/Setup/MemoryMap.xml"
-      linker_output_format="bin"
+      linker_output_format="hex"
       linker_printf_fmt_level="int"
       linker_printf_fp_enabled="Float"
       linker_printf_width_precision_supported="Yes"
@@ -77,6 +77,10 @@
       <file file_name="Source/radio.h" />
       <file file_name="Source/rng.c" />
       <file file_name="Source/rng.h" />
+      <file file_name="Source/sha256.c" />
+      <file file_name="Source/sha256.h" />
+      <file file_name="Source/soft_sha256.c" />
+      <file file_name="Source/soft_sha256.h" />
       <file file_name="Source/tdma_client.c" />
       <file file_name="Source/tdma_client.h" />
       <file file_name="Source/timer_hf.c" />

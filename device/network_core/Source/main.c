@@ -15,6 +15,7 @@
 #include "ipc.h"
 #include "protocol.h"
 #include "rng.h"
+#include "sha256.h"
 #include "tdma_client.h"
 #include "timer_hf.h"
 
@@ -31,7 +32,8 @@ typedef struct {
     ipc_req_t   ipc_req;
     bool        ipc_log_received;
     uint8_t     gpio_event_idx;
-    uint8_t     hash[SWRMT_OTA_SHA256_LENGTH];
+    uint8_t     expected_hash[SWRMT_OTA_SHA256_LENGTH];
+    uint8_t     computed_hash[SWRMT_OTA_SHA256_LENGTH];
     uint64_t    device_id;
 } swrmt_app_data_t;
 
@@ -133,11 +135,17 @@ int main(void) {
                     }
                     const swrmt_ota_start_pkt_t *pkt = (const swrmt_ota_start_pkt_t *)req->data;
                     // Copy expected hash
-                    memcpy(_app_vars.hash, pkt->hash, SWRMT_OTA_SHA256_LENGTH);
+                    memcpy(_app_vars.expected_hash, pkt->hash, SWRMT_OTA_SHA256_LENGTH);
+
+                    // Initialize computed hash
+                    memset(_app_vars.computed_hash, 0, SWRMT_OTA_SHA256_LENGTH);
+                    sha256_init();
 
                     // Erase the corresponding flash pages.
                     mutex_lock();
                     ipc_shared_data.ota.image_size = pkt->image_size;
+                    ipc_shared_data.ota.chunk_count = pkt->chunk_count;
+                    ipc_shared_data.ota.hashes_match = 0;
                     mutex_unlock();
                     NRF_IPC_NS->TASKS_SEND[IPC_CHAN_OTA_START] = 1;
                 } break;
@@ -152,6 +160,18 @@ int main(void) {
                     ipc_shared_data.ota.chunk_size = pkt->chunk_size;
                     memcpy((uint8_t *)ipc_shared_data.ota.chunk, pkt->chunk, pkt->chunk_size);
                     mutex_unlock();
+
+                    // Update computed hash
+                    sha256_update((const uint8_t *)ipc_shared_data.ota.chunk, ipc_shared_data.ota.chunk_size);
+
+                    // If last chunk, finalize computed hash, compare with expected hash and report to application core via shared memory
+                    if (ipc_shared_data.ota.chunk_index == ipc_shared_data.ota.chunk_count - 1) {
+                        sha256_finalize(_app_vars.computed_hash);
+                        mutex_lock();
+                        ipc_shared_data.ota.hashes_match = !memcmp(_app_vars.computed_hash, _app_vars.expected_hash, SWRMT_OTA_SHA256_LENGTH);
+                        mutex_unlock();
+                    }
+
                     NRF_IPC_NS->TASKS_SEND[IPC_CHAN_OTA_CHUNK] = 1;
                 } break;
                 default:

@@ -282,7 +282,7 @@ int main(void) {
             printf("Pages to erase: %u\n", pages_count);
             for (uint32_t page = 0; page < pages_count; page++) {
                 uint32_t addr = _bootloader_vars.base_addr + page * FLASH_PAGE_SIZE;
-                printf("Erasing page %u at %p\n", page, (uint32_t *)addr);
+                printf("Erasing page %u at %p\n", page + 4, (uint32_t *)addr);
                 nvmc_page_erase(page + 4);
             }
             printf("Erasing done\n");
@@ -301,7 +301,7 @@ int main(void) {
 
             // Write chunk to flash
             uint32_t addr = _bootloader_vars.base_addr + ipc_shared_data.ota.chunk_index * SWRMT_OTA_CHUNK_SIZE;
-            printf("Writing chunk %d at address %p\n", ipc_shared_data.ota.chunk_index, (uint32_t *)addr);
+            printf("Writing chunk %d/%d at address %p\n", ipc_shared_data.ota.chunk_index, ipc_shared_data.ota.chunk_count - 1, (uint32_t *)addr);
             nvmc_write((uint32_t *)addr, (void *)ipc_shared_data.ota.chunk, ipc_shared_data.ota.chunk_size);
 
             // Notify chunk has been written
@@ -312,6 +312,7 @@ int main(void) {
             length += sizeof(uint64_t);
             memcpy(_bootloader_vars.notification_buffer + length, (void *)&ipc_shared_data.ota.chunk_index, sizeof(uint32_t));
             length += sizeof(uint32_t);
+            _bootloader_vars.notification_buffer[length++] = ipc_shared_data.ota.hashes_match;
             tdma_client_tx(_bootloader_vars.notification_buffer, length);
         }
 

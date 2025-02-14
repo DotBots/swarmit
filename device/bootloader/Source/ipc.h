@@ -51,9 +51,11 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
     uint32_t image_size;
+    uint32_t chunk_count;
     uint32_t chunk_index;
     uint32_t chunk_size;
     uint8_t chunk[INT8_MAX + 1];
+    uint8_t hashes_match;
 } ipc_ota_data_t;
 
 typedef struct {

@@ -57,7 +57,7 @@
       link_time_optimization="No"
       linker_additional_options="--gc-sections"
       linker_memory_map_file="$(ProjectDir)/Setup/MemoryMap.xml"
-      linker_output_format="bin"
+      linker_output_format="hex"
       linker_post_build_command="cp $(ProjectDir)/Output/$(Configuration)/Exe/cmse_implib.a $(ProjectDir)/../../sample/."
       linker_printf_fmt_level="int"
       linker_printf_fp_enabled="Float"
