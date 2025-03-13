@@ -22,11 +22,10 @@
       <file file_name="Source/nvmc.h" />
       <file file_name="Source/protocol.c" />
       <file file_name="Source/protocol.h" />
-      <file file_name="Source/radio.h" />
       <file file_name="Source/rng.c" />
       <file file_name="Source/rng.h" />
-      <file file_name="Source/tdma_client.c" />
-      <file file_name="Source/tdma_client.h" />
+      <file file_name="Source/blink.c" />
+      <file file_name="Source/blink.h" />
       <file file_name="Source/tz.c" />
       <file file_name="Source/tz.h" />
     </folder>

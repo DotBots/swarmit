@@ -18,7 +18,7 @@
 
 //=========================== defines ==========================================
 
-#define FIRMWARE_VERSION  (9)                   ///< Version of the firmware
+#define FIRMWARE_VERSION  (1)                   ///< Version of the firmware
 #define SWARM_ID          (0x0000)              ///< Default swarm ID
 #define BROADCAST_ADDRESS 0xffffffffffffffffUL  ///< Broadcast address
 #define GATEWAY_ADDRESS   0x0000000000000000UL  ///< Gateway address
@@ -69,11 +69,11 @@ typedef enum {
 
 /// Protocol packet type
 typedef enum {
-    PACKET_BEACON            = 1,  ///< Beacon packet
-    PACKET_JOIN_REQUEST      = 2,  ///< Join request packet
-    PACKET_JOIN_RESPONSE     = 3,  ///< Join response packet
-    PACKET_LEAVE             = 4,  ///< Leave packet
-    PACKET_DATA              = 5,  ///< Data packet
+    PACKET_BEACON = 1,
+    PACKET_JOIN_REQUEST = 2,
+    PACKET_JOIN_RESPONSE = 4,
+    PACKET_KEEPALIVE = 8,
+    PACKET_DATA = 16,
 } packet_type_t;
 
 /// DotBot protocol data type (just the LH related ones)
@@ -115,24 +115,13 @@ typedef struct __attribute__((packed)) {
 } protocol_lh2_location_t;
 
 /**
- * @brief   Write the protocol header in a buffer
- *
- * @param[out]  buffer      Bytes array to write to
- * @param[in]   dst         Destination address written in the header
- *
- * @return                  Number of bytes written in the buffer
- */
-size_t protocol_header_to_buffer(uint8_t *buffer, uint64_t dst);
-
-/**
  * @brief   Write an application advertizement packet in a buffer
  *
  * @param[out]  buffer      Bytes array to write to
- * @param[in]   dst         Destination address written in the header
  * @param[in]   application Type of application advertized
  *
  * @return                  Number of bytes written in the buffer
  */
-size_t db_protocol_advertizement_to_buffer(uint8_t *buffer, uint64_t dst, application_type_t application);
+size_t db_protocol_advertizement_to_buffer(uint8_t *buffer, application_type_t application);
 
 #endif

@@ -29,7 +29,7 @@
     build_treat_warnings_as_errors="Yes"
     c_additional_options="-Wall;-Wextra;-Wunused-variable;-Wuninitialized;-Wmissing-field-initializers;-Wundef;-ffunction-sections;-fdata-sections"
     c_only_additional_options="-Wno-missing-prototypes;-Wno-strict-prototypes"
-    c_preprocessor_definitions="ARM_MATH_ARMV8MML;NRF5340_XXAA;NRF_APPLICATION;__NRF_FAMILY;CONFIG_NFCT_PINS_AS_GPIOS;BOARD_DOTBOT_V2;USE_LH2"
+    c_preprocessor_definitions="ARM_MATH_ARMV8MML;NRF5340_XXAA;NRF_APPLICATION;__NRF_FAMILY;CONFIG_NFCT_PINS_AS_GPIOS;BOARD_NRF5340DK;USE_LH2"
     c_user_include_directories="$(SolutionDir)/../../dotbot-firmware/bsp;$(SolutionDir)/../../dotbot-firmware/drv;$(PackagesDir)/nRF/Device/Include;$(PackagesDir)/CMSIS_5/CMSIS/Core/Include"
     compile_post_build_command=""
     compiler_color_diagnostics="Yes"

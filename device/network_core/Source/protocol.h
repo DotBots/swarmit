@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define FIRMWARE_VERSION  (9)                   ///< Version of the firmware
+#define FIRMWARE_VERSION  (1)                   ///< Version of the firmware
 #define SWARM_ID          (0x0000)              ///< Default swarm ID
 #define BROADCAST_ADDRESS 0xffffffffffffffffUL  ///< Broadcast address
 #define GATEWAY_ADDRESS   0x0000000000000000UL  ///< Gateway address
@@ -40,14 +40,11 @@ typedef enum {
 
 /// Protocol packet type
 typedef enum {
-    PACKET_BEACON            = 1,  ///< Beacon packet
-    PACKET_JOIN_REQUEST      = 2,  ///< Join request packet
-    PACKET_JOIN_RESPONSE     = 3,  ///< Join response packet
-    PACKET_LEAVE             = 4,  ///< Leave packet
-    PACKET_DATA              = 5,  ///< Data
-    PACKET_TDMA_UPDATE_TABLE = 6,  ///< TDMA table update packet
-    PACKET_TDMA_SYNC_FRAME   = 7,  ///< TDMA sync frame packet
-    PACKET_TDMA_KEEP_ALIVE   = 8,  ///< TDMA keep alive packet
+    PACKET_BEACON = 1,
+    PACKET_JOIN_REQUEST = 2,
+    PACKET_JOIN_RESPONSE = 4,
+    PACKET_KEEPALIVE = 8,
+    PACKET_DATA = 16,
 } packet_type_t;
 
 /// DotBot protocol data type (just the LH related ones)

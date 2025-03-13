@@ -17,19 +17,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "protocol.h"
-#include "tdma_client.h"
 
 #define IPC_IRQ_PRIORITY (1)
 
 typedef enum {
     IPC_REQ_NONE,        ///< Sorry, but nothing
-    IPC_TDMA_CLIENT_INIT_REQ,        ///< Request for TDMA client initialization
-    IPC_TDMA_CLIENT_SET_TABLE_REQ,   ///< Request for setting the TDMA client timing table
-    IPC_TDMA_CLIENT_GET_TABLE_REQ,   ///< Request for reading the TDMA client timing table
-    IPC_TDMA_CLIENT_TX_REQ,          ///< Request for a TDMA client TX
-    IPC_TDMA_CLIENT_FLUSH_REQ,       ///< Request for flushing the TDMA client message buffer
-    IPC_TDMA_CLIENT_EMPTY_REQ,       ///< Request for erasing the TDMA client message buffer
-    IPC_TDMA_CLIENT_STATUS_REQ,      ///< Request for reading the TDMA client driver status
+    IPC_BLINK_INIT_REQ,
+    IPC_BLINK_NODE_TX_REQ,
     IPC_RNG_INIT_REQ,                ///< Request for rng init
     IPC_RNG_READ_REQ,                ///< Request for rng read
 } ipc_req_t;
@@ -70,16 +64,6 @@ typedef struct __attribute__((packed)) {
 } ipc_radio_pdu_t;
 
 typedef struct __attribute__((packed)) {
-    radio_mode_t               mode;                ///< radio_init function parameters
-    uint8_t                    frequency;           ///< db_set_frequency function parameters
-    tdma_client_table_t        table_set;           ///< tdma_client_set_table function parameter
-    tdma_client_table_t        table_get;           ///< tdma_client_get_table function parameter
-    ipc_radio_pdu_t            tx_pdu;              ///< PDU to send
-    ipc_radio_pdu_t            rx_pdu;              ///< Received pdu
-    tdma_registration_state_t  registration_state;  ///< tdma_client_get_status return value
-} ipc_tdma_client_data_t;
-
-typedef struct __attribute__((packed)) {
     bool                    net_ready;          ///< Network core is ready
     bool                    net_ack;            ///< Network core acked the latest request
     ipc_req_t               req;                ///< IPC network request
@@ -89,8 +73,8 @@ typedef struct __attribute__((packed)) {
     ipc_ota_data_t          ota;                ///< OTA data
     protocol_lh2_location_t current_location;   ///< LH2 current location
     protocol_lh2_location_t target_location;    ///< LH2 target location
-    ipc_tdma_client_data_t  tdma_client;        ///< TDMA client drv shared data
-    ipc_radio_pdu_t         data_pdu;           ///< User data pdu
+    ipc_radio_pdu_t         tx_pdu;             ///< TX PDU
+    ipc_radio_pdu_t         rx_pdu;             ///< RX PDU
 } ipc_shared_data_t;
 
 void mutex_lock(void);

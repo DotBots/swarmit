@@ -1,3 +1,6 @@
 [submodule "dotbot-firmware"]
 	path = dotbot-firmware
 	url = https://github.com/DotBots/dotbot-firmware
+[submodule "blink"]
+	path = blink
+	url = https://github.com/DotBots/blink

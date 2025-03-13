@@ -32,19 +32,3 @@ static size_t _protocol_header_to_buffer(uint8_t *buffer, uint64_t dst, packet_t
 size_t protocol_header_to_buffer(uint8_t *buffer, uint64_t dst) {
     return _protocol_header_to_buffer(buffer, dst, PACKET_DATA);
 }
-
-size_t protocol_tdma_keep_alive_to_buffer(uint8_t *buffer, uint64_t dst) {
-    return _protocol_header_to_buffer(buffer, dst, PACKET_TDMA_KEEP_ALIVE);
-}
-
-size_t protocol_tdma_table_update_to_buffer(uint8_t *buffer, uint64_t dst, protocol_tdma_table_t *tdma_table) {
-    size_t header_length = _protocol_header_to_buffer(buffer, dst, PACKET_TDMA_UPDATE_TABLE);
-    memcpy(buffer + sizeof(protocol_header_t), tdma_table, sizeof(protocol_tdma_table_t));
-    return header_length + sizeof(protocol_tdma_table_t);
-}
-
-size_t protocol_tdma_sync_frame_to_buffer(uint8_t *buffer, uint64_t dst, protocol_sync_frame_t *sync_frame) {
-    size_t header_length = _protocol_header_to_buffer(buffer, dst, PACKET_TDMA_SYNC_FRAME);
-    memcpy(buffer + sizeof(protocol_header_t), sync_frame, sizeof(protocol_sync_frame_t));
-    return header_length + sizeof(protocol_sync_frame_t);
-}

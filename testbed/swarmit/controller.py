@@ -581,7 +581,7 @@ class Controller:
                 time.sleep(0.01)
                 send_time = time.time()
             time.sleep(0.001)
-            send = time.time() - send_time > 1
+            send = time.time() - send_time > 0.04
 
     def transfer(self, firmware):
         """Transfer the firmware to the devices."""

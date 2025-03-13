@@ -2,24 +2,26 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "board_config.h"
 #include "clock.h"
+#include "device.h"
 #include "gpio.h"
 #include "hdlc.h"
 #include "timer.h"
 #include "uart.h"
-#include "tdma_server.h"
+
+#include "packet.h"
+#include "blink.h"
 
 //=========================== defines ==========================================
-#define DOTBOT_GW_RADIO_MODE DB_RADIO_BLE_1MBit
 #define TIMER_DEV           (1)
 #define BUFFER_MAX_BYTES (255U)       ///< Max bytes in UART receive buffer
 #define UART_BAUDRATE    (1000000UL)  ///< UART baudrate used by the gateway
 #define UART_INDEX       (0)  ///< Index of UART peripheral to use
 #define RADIO_QUEUE_SIZE (64U)                             ///< Size of the radio queue (must by a power of 2)
-#define RADIO_FREQ       (8U)                             //< Set the frequency to 2408 MHz
 #define UART_QUEUE_SIZE  ((BUFFER_MAX_BYTES + 1) * 2)  ///< Size of the UART queue size (must by a power of 2)
 
 typedef struct {
@@ -51,6 +53,7 @@ typedef struct {
 
 //=========================== variables ========================================
 
+extern schedule_t schedule_minuscule, schedule_tiny, schedule_small, schedule_huge, schedule_only_beacons, schedule_only_beacons_optimized_scan;
 static gateway_vars_t _gw_vars;
 
 //=========================== callbacks ========================================
@@ -60,10 +63,35 @@ static void _uart_callback(uint8_t data) {
     _gw_vars.uart_queue.last                             = (_gw_vars.uart_queue.last + 1) & (UART_QUEUE_SIZE - 1);
 }
 
-static void _radio_callback(uint8_t *packet, uint8_t length) {
-    memcpy(_gw_vars.radio_queue.packets[_gw_vars.radio_queue.last].buffer, packet, length);
-    _gw_vars.radio_queue.packets[_gw_vars.radio_queue.last].length = length;
-    _gw_vars.radio_queue.last                                      = (_gw_vars.radio_queue.last + 1) & (RADIO_QUEUE_SIZE - 1);
+void blink_event_callback(bl_event_t event, bl_event_data_t event_data) {
+    switch (event) {
+        case BLINK_NEW_PACKET:
+            printf("Blink packet (%d B): ", event_data.data.new_packet.length);
+            for (int i = 0; i < event_data.data.new_packet.length; i++) {
+                printf("%02X ", event_data.data.new_packet.packet[i]);
+            }
+            printf("\n");
+            memcpy(_gw_vars.radio_queue.packets[_gw_vars.radio_queue.last].buffer, event_data.data.new_packet.packet, event_data.data.new_packet.length);
+            _gw_vars.radio_queue.packets[_gw_vars.radio_queue.last].length = event_data.data.new_packet.length;
+            _gw_vars.radio_queue.last                                      = (_gw_vars.radio_queue.last + 1) & (RADIO_QUEUE_SIZE - 1);
+            break;
+        case BLINK_NODE_JOINED:
+            printf("New node joined: %016llX\n", event_data.data.node_info.node_id);
+            uint64_t joined_nodes[BLINK_MAX_NODES] = { 0 };
+            uint8_t joined_nodes_len = blink_gateway_get_nodes(joined_nodes);
+            printf("Number of connected nodes: %d\n", joined_nodes_len);
+            // TODO: send list of joined_nodes to Edge Gateway via UART
+            break;
+        case BLINK_NODE_LEFT:
+            printf("Node left: %016llX, reason: %u\n", event_data.data.node_info.node_id, event_data.tag);
+            printf("Number of connected nodes: %d\n", blink_gateway_count_nodes());
+            break;
+        case BLINK_ERROR:
+            printf("Error\n");
+            break;
+        default:
+            break;
+    }
 }
 
 static void _led1_blink_fast(void) {
@@ -98,7 +126,7 @@ int main(void) {
     db_gpio_set(&db_led3);
 
     // Configure Radio as transmitter
-    db_tdma_server_init(&_radio_callback, DOTBOT_GW_RADIO_MODE, RADIO_FREQ);
+    blink_init(BLINK_GATEWAY, &schedule_minuscule, &blink_event_callback);
 
     // Initialize the gateway context
     _gw_vars.buttons             = 0x0000;
@@ -130,9 +158,21 @@ int main(void) {
                     break;
                 case DB_HDLC_STATE_READY:
                 {
-                    size_t msg_len = db_hdlc_decode(&_gw_vars.hdlc_rx_buffer[0]);
+                    size_t msg_len = db_hdlc_decode(_gw_vars.hdlc_rx_buffer);
+
+                    bl_packet_header_t *header = (bl_packet_header_t *)_gw_vars.hdlc_rx_buffer;
+                    uint8_t *payload = _gw_vars.hdlc_rx_buffer + sizeof(bl_packet_header_t);
+
+                    header->dst = BLINK_BROADCAST_ADDRESS;
+                    header->src = db_device_id();
+                    header->version = BLINK_PROTOCOL_VERSION;
+                    header->type = BLINK_PACKET_DATA;
+
+                    memcpy(_gw_vars.hdlc_rx_buffer, header, sizeof(bl_packet_header_t));
+                    memcpy(_gw_vars.hdlc_rx_buffer + sizeof(bl_packet_header_t), payload, msg_len - sizeof(bl_packet_header_t));
+
                     if (msg_len) {
-                        db_tdma_server_tx(&_gw_vars.hdlc_rx_buffer[0], msg_len);
+                        blink_tx(_gw_vars.hdlc_rx_buffer, msg_len);
                     }
                 } break;
                 default:

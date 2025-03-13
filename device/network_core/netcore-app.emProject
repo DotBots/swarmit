@@ -3,7 +3,7 @@
   <project Name="netcore">
     <configuration
       Name="Common"
-      project_dependencies="00bsp_rng(bsp);00bsp_timer_hf(bsp);00drv_tdma_client(drv);00crypto_sha256(crypto)" />
+      project_dependencies="00bsp_rng(bsp);00crypto_sha256(crypto);01blink(01blink)" />
     <folder Name="Setup">
       <file file_name="Setup/flash_placement.xml" />
       <file file_name="Setup/MemoryMap.xml" />

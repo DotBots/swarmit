@@ -8,7 +8,7 @@
 #include "cmse_implib.h"
 #include "device.h"
 #include "ipc.h"
-#include "protocol.h"
+#include "blink.h"
 #include "rng.h"
 
 static __attribute__((aligned(8))) uint8_t _tx_data_buffer[UINT8_MAX];
@@ -20,22 +20,22 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_reload_wdt0(void) {
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_send_data_packet(const uint8_t *packet, uint8_t length) {
-    size_t frame_length = protocol_header_to_buffer(_tx_data_buffer, GATEWAY_ADDRESS);
-    _tx_data_buffer[frame_length++] = PACKET_DATA;
-    memcpy(_tx_data_buffer + frame_length, &packet, length);
-    frame_length += length;
-
-    tdma_client_tx(_tx_data_buffer, frame_length);
+    size_t pos = 0;
+    _tx_data_buffer[pos++] = PACKET_DATA;
+    _tx_data_buffer[pos++] = length;
+    memcpy(_tx_data_buffer + pos, &packet, length);
+    pos += length;
+    blink_node_tx(_tx_data_buffer, pos);
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_send_raw_data(const uint8_t *packet, uint8_t length) {
-    tdma_client_tx(packet, length);
+    blink_node_tx(packet, length);
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_ipc_isr(ipc_isr_cb_t cb) {
     if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_RADIO_RX]) {
         NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_RADIO_RX] = 0;
-        cb((const uint8_t *)ipc_shared_data.data_pdu.buffer, ipc_shared_data.data_pdu.length);
+        cb((const uint8_t *)ipc_shared_data.rx_pdu.buffer, ipc_shared_data.rx_pdu.length);
     }
 }
 
