@@ -20,6 +20,7 @@
 
 // Blink includes
 #include "bl_timer_hf.h"
+#include "bl_gpio.h"
 #include "blink.h"
 #include "models.h"
 
@@ -46,6 +47,8 @@ typedef struct {
 
 static swrmt_app_data_t _app_vars = { 0 };
 extern schedule_t schedule_minuscule, schedule_tiny, schedule_small, schedule_huge, schedule_only_beacons, schedule_only_beacons_optimized_scan;
+
+static const bl_gpio_t _blink_status_led = { .port = 1, .pin = 4 };
 
 volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
 
@@ -96,11 +99,13 @@ static void blink_event_callback(bl_event_t event, bl_event_data_t event_data) {
         case BLINK_CONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Connected to gateway %016llX\n", gateway_id);
+            bl_gpio_set(&_blink_status_led);
             break;
         }
         case BLINK_DISCONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Disconnected from gateway %016llX, reason: %u\n", gateway_id, event_data.tag);
+            bl_gpio_clear(&_blink_status_led);
             break;
         }
         case BLINK_ERROR:
@@ -138,6 +143,9 @@ int main(void) {
 
     // Configure timer used for timestamping events
     bl_timer_hf_init(NETCORE_MAIN_TIMER);
+
+    // Configure GPIO used for the status LED
+    bl_gpio_init(&_blink_status_led, BL_GPIO_OUT);
 
     // Network core must remain on
     ipc_shared_data.net_ready = true;

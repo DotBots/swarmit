@@ -409,6 +409,11 @@ int main(void) {
     NRF_DPPIC_NS->CHENSET = (DPPIC_CHENSET_CH0_Enabled << DPPIC_CHENSET_CH0_Pos);
     NRF_DPPIC_S->CHENSET = (DPPIC_CHENSET_CH0_Enabled << DPPIC_CHENSET_CH0_Pos);
 
+    // Assign P1.04 to the network core
+    NRF_P1_S->PIN_CNF[4] = GPIO_PIN_CNF_MCUSEL_NetworkMCU << GPIO_PIN_CNF_MCUSEL_Pos;
+    // Allow the network core to access GPIO port 1, pin 4
+    NRF_SPU_S->GPIOPORT[1].PERM = ~(1 << 4);
+
     // Start the network core
     release_network_core();
 
