@@ -388,7 +388,7 @@ class Controller:
         payload = PayloadStatusRequest(device_id=0)
         frame = Frame(header=Header(), payload=payload)
         self.send_frame(frame)
-        wait_for_done(2, lambda: False)
+        wait_for_done(3, lambda: False)
         return self.status_data
 
     def _send_start(self, device_id: str):
@@ -583,7 +583,7 @@ class Controller:
                 send_time = time.time()
                 retries += 1
             time.sleep(0.001)
-            send = time.time() - send_time > 0.1
+            send = time.time() - send_time > 0.5
 
     def transfer(self, firmware):
         """Transfer the firmware to the devices."""
