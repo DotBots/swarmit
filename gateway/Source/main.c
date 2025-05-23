@@ -19,7 +19,7 @@
 //=========================== defines ==========================================
 #define TIMER_DEV           (1)
 #define BUFFER_MAX_BYTES (255U)       ///< Max bytes in UART receive buffer
-#define UART_BAUDRATE    (115200UL)  ///< UART baudrate used by the gateway
+#define UART_BAUDRATE    (1000000UL)  ///< UART baudrate used by the gateway
 #define UART_INDEX       (0)  ///< Index of UART peripheral to use
 #define RADIO_QUEUE_SIZE (64U)                             ///< Size of the radio queue (must by a power of 2)
 #define UART_QUEUE_SIZE  ((BUFFER_MAX_BYTES + 1) * 2)  ///< Size of the UART queue size (must by a power of 2)
@@ -125,7 +125,7 @@ int main(void) {
     db_gpio_set(&db_led3);
 
     // Configure Radio as transmitter
-    mira_init(MIRA_GATEWAY, &schedule_tiny, &mira_event_callback);
+    mira_init(MIRA_GATEWAY, &schedule_huge, &mira_event_callback);
 
     // Initialize the gateway context
     _gw_vars.buttons             = 0x0000;

@@ -24,7 +24,7 @@ from testbed.swarmit.controller import (
 )
 
 SERIAL_PORT_DEFAULT = get_default_port()
-BAUDRATE_DEFAULT = 115200
+BAUDRATE_DEFAULT = 1000000
 
 
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
