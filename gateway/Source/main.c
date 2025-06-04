@@ -24,6 +24,16 @@
 #define RADIO_QUEUE_SIZE (64U)                             ///< Size of the radio queue (must by a power of 2)
 #define UART_QUEUE_SIZE  ((BUFFER_MAX_BYTES + 1) * 2)  ///< Size of the UART queue size (must by a power of 2)
 
+#define SWARMIT_MIRA_NET_ID 0x0000
+
+#if defined(USE_MIRA_SCHEDULE_TINY)
+#define MIRA_SCHEDULE &schedule_tiny
+#elif defined(USE_MIRA_SCHEDULE_MINUSCULE)
+#define MIRA_SCHEDULE &schedule_minuscule
+#else
+#define MIRA_SCHEDULE &schedule_huge
+#endif
+
 typedef struct {
     uint8_t length;                       ///< Length of the radio packet
     uint8_t buffer[BUFFER_MAX_BYTES];  ///< Buffer containing the radio packet
@@ -125,7 +135,7 @@ int main(void) {
     db_gpio_set(&db_led3);
 
     // Configure Radio as transmitter
-    mira_init(MIRA_GATEWAY, &schedule_huge, &mira_event_callback);
+    mira_init(MIRA_GATEWAY, SWARMIT_MIRA_NET_ID, MIRA_SCHEDULE, &mira_event_callback);
 
     // Initialize the gateway context
     _gw_vars.buttons             = 0x0000;
