@@ -3,7 +3,7 @@
   <project Name="gateway">
     <configuration
       Name="Common"
-      project_dependencies="00bsp_timer(bsp);00bsp_uart(bsp);00drv_dotbot_hdlc(drv);01mira(01mira)"
+      project_dependencies="00bsp_gpio(bsp);00bsp_timer(bsp);01mira(01mira)"
       project_directory="."
       project_type="Executable" />
     <folder Name="Setup">
@@ -12,6 +12,8 @@
     </folder>
     <folder Name="Source">
       <file file_name="Source/main.c" />
+      <file file_name="Source/uart.c" />
+      <file file_name="Source/uart.h" />
     </folder>
     <folder Name="System">
       <file file_name="System/system_init.c" />
