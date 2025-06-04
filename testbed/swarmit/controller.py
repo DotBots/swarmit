@@ -34,7 +34,8 @@ from testbed.swarmit.protocol import (
 )
 
 CHUNK_SIZE = 128
-OTA_CHUNK_MAX_RETRIES = 5
+OTA_CHUNK_MAX_RETRIES_DEFAULT = 5
+OTA_CHUNK_TIMEOUT_DEFAULT = 0.5
 SERIAL_PORT_DEFAULT = get_default_port()
 
 
@@ -541,7 +542,9 @@ class Controller:
                 self._send_start_ota(device_id, firmware)
         return self.start_ota_data
 
-    def send_chunk(self, chunk, device_id: str):
+    def send_chunk(
+        self, chunk: DataChunk, device_id: str, timeout: float, retries: int
+    ):
 
         def is_chunk_acknowledged():
             if device_id == "0":
@@ -562,7 +565,7 @@ class Controller:
         send_time = time.time()
         send = True
         retries = 0
-        while not is_chunk_acknowledged() and retries <= OTA_CHUNK_MAX_RETRIES:
+        while not is_chunk_acknowledged() and retries <= retries:
             if send is True:
                 payload = PayloadOTAChunkRequest(
                     device_id=int(device_id, base=16),
@@ -583,9 +586,14 @@ class Controller:
                 send_time = time.time()
                 retries += 1
             time.sleep(0.001)
-            send = time.time() - send_time > 0.5
+            send = time.time() - send_time > timeout
 
-    def transfer(self, firmware):
+    def transfer(
+        self,
+        firmware,
+        timeout=OTA_CHUNK_TIMEOUT_DEFAULT,
+        retries=OTA_CHUNK_MAX_RETRIES_DEFAULT,
+    ) -> dict[str, TransferDataStatus]:
         """Transfer the firmware to the devices."""
         data_size = len(firmware)
         progress = tqdm(
@@ -610,10 +618,10 @@ class Controller:
             ]
         for chunk in self.chunks:
             if not self.settings.devices:
-                self.send_chunk(chunk, "0")
+                self.send_chunk(chunk, "0", timeout, retries)
             else:
                 for device_id in self.settings.devices:
-                    self.send_chunk(chunk, device_id)
+                    self.send_chunk(chunk, device_id, timeout, retries)
             progress.update(chunk.size)
         progress.close()
         return self.transfer_data
