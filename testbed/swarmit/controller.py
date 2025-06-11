@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import serial
 from cryptography.hazmat.primitives import hashes
 from dotbot.logger import LOGGER
-from dotbot.protocol import Frame, Header
+from dotbot.protocol import Frame, Header, ProtocolPayloadParserException
 from dotbot.serial_interface import SerialInterfaceException, get_default_port
 from rich import print
 from rich.console import Console
@@ -297,7 +297,11 @@ class Controller:
         self.interface.send_data(frame.to_bytes())
 
     def on_data_received(self, data):
-        frame = Frame().from_bytes(data)
+        try:
+            frame = Frame().from_bytes(data)
+        except (ValueError, ProtocolPayloadParserException) as exc:
+            self.logger.warning("Failed to decode frame", error=exc)
+            return
         if self.settings.verbose:
             print(f"\n{frame}")
         if frame.payload_type < SwarmitPayloadType.SWARMIT_REQUEST_STATUS:

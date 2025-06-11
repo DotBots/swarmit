@@ -17,9 +17,9 @@
 
 //=========================== defines ==========================================
 #define TIMER_DEV           (1)
-#define BUFFER_MAX_BYTES (255U)       ///< Max bytes in UART receive buffer
-#define UART_BAUDRATE    (1000000UL)  ///< UART baudrate used by the gateway
-#define UART_INDEX       (0)  ///< Index of UART peripheral to use
+#define BUFFER_MAX_BYTES (255U)         ///< Max bytes in UART receive buffer
+#define UART_BAUDRATE    (1000000UL)    ///< UART baudrate used by the gateway
+#define UART_INDEX       (0)            ///< Index of UART peripheral to use
 
 #define SWARMIT_MIRA_NET_ID 0x0017
 
@@ -39,10 +39,10 @@ typedef struct {
 typedef struct {
     gateway_packet_t             radio_packet;                          ///< Queue used to process received radio packets outside of interrupt
     bool                         radio_packet_received;
-    gateway_packet_t             uart_packet;  ///< Queue used to process received UART bytes outside of interrupt
+    gateway_packet_t             uart_packet;                           ///< Queue used to process received UART bytes outside of interrupt
     bool                         uart_packet_received;
-    uint32_t                     buttons;                                  ///< Buttons state (one byte per button)
-    bool                         led1_mira;                               ///< Whether the status LED should mira
+    uint32_t                     buttons;                               ///< Buttons state (one byte per button)
+    bool                         led1_mira;                             ///< Whether the status LED should mira
     bool                         client_connected;
 } gateway_vars_t;
 
@@ -153,11 +153,9 @@ int main(void) {
             if (!_gw_vars.client_connected && _gw_vars.uart_packet.buffer[0] == 0xff) {
                 _gw_vars.client_connected = true;
                 puts("UART client connected");
-                break;
             } else if (_gw_vars.client_connected && _gw_vars.uart_packet.buffer[0] == 0xfe) {
                 _gw_vars.client_connected = false;
                 puts("UART client disconnected");
-                break;
             } else {
                 mr_packet_header_t *header = (mr_packet_header_t *)_gw_vars.uart_packet.buffer;
                 header->dst = MIRA_BROADCAST_ADDRESS;
@@ -174,5 +172,6 @@ int main(void) {
             }
             _gw_vars.uart_packet_received = false;
         }
+
     }
 }

@@ -1,6 +1,7 @@
 """Module containing classes for interfacing with the DotBot gateway."""
 
 import base64
+import time
 from abc import ABC, abstractmethod
 
 import paho.mqtt.client as mqtt
@@ -39,26 +40,24 @@ class SerialAdapter(GatewayAdapterBase):
         else:
             self.bytes += byte
         if len(self.bytes) == self.expected_length:
-            print(self.bytes)
             self.on_data_received(self.bytes)
             self.expected_length = -1
             self.bytes = bytearray()
 
     def init(self, on_data_received: callable):
-        self.serial = SerialInterface(
-            self.port, self.baudrate, self.on_byte_received
-        )
         self.on_data_received = on_data_received
-        print("[yellow]Connecting to gateway...[/]")
-        self.serial.serial.flush()
-        self.serial.write(b"\x01\xff")
+        self.serial = SerialInterface(self.port, self.baudrate, self.on_byte_received)
+        print("[yellow]Connected to gateway[/]")
+        self.send_data(b"\xff")
 
     def close(self):
         print("[yellow]Disconnect from gateway...[/]")
-        self.serial.write(b"\x01\xfe")
+        self.send_data(b"\xfe")
         self.serial.stop()
 
     def send_data(self, data):
+        self.serial.serial.flush()
+        self.expected_length = -1
         self.serial.write(len(data).to_bytes(1, "big"))
         self.serial.write(data)
 
