@@ -4,7 +4,6 @@ import base64
 from abc import ABC, abstractmethod
 
 import paho.mqtt.client as mqtt
-from dotbot.hdlc import HDLCHandler, HDLCState, hdlc_encode
 from dotbot.serial_interface import SerialInterface
 from rich import print
 
@@ -31,33 +30,37 @@ class SerialAdapter(GatewayAdapterBase):
     def __init__(self, port, baudrate):
         self.port = port
         self.baudrate = baudrate
-        self.hdlc_handler = HDLCHandler()
+        self.expected_length = -1
+        self.bytes = bytearray()
 
     def on_byte_received(self, byte):
-        self.hdlc_handler.handle_byte(byte)
-        if self.hdlc_handler.state == HDLCState.READY:
-            try:
-                payload = self.hdlc_handler.payload
-                self.on_data_received(payload)
-            except:
-                pass
+        if self.expected_length == -1:
+            self.expected_length = int.from_bytes(byte, byteorder="little")
+        else:
+            self.bytes += byte
+        if len(self.bytes) == self.expected_length:
+            self.on_data_received(self.bytes)
+            self.expected_length = -1
+            self.bytes = bytearray()
 
     def init(self, on_data_received: callable):
+        self.on_data_received = on_data_received
         self.serial = SerialInterface(
             self.port, self.baudrate, self.on_byte_received
         )
-        self.on_data_received = on_data_received
-        print("[yellow]Connecting to gateway...[/]")
-        self.serial.serial.flush()
-        self.serial.write(hdlc_encode(b"\x01\xff"))
+        print("[yellow]Connected to gateway[/]")
+        self.send_data(b"\xff")
 
     def close(self):
         print("[yellow]Disconnect from gateway...[/]")
-        self.serial.write(hdlc_encode(b"\x01\xfe"))
+        self.send_data(b"\xfe")
         self.serial.stop()
 
     def send_data(self, data):
-        self.serial.write(hdlc_encode(data))
+        self.serial.serial.flush()
+        self.expected_length = -1
+        self.serial.write(len(data).to_bytes(1, "big"))
+        self.serial.write(data)
 
 
 class MQTTAdapter(GatewayAdapterBase):

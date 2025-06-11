@@ -24,6 +24,7 @@
 #include "models.h"
 
 #define NETCORE_MAIN_TIMER                  (0)
+#define SWARMIT_MIRA_NET_ID                 (0x0017)
 
 //=========================== variables =========================================
 
@@ -255,7 +256,7 @@ int main(void) {
             switch (_app_vars.ipc_req) {
                 // Mira node functions
                 case IPC_MIRA_INIT_REQ:
-                    mira_init(MIRA_NODE, &schedule_tiny, &mira_event_callback);
+                    mira_init(MIRA_NODE, SWARMIT_MIRA_NET_ID, &schedule_tiny, &mira_event_callback);
                     break;
                 case IPC_MIRA_NODE_TX_REQ:
                     while (!mira_node_is_connected()) {}

@@ -20,3 +20,6 @@ dist/
 
 # Virtual env folder
 .venv/
+
+# Tox
+.tox/

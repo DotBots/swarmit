@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import serial
 from cryptography.hazmat.primitives import hashes
 from dotbot.logger import LOGGER
-from dotbot.protocol import Frame, Header
+from dotbot.protocol import Frame, Header, ProtocolPayloadParserException
 from dotbot.serial_interface import SerialInterfaceException, get_default_port
 from rich import print
 from rich.console import Console
@@ -34,7 +34,8 @@ from testbed.swarmit.protocol import (
 )
 
 CHUNK_SIZE = 128
-OTA_CHUNK_MAX_RETRIES = 5
+OTA_CHUNK_MAX_RETRIES_DEFAULT = 5
+OTA_CHUNK_TIMEOUT_DEFAULT = 0.5
 SERIAL_PORT_DEFAULT = get_default_port()
 
 
@@ -103,7 +104,7 @@ def print_status(status_data: dict[str, StatusType]) -> None:
         for device_id, status in sorted(status_data.items()):
             status_table.add_row(
                 f"{device_id}",
-                f'{"[bold cyan]" if status == StatusType.Running else "[bold green]"}{status.name}',
+                f"{'[bold cyan]' if status == StatusType.Running else '[bold green]'}{status.name}",
             )
 
 
@@ -296,7 +297,11 @@ class Controller:
         self.interface.send_data(frame.to_bytes())
 
     def on_data_received(self, data):
-        frame = Frame().from_bytes(data)
+        try:
+            frame = Frame().from_bytes(data)
+        except (ValueError, ProtocolPayloadParserException) as exc:
+            self.logger.warning("Failed to decode frame", error=exc)
+            return
         if self.settings.verbose:
             print(f"\n{frame}")
         if frame.payload_type < SwarmitPayloadType.SWARMIT_REQUEST_STATUS:
@@ -388,7 +393,7 @@ class Controller:
         payload = PayloadStatusRequest(device_id=0)
         frame = Frame(header=Header(), payload=payload)
         self.send_frame(frame)
-        wait_for_done(2, lambda: False)
+        wait_for_done(3, lambda: False)
         return self.status_data
 
     def _send_start(self, device_id: str):
@@ -487,7 +492,6 @@ class Controller:
                 self._send_message(device_id, message)
 
     def _send_start_ota(self, device_id: str, firmware: bytes):
-
         def is_start_ota_acknowledged():
             if device_id == "0":
                 return sorted(self.start_ota_data.ids) == sorted(
@@ -541,8 +545,9 @@ class Controller:
                 self._send_start_ota(device_id, firmware)
         return self.start_ota_data
 
-    def send_chunk(self, chunk, device_id: str):
-
+    def send_chunk(
+        self, chunk: DataChunk, device_id: str, timeout: float, retries: int
+    ):
         def is_chunk_acknowledged():
             if device_id == "0":
                 return sorted(self.transfer_data.keys()) == sorted(
@@ -562,7 +567,7 @@ class Controller:
         send_time = time.time()
         send = True
         retries = 0
-        while not is_chunk_acknowledged() and retries <= OTA_CHUNK_MAX_RETRIES:
+        while not is_chunk_acknowledged() and retries <= retries:
             if send is True:
                 payload = PayloadOTAChunkRequest(
                     device_id=int(device_id, base=16),
@@ -583,9 +588,14 @@ class Controller:
                 send_time = time.time()
                 retries += 1
             time.sleep(0.001)
-            send = time.time() - send_time > 0.1
+            send = time.time() - send_time > timeout
 
-    def transfer(self, firmware):
+    def transfer(
+        self,
+        firmware,
+        timeout=OTA_CHUNK_TIMEOUT_DEFAULT,
+        retries=OTA_CHUNK_MAX_RETRIES_DEFAULT,
+    ) -> dict[str, TransferDataStatus]:
         """Transfer the firmware to the devices."""
         data_size = len(firmware)
         progress = tqdm(
@@ -610,10 +620,10 @@ class Controller:
             ]
         for chunk in self.chunks:
             if not self.settings.devices:
-                self.send_chunk(chunk, "0")
+                self.send_chunk(chunk, "0", timeout, retries)
             else:
                 for device_id in self.settings.devices:
-                    self.send_chunk(chunk, device_id)
+                    self.send_chunk(chunk, device_id, timeout, retries)
             progress.update(chunk.size)
         progress.close()
         return self.transfer_data

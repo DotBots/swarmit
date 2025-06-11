@@ -14,6 +14,8 @@ from rich.pretty import pprint
 from testbed.swarmit import __version__
 from testbed.swarmit.controller import (
     CHUNK_SIZE,
+    OTA_CHUNK_MAX_RETRIES_DEFAULT,
+    OTA_CHUNK_TIMEOUT_DEFAULT,
     Controller,
     ControllerSettings,
     ResetLocation,
@@ -24,7 +26,7 @@ from testbed.swarmit.controller import (
 )
 
 SERIAL_PORT_DEFAULT = get_default_port()
-BAUDRATE_DEFAULT = 115200
+BAUDRATE_DEFAULT = 1000000
 
 
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
@@ -195,9 +197,9 @@ def reset(ctx, locations, verbose):
         print("No devices selected.")
         return
     locations = {
-        location.split(':')[0]: ResetLocation(
-            pos_x=int(float(location.split(':')[1].split(',')[0]) * 1e6),
-            pos_y=int(float(location.split(':')[1].split(',')[1]) * 1e6),
+        location.split(":")[0]: ResetLocation(
+            pos_x=int(float(location.split(":")[1].split(",")[0]) * 1e6),
+            pos_y=int(float(location.split(":")[1].split(",")[1]) * 1e6),
         )
         for location in locations.split("-")
     }
@@ -243,6 +245,22 @@ def reset(ctx, locations, verbose):
     help="Start the firmware once flashed.",
 )
 @click.option(
+    "-t",
+    "--chunk-timeout",
+    type=float,
+    default=OTA_CHUNK_TIMEOUT_DEFAULT,
+    show_default=True,
+    help="Timeout for each chunk transfer in seconds.",
+)
+@click.option(
+    "-t",
+    "--chunk-retries",
+    type=int,
+    default=OTA_CHUNK_MAX_RETRIES_DEFAULT,
+    show_default=True,
+    help="Number of retries for each chunk transfer.",
+)
+@click.option(
     "-v",
     "--verbose",
     is_flag=True,
@@ -250,7 +268,7 @@ def reset(ctx, locations, verbose):
 )
 @click.argument("firmware", type=click.File(mode="rb"), required=False)
 @click.pass_context
-def flash(ctx, yes, start, verbose, firmware):
+def flash(ctx, yes, start, chunk_timeout, chunk_retries, verbose, firmware):
     """Flash a firmware to the robots."""
     console = Console()
     if firmware is None:
@@ -288,7 +306,7 @@ def flash(ctx, yes, start, verbose, firmware):
         console = Console()
         console.print(
             "[bold red]Error:[/] some acknowledgments are missing "
-            f'({", ".join(sorted(set(controller.ready_devices).difference(set(start_data.ids))))}). '
+            f"({', '.join(sorted(set(controller.ready_devices).difference(set(start_data.ids))))}). "
             "Aborting."
         )
         raise click.Abort()
@@ -297,7 +315,9 @@ def flash(ctx, yes, start, verbose, firmware):
     print(f"Image hash: [bold cyan]{start_data.fw_hash.hex().upper()}[/]")
     print(f"Radio chunks ([bold]{CHUNK_SIZE}B[/bold]): {start_data.chunks}")
     start_time = time.time()
-    data = controller.transfer(fw)
+    data = controller.transfer(
+        fw, timeout=chunk_timeout, retries=chunk_retries
+    )
     print(f"Elapsed: [bold cyan]{time.time() - start_time:.3f}s[/bold cyan]")
     print_transfer_status(data, start_data)
     if verbose:

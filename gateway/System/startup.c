@@ -275,13 +275,13 @@ void reset_handler(void) {
 
 // Exception handlers
 void HardFault_Handler(void) {
-   while(1) {
-       __NOP();
-   }
+    while(1) {
+        __NOP();
+    }
 }
 
 void dummy_handler(void) {
-   while(1) {
-       __NOP();
-   }
+    while(1) {
+        __NOP();
+    }
 }
