@@ -1,7 +1,6 @@
 """Module containing classes for interfacing with the DotBot gateway."""
 
 import base64
-import time
 from abc import ABC, abstractmethod
 
 import paho.mqtt.client as mqtt
@@ -46,7 +45,9 @@ class SerialAdapter(GatewayAdapterBase):
 
     def init(self, on_data_received: callable):
         self.on_data_received = on_data_received
-        self.serial = SerialInterface(self.port, self.baudrate, self.on_byte_received)
+        self.serial = SerialInterface(
+            self.port, self.baudrate, self.on_byte_received
+        )
         print("[yellow]Connected to gateway[/]")
         self.send_data(b"\xff")
 

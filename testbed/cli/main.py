@@ -197,9 +197,9 @@ def reset(ctx, locations, verbose):
         print("No devices selected.")
         return
     locations = {
-        location.split(':')[0]: ResetLocation(
-            pos_x=int(float(location.split(':')[1].split(',')[0]) * 1e6),
-            pos_y=int(float(location.split(':')[1].split(',')[1]) * 1e6),
+        location.split(":")[0]: ResetLocation(
+            pos_x=int(float(location.split(":")[1].split(",")[0]) * 1e6),
+            pos_y=int(float(location.split(":")[1].split(",")[1]) * 1e6),
         )
         for location in locations.split("-")
     }
@@ -306,7 +306,7 @@ def flash(ctx, yes, start, chunk_timeout, chunk_retries, verbose, firmware):
         console = Console()
         console.print(
             "[bold red]Error:[/] some acknowledgments are missing "
-            f'({", ".join(sorted(set(controller.ready_devices).difference(set(start_data.ids))))}). '
+            f"({', '.join(sorted(set(controller.ready_devices).difference(set(start_data.ids))))}). "
             "Aborting."
         )
         raise click.Abort()

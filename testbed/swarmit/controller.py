@@ -104,7 +104,7 @@ def print_status(status_data: dict[str, StatusType]) -> None:
         for device_id, status in sorted(status_data.items()):
             status_table.add_row(
                 f"{device_id}",
-                f'{"[bold cyan]" if status == StatusType.Running else "[bold green]"}{status.name}',
+                f"{'[bold cyan]' if status == StatusType.Running else '[bold green]'}{status.name}",
             )
 
 
@@ -492,7 +492,6 @@ class Controller:
                 self._send_message(device_id, message)
 
     def _send_start_ota(self, device_id: str, firmware: bytes):
-
         def is_start_ota_acknowledged():
             if device_id == "0":
                 return sorted(self.start_ota_data.ids) == sorted(
@@ -549,7 +548,6 @@ class Controller:
     def send_chunk(
         self, chunk: DataChunk, device_id: str, timeout: float, retries: int
     ):
-
         def is_chunk_acknowledged():
             if device_id == "0":
                 return sorted(self.transfer_data.keys()) == sorted(
