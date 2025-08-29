@@ -70,7 +70,7 @@ typedef struct {
 } control_loop_data_t;
 
 static control_loop_data_t _control_loop_vars = { 0 };
-static const gpio_t _status_led = { .port = 1, .pin = 5 };
+static const gpio_t _status_led = { .port = 1, .pin = 5 };  // TODO: use board specific values
 #endif
 
 static bootloader_app_data_t _bootloader_vars = { 0 };
@@ -421,11 +421,6 @@ int main(void) {
         // Experiment is running
         ipc_shared_data.status = SWRMT_APPLICATION_RUNNING;
 
-        // Notify application is about to start
-        size_t length = 0;
-        _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_STARTED;
-        mari_node_tx(_bootloader_vars.notification_buffer, length);
-
         // Initialize watchdog and non secure access
         setup_ns_user();
         setup_watchdog0();
@@ -444,14 +439,6 @@ int main(void) {
         reset_handler_ns();
 
         while (1) {}
-    }
-
-    if (resetreas & RESET_RESETREAS_DOG1_Detected << RESET_RESETREAS_DOG1_Pos) {
-        // Notify application is stopped
-        size_t length = 0;
-        //size_t length = 0;
-        _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_STOPPED;
-        mari_node_tx(_bootloader_vars.notification_buffer, length);
     }
 
     _bootloader_vars.base_addr = SWARMIT_BASE_ADDRESS;

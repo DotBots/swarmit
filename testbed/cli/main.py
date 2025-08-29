@@ -19,9 +19,6 @@ from testbed.swarmit.controller import (
     Controller,
     ControllerSettings,
     ResetLocation,
-    print_start_status,
-    print_status,
-    print_stop_status,
     print_transfer_status,
 )
 
@@ -146,18 +143,7 @@ def start(ctx):
         console.print(f"[bold red]Error:[/] {exc}")
         return
     if controller.ready_devices:
-        started = controller.start()
-        print_start_status(
-            sorted(started),
-            sorted(set(controller.ready_devices).difference(set(started))),
-        )
-        if controller.settings.verbose:
-            print("Started devices:")
-            pprint(started)
-            print("Not started devices:")
-            pprint(
-                sorted(set(controller.ready_devices).difference(set(started)))
-            )
+        controller.start()
     else:
         print("No device to start")
     controller.terminate()
@@ -177,27 +163,7 @@ def stop(ctx):
         console.print(f"[bold red]Error:[/] {exc}")
         return
     if controller.running_devices or controller.resetting_devices:
-        stopped = controller.stop()
-        print_stop_status(
-            sorted(stopped),
-            sorted(
-                set(
-                    controller.running_devices + controller.resetting_devices
-                ).difference(set(stopped))
-            ),
-        )
-        if controller.settings.verbose:
-            print("Stopped devices:")
-            pprint(stopped)
-            print("Not stopped devices:")
-            pprint(
-                sorted(
-                    set(
-                        controller.running_devices
-                        + controller.resetting_devices
-                    ).difference(set(stopped))
-                )
-            )
+        controller.stop()
     else:
         print("[bold]No device to stop[/]")
     controller.terminate()
@@ -296,29 +262,34 @@ def flash(ctx, yes, start, chunk_timeout, chunk_retries, firmware):
     if yes is False:
         click.confirm("Do you want to continue?", default=True, abort=True)
 
-    devices = controller.settings.devices
     start_data = controller.start_ota(fw)
-    if (devices and sorted(start_data.addrs) != sorted(devices)) or (
-        not devices
-        and sorted(start_data.addrs) != sorted(controller.ready_devices)
-    ):
+    if controller.settings.verbose:
+        print("\n[b]Start OTA response:[/]")
+        pprint(start_data, indent_guides=False, expand_all=True)
+    if start_data["missed"]:
         console = Console()
         console.print(
             "[bold red]Error:[/] some acknowledgments are missing "
-            f"({', '.join(sorted(set(controller.ready_devices).difference(set(start_data.addrs))))}). "
+            f"({', '.join(sorted(set(start_data["missed"])))}). "
             "Aborting."
         )
+        controller.stop()
+        controller.terminate()
         raise click.Abort()
     print()
     print(f"Image size: [bold cyan]{len(fw)}B[/]")
-    print(f"Image hash: [bold cyan]{start_data.fw_hash.hex().upper()}[/]")
-    print(f"Radio chunks ([bold]{CHUNK_SIZE}B[/bold]): {start_data.chunks}")
+    print(
+        f"Image hash: [bold cyan]{start_data["ota"].fw_hash.hex().upper()}[/]"
+    )
+    print(
+        f"Radio chunks ([bold]{CHUNK_SIZE}B[/bold]): {start_data["ota"].chunks}"
+    )
     start_time = time.time()
     data = controller.transfer(
-        fw, timeout=chunk_timeout, retries=chunk_retries
+        fw, start_data["acked"], timeout=chunk_timeout, retries=chunk_retries
     )
     print(f"Elapsed: [bold cyan]{time.time() - start_time:.3f}s[/bold cyan]")
-    print_transfer_status(data, start_data)
+    print_transfer_status(data, start_data["ota"])
     if controller.settings.verbose:
         print("\n[b]Transfer data:[/]")
         pprint(data, indent_guides=False, expand_all=True)
@@ -329,11 +300,8 @@ def flash(ctx, yes, start, chunk_timeout, chunk_retries, firmware):
         raise click.Abort()
 
     if start is True:
-        started = controller.start()
-        print_start_status(
-            sorted(started),
-            sorted(set(start_data.addrs).difference(set(started))),
-        )
+        time.sleep(1)
+        controller.start()
     controller.terminate()
 
 
@@ -363,11 +331,7 @@ def monitor(ctx):
 def status(ctx):
     """Print current status of the robots."""
     controller = Controller(ctx.obj["settings"])
-    data = controller.status()
-    if not data:
-        click.echo("No devices found.")
-    else:
-        print_status(data)
+    controller.status()
     controller.terminate()
 
 

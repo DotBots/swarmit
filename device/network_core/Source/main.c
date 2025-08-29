@@ -34,6 +34,7 @@
 typedef struct {
     bool        req_received;
     bool        data_received;
+    bool        send_status;
 #if defined(USE_LH2)
     bool        lh2_location_received;
 #endif
@@ -112,6 +113,10 @@ uint64_t _deviceid(void) {
     return ((uint64_t)NRF_FICR_NS->INFO.DEVICEID[1]) << 32 | (uint64_t)NRF_FICR_NS->INFO.DEVICEID[0];
 }
 
+static void _send_status(void) {
+    _app_vars.send_status = true;
+}
+
 //=========================== main ==============================================
 
 int main(void) {
@@ -135,6 +140,7 @@ int main(void) {
 
     // Configure timer used for timestamping events
     mr_timer_hf_init(NETCORE_MAIN_TIMER);
+    mr_timer_hf_set_periodic_us(NETCORE_MAIN_TIMER, 0, 1000000UL, _send_status);
 
     // Network core must remain on
     ipc_shared_data.net_ready = true;
@@ -142,18 +148,18 @@ int main(void) {
     while (1) {
         __WFE();
 
+        if (_app_vars.send_status) {
+            _app_vars.send_status = false;
+            size_t length = 0;
+            _app_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_STATUS;
+            _app_vars.notification_buffer[length++] = ipc_shared_data.status;
+            mari_node_tx_payload(_app_vars.notification_buffer, length);
+        }
+
         if (_app_vars.req_received) {
             _app_vars.req_received = false;
             swrmt_request_t *req = (swrmt_request_t *)_app_vars.req_buffer;
             switch (req->type) {
-                case SWRMT_REQUEST_STATUS:
-                {
-                    size_t length = 0;
-                    _app_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_STATUS;
-                    _app_vars.notification_buffer[length++] = ipc_shared_data.status;
-                    mari_node_tx_payload(_app_vars.notification_buffer, length);
-                    printf("Replying to status request (status: %d)\n", ipc_shared_data.status);
-                }   break;
                 case SWRMT_REQUEST_START:
                     if (ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;
