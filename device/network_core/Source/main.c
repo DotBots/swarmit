@@ -44,6 +44,9 @@ typedef struct {
     uint8_t     computed_hash[SWRMT_OTA_SHA256_LENGTH];
     uint64_t    device_id;
     int32_t     last_chunk_acked;
+    uint32_t    metrics_rx_counter;
+    uint32_t    metrics_tx_counter;
+    bool        metrics_received;
 } swrmt_app_data_t;
 
 static swrmt_app_data_t _app_vars = { 0 };
@@ -59,6 +62,11 @@ static void _handle_packet(uint8_t *packet, uint8_t length) {
     uint8_t packet_type = (uint8_t)*ptr++;
     if ((packet_type >= SWRMT_REQUEST_STATUS) && (packet_type <= SWRMT_REQUEST_OTA_CHUNK)) {
         _app_vars.req_received = true;
+        return;
+    }
+
+    if (length == sizeof(mr_metrics_payload_t) && packet_type == MARI_PAYLOAD_TYPE_METRICS_PROBE) {
+        _app_vars.metrics_received = true;
         return;
     }
 
@@ -265,6 +273,20 @@ int main(void) {
         if (_app_vars.data_received) {
             _app_vars.data_received = false;
             NRF_IPC_NS->TASKS_SEND[IPC_CHAN_RADIO_RX] = 1;
+        }
+
+        if (_app_vars.metrics_received) {
+            _app_vars.metrics_received = false;
+            mr_metrics_payload_t *metrics_payload = (mr_metrics_payload_t *)_app_vars.req_buffer;
+            // update metrics probe
+            metrics_payload->node_rx_count        = ++_app_vars.metrics_rx_counter;
+            metrics_payload->node_rx_asn          = mr_mac_get_asn();
+            metrics_payload->node_tx_count        = ++_app_vars.metrics_tx_counter;
+            metrics_payload->node_tx_enqueued_asn = mr_mac_get_asn();
+            metrics_payload->rssi_at_node         = mr_radio_rssi();
+
+            // send metrics probe to gateway
+            mari_node_tx_payload((uint8_t *)metrics_payload, sizeof(mr_metrics_payload_t));
         }
 
         if (_app_vars.ipc_log_received) {
