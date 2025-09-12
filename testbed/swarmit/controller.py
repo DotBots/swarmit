@@ -394,6 +394,8 @@ class Controller:
                 == SwarmitPayloadType.SWARMIT_NOTIFICATION_EVENT_LOG
             ):
                 logger.info("LOG event")
+        elif packet.payload_type == SwarmitPayloadType.METRICS_PROBE:
+            pass
         else:
             self.logger.error(
                 "Unknown payload type", payload_type=packet.payload_type
