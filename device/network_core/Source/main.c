@@ -20,8 +20,10 @@
 
 // Mira includes
 #include "mr_timer_hf.h"
-#include "mari.h"
+#include "mr_radio.h"
 #include "models.h"
+#include "mac.h"
+#include "mari.h"
 
 #define NETCORE_MAIN_TIMER                  (0)
 
