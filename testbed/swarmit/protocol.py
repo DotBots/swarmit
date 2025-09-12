@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 
 from dotbot.protocol import Payload, PayloadFieldMetadata, register_parser
+from marilib.mari_protocol import DefaultPayloadType as MariDefaultPayloadType
 
 
 class StatusType(Enum):
@@ -46,6 +47,9 @@ class SwarmitPayloadType(IntEnum):
 
     # Custom messages
     SWARMIT_MESSAGE = 0xA0
+
+    # Marilib metrics probe
+    METRICS_PROBE = MariDefaultPayloadType.METRICS_PROBE
 
 
 # Requests
@@ -212,6 +216,16 @@ class PayloadMessage(Payload):
     message: bytes = dataclasses.field(default_factory=lambda: bytearray)
 
 
+@dataclass
+class MetricsProbePayload(Payload):
+    metadata: list[PayloadFieldMetadata] = dataclasses.field(
+        default_factory=lambda: [
+            PayloadFieldMetadata(name="type", length=1),
+        ]
+    )
+    type_: SwarmitPayloadType = SwarmitPayloadType.METRICS_PROBE
+
+
 def register_parsers():
     # Register all swarmit specific parsers at module level
     register_parser(
@@ -250,3 +264,4 @@ def register_parsers():
         PayloadEventNotification,
     )
     register_parser(SwarmitPayloadType.SWARMIT_MESSAGE, PayloadMessage)
+    register_parser(SwarmitPayloadType.METRICS_PROBE, MetricsProbePayload)
