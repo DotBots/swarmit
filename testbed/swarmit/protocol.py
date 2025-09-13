@@ -141,7 +141,7 @@ class PayloadStatusNotification(Payload):
         default_factory=lambda: [
             PayloadFieldMetadata(name="device", disp="dev."),
             PayloadFieldMetadata(name="status", disp="st."),
-            PayloadFieldMetadata(name="battery", disp="bat."),
+            PayloadFieldMetadata(name="battery", disp="bat.", length=2),
             PayloadFieldMetadata(
                 name="pos_x", disp="pos x", length=4, signed=True
             ),

@@ -69,7 +69,7 @@ typedef struct __attribute__((packed)) {
     ipc_req_t               req;                ///< IPC network request
     uint8_t                 status;             ///< Experiment status
     swrmt_device_type_t     device_type;        ///< Device type
-    uint8_t                 battery_level;      ///< Battery level in %
+    uint16_t                battery_level;      ///< Battery level in mV
     ipc_log_data_t          log;                ///< Log data
     ipc_rng_data_t          rng;                ///< Rng shared data
     ipc_ota_data_t          ota;                ///< OTA data

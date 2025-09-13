@@ -24,6 +24,6 @@
 
 void battery_level_init(void);
 
-uint8_t battery_level_read(void);
+uint16_t battery_level_read(void);
 
 #endif // __BATTERY_H

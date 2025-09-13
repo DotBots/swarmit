@@ -151,7 +151,8 @@ int main(void) {
             _app_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_STATUS;
             _app_vars.notification_buffer[length++] = ipc_shared_data.device_type;
             _app_vars.notification_buffer[length++] = ipc_shared_data.status;
-            _app_vars.notification_buffer[length++] = ipc_shared_data.battery_level;
+            _app_vars.notification_buffer[length] = ipc_shared_data.battery_level;
+            length += sizeof(uint16_t)
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.current_position, sizeof(position_2d_t));
             length += sizeof(position_2d_t);
             mari_node_tx_payload(_app_vars.notification_buffer, length);

@@ -43,6 +43,9 @@ OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 2
 SERIAL_PORT_DEFAULT = get_default_port()
 BROADCAST_ADDRESS = 0xFFFFFFFFFFFFFFFF
+VOLTAGE_MAX = 3000  # mV
+VOLTAGE_WARNING = 2200  # mV
+VOLTAGE_DANGER = 2000  # mV
 
 
 @dataclass
@@ -114,9 +117,9 @@ def addr_to_hex(addr: int) -> str:
 
 
 def battery_level_color(level: int):
-    if level > 85:
+    if level > VOLTAGE_WARNING:
         return "green"
-    elif level > 65:
+    elif level > VOLTAGE_DANGER:
         return "dark_orange"
     else:
         return "red"
@@ -150,7 +153,7 @@ def generate_status(status_data, devices=[], status_message="found"):
     table.add_column(
         "Position",
         style="cyan",
-        justify="right",
+        justify="center",
     )
     table.add_column(
         "Status",
@@ -163,7 +166,7 @@ def generate_status(status_data, devices=[], status_message="found"):
         table.add_row(
             f"{device_addr}",
             f"{device_data.device.name}",
-            f"[{battery_level_color(device_data.battery)}]{device_data.battery:>3}%",
+            f"[{battery_level_color(device_data.battery)}]{device_data.battery / 1000:.2f}V ({int(device_data.battery / 3000 * 100)}%)",
             f"({(device_data.pos_x / 1e6):.2f}, {(device_data.pos_y / 1e6):.2f})",
             f"{'[bold cyan]' if device_data.status == StatusType.Running else '[bold green]'}{device_data.status.name}",
         )

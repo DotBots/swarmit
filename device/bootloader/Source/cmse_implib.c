@@ -7,7 +7,6 @@
 
 #include "battery.h"
 #include "cmse_implib.h"
-#include "board_config.h"
 #include "device.h"
 #include "ipc.h"
 #include "mari.h"
