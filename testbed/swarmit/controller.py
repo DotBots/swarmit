@@ -148,7 +148,7 @@ def generate_status(status_data, devices=[], status_message="found"):
     table.add_column(
         "Battery",
         style="cyan",
-        justify="right",
+        justify="center",
     )
     table.add_column(
         "Position",
