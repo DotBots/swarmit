@@ -13,7 +13,7 @@
  * @}
  */
 
-#include "protocol.h"
+#include <stdint.h>
 
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {

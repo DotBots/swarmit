@@ -33,20 +33,20 @@ void localization_init(void) {
 }
 
 void localization_process_data(void) {
-    puts("localization_process_data");
+    //puts("localization_process_data");
     db_lh2_process_location(&_localization_data.lh2);
 }
 
 void localization_get_position(position_2d_t *position) {
-    puts("Get position");
+    //puts("Get position");
     if (_localization_data.lh2.data_ready[0][0] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][0] == DB_LH2_PROCESSED_DATA_AVAILABLE) {
-        puts("Data available");
+        //puts("Data available");
 #if LH2_CALIBRATION_IS_VALID
         db_lh2_stop();
         db_lh2_calculate_position(_localization_data.lh2.locations[0][0].lfsr_location, _localization_data.lh2.locations[1][0].lfsr_location, 0, _localization_data.coordinates);
         position->x = (uint32_t)(_localization_data.coordinates[0] * 1e6);
         position->y = (uint32_t)(_localization_data.coordinates[1] * 1e6);
-        printf("Position (%u,%u)\n", position->x, position->y);
+        //printf("Position (%u,%u)\n", position->x, position->y);
         db_lh2_start();
 #endif
     }

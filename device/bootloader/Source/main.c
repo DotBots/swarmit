@@ -213,9 +213,23 @@ static void setup_ns_user(void) {
     NVIC_SetTargetState(GPIOTE0_IRQn);
     NVIC_SetTargetState(GPIOTE1_IRQn);
 
-    // All GPIOs are non secure
+    // Configure non-secure GPIOs
     NRF_SPU_S->GPIOPORT[0].PERM = 0;
     NRF_SPU_S->GPIOPORT[1].PERM = 0;
+
+    // Set LH2 pins as secure
+    NRF_SPU_S->GPIOPORT[DB_LH2_E_PORT].PERM |= (1 << DB_LH2_E_PIN);
+    NRF_SPU_S->GPIOPORT[DB_LH2_D_PORT].PERM |= (1 << DB_LH2_D_PIN);
+#if defined(BOARD_DOTBOT_V3)
+    NRF_SPU_S->GPIOPORT[1].PERM |= (1 << 7);
+#else
+    NRF_SPU_S->GPIOPORT[1].PERM |= (1 << 6);
+#endif
+
+    // Set AIN1 as secure, only for reading battery level on dotvot-v3
+#if defined(BOARD_DOTBOT_V3)
+    NRF_SPU_S->GPIOPORT[0].PERM |= (1 << 5); // AIN1 is P0.5
+#endif
 
     __DSB(); // Force memory writes before continuing
     __ISB(); // Flush and refill pipeline with updated permissions
