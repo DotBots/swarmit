@@ -63,7 +63,7 @@ typedef struct __attribute__((packed)) {
     uint8_t buffer[UINT8_MAX];  ///< Buffer containing the pdu data
 } ipc_radio_pdu_t;
 
-typedef struct __attribute__((packed)) {
+typedef struct __attribute__((packed,aligned(8))) {
     bool                    net_ready;          ///< Network core is ready
     bool                    net_ack;            ///< Network core acked the latest request
     ipc_req_t               req;                ///< IPC network request

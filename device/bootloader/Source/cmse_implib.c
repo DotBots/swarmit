@@ -9,6 +9,7 @@
 #include "cmse_implib.h"
 #include "device.h"
 #include "ipc.h"
+#include "localization.h"
 #include "mari.h"
 #include "rng.h"
 #include "lh2.h"
@@ -21,6 +22,9 @@ extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_s
 __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
     NRF_WDT0_S->RR[0] = WDT_RR_RR_Reload << WDT_RR_RR_Pos;
     ipc_shared_data.battery_level = battery_level_read();
+    if (localization_process_data()) {
+        localization_get_position((position_2d_t *)&ipc_shared_data.current_position);
+    }
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_send_data_packet(const uint8_t *packet, uint8_t length) {
@@ -71,14 +75,16 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_
     NRF_IPC_S->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
 }
 
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_process_data(void) {
+__attribute__((cmse_nonsecure_entry)) void swarmit_localization_process_data(void) {
     localization_process_data();
 }
 
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_get_position(position_2d_t *position) {
-    localization_get_position(position);
+__attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
+    position->x = ipc_shared_data.current_position.x;
+    position->y = ipc_shared_data.current_position.y;
 }
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_handle_isr(void) {
+
+__attribute__((cmse_nonsecure_entry)) void swarmit_localization_handle_isr(void) {
     if (NRF_SPIM4_S->EVENTS_END) {
         // Clear the Interrupt flag
         NRF_SPIM4_S->EVENTS_END = 0;
@@ -86,7 +92,7 @@ __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_handle_
     }
 }
 
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_saadc_read(uint8_t channel, uint16_t *value) {
+__attribute__((cmse_nonsecure_entry)) void swarmit_saadc_read(uint8_t channel, uint16_t *value) {
     if (channel != DB_SAADC_INPUT_VDDH && !(channel <= DB_SAADC_INPUT_VDD) && !(channel >= DB_SAADC_INPUT_AIN0)) {
         return;
     }
