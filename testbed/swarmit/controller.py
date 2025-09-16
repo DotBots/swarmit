@@ -34,7 +34,7 @@ from testbed.swarmit.protocol import (
     register_parsers,
 )
 
-CHUNK_SIZE = 64
+CHUNK_SIZE = 128
 COMMAND_TIMEOUT = 6
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7

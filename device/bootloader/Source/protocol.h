@@ -24,7 +24,7 @@
 #define GATEWAY_ADDRESS   0x0000000000000000UL  ///< Gateway address
 
 #define SWRMT_PREAMBLE_LENGTH       (8U)
-#define SWRMT_OTA_CHUNK_SIZE        (64U)
+#define SWRMT_OTA_CHUNK_SIZE        (128U)
 
 typedef struct __attribute__((packed)) {
     uint32_t index;                             ///< Index of the chunk
