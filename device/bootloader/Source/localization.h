@@ -13,6 +13,7 @@
  * @}
  */
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /// DotBot protocol LH2 computed location
@@ -28,7 +29,7 @@ typedef struct __attribute__((packed)) {
 
 void localization_init(void);
 
-void localization_process_data(void);
+bool localization_process_data(void);
 
 void localization_get_position(position_2d_t *position);
 

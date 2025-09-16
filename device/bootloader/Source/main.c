@@ -176,8 +176,6 @@ static void setup_ns_user(void) {
     tz_configure_periph_dma_non_secure(NRF_APPLICATION_PERIPH_ID_SPIM2_SPIS2_TWIM2_TWIS2_UARTE2);
     tz_configure_periph_non_secure(NRF_APPLICATION_PERIPH_ID_SPIM3_SPIS3_TWIM3_TWIS3_UARTE3);
     tz_configure_periph_dma_non_secure(NRF_APPLICATION_PERIPH_ID_SPIM3_SPIS3_TWIM3_TWIS3_UARTE3);
-    tz_configure_periph_non_secure(NRF_APPLICATION_PERIPH_ID_SPIM4);
-    tz_configure_periph_dma_non_secure(NRF_APPLICATION_PERIPH_ID_SPIM4);
     tz_configure_periph_non_secure(NRF_APPLICATION_PERIPH_ID_TIMER0);
     tz_configure_periph_non_secure(NRF_APPLICATION_PERIPH_ID_TIMER1);
     tz_configure_periph_non_secure(NRF_APPLICATION_PERIPH_ID_USBD);
@@ -220,6 +218,7 @@ static void setup_ns_user(void) {
     // Set LH2 pins as secure
     NRF_SPU_S->GPIOPORT[DB_LH2_E_PORT].PERM |= (1 << DB_LH2_E_PIN);
     NRF_SPU_S->GPIOPORT[DB_LH2_D_PORT].PERM |= (1 << DB_LH2_D_PIN);
+    NRF_SPU_S->GPIOPORT[1].PERM |= (1 << 4);
 #if defined(BOARD_DOTBOT_V3)
     NRF_SPU_S->GPIOPORT[1].PERM |= (1 << 7);
 #else
@@ -374,12 +373,8 @@ int main(void) {
     NVIC_SetPriority(IPC_IRQn, IPC_IRQ_PRIORITY);
 
     // PPI connection: IPC_RECEIVE -> WDT_START
-    tz_configure_periph_non_secure(NRF_APPLICATION_PERIPH_ID_DPPIC);
-    NRF_SPU_S->DPPI[0].PERM &= ~(SPU_DPPI_PERM_CHANNEL0_Msk);
-    NRF_SPU_S->DPPI[0].LOCK |= SPU_DPPI_LOCK_LOCK_Locked << SPU_DPPI_LOCK_LOCK_Pos;
     NRF_IPC_S->PUBLISH_RECEIVE[IPC_CHAN_APPLICATION_STOP] = IPC_PUBLISH_RECEIVE_EN_Enabled << IPC_PUBLISH_RECEIVE_EN_Pos;
     NRF_WDT1_S->SUBSCRIBE_START = WDT_SUBSCRIBE_START_EN_Enabled << WDT_SUBSCRIBE_START_EN_Pos;
-    NRF_DPPIC_NS->CHENSET = (DPPIC_CHENSET_CH0_Enabled << DPPIC_CHENSET_CH0_Pos);
     NRF_DPPIC_S->CHENSET = (DPPIC_CHENSET_CH0_Enabled << DPPIC_CHENSET_CH0_Pos);
 
     // Write device type value to shared memory
@@ -415,7 +410,7 @@ int main(void) {
         // Initialize watchdog and non secure access
         setup_ns_user();
         setup_watchdog0();
-        NVIC_SetTargetState(IPC_IRQn);
+        NVIC_SetTargetState(IPC_IRQn);    // Used for radio RX
         NVIC_SetTargetState(SPIM4_IRQn);  // Used for LH2 localization
 
         // Set the vector table address prior to jumping to image
