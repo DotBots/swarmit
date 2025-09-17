@@ -58,7 +58,7 @@ volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_d
 
 //=========================== functions =========================================
 
-static void _handle_packet(uint8_t *packet, uint8_t length) {
+static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length) {
     memcpy(_app_vars.req_buffer, packet, length);
     uint8_t *ptr = _app_vars.req_buffer;
     uint8_t packet_type = (uint8_t)*ptr++;
@@ -77,6 +77,10 @@ static void _handle_packet(uint8_t *packet, uint8_t length) {
         return;
     }
 
+    if (dst_address != MARI_BROADCAST_ADDRESS && dst_address != _app_vars.device_id) {
+        return;
+    }
+
     ipc_shared_data.rx_pdu.length = length;
     memcpy((uint8_t *)ipc_shared_data.rx_pdu.buffer, packet, length);
     _app_vars.data_received = true;
@@ -86,7 +90,7 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
     switch (event) {
         case MARI_NEW_PACKET:
         {
-            _handle_packet(event_data.data.new_packet.payload, event_data.data.new_packet.payload_len);
+            _handle_packet(event_data.data.new_packet.header->dst, event_data.data.new_packet.payload, event_data.data.new_packet.payload_len);
             break;
         }
         case MARI_CONNECTED: {
