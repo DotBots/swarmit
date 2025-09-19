@@ -45,7 +45,7 @@ jobs:
         with:
           submodules: 'true'
       - name: Build network core application
-        run: DOCKER_TARGETS=netcore make docker
+        run: BUILD_CONFIG=${{ matrix.config }} DOCKER_TARGETS=netcore make docker
       - name: Upload artifact
         if: matrix.config == 'Debug'
         uses: actions/upload-artifact@v4
