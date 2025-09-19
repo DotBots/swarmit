@@ -47,7 +47,8 @@ class MarilibEdgeAdapter(GatewayAdapterBase):
             try:
                 packet = Packet.from_bytes(event_data.payload)
             except (ValueError, ProtocolPayloadParserException) as exc:
-                print(f"[red]Error parsing packet: {exc}[/]")
+                if self.verbose:
+                    print(f"[red]Error parsing packet: {exc}[/]")
                 return
             if not hasattr(self, "on_frame_received"):
                 return
@@ -97,7 +98,8 @@ class MarilibCloudAdapter(GatewayAdapterBase):
             try:
                 packet = Packet.from_bytes(event_data.payload)
             except (ValueError, ProtocolPayloadParserException) as exc:
-                print(f"[red]Error parsing packet: {exc}[/]")
+                if self.verbose:
+                    print(f"[red]Error parsing packet: {exc}[/]")
                 return
             if not hasattr(self, "on_frame_received"):
                 return
