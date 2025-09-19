@@ -28,11 +28,11 @@ authors = [
 dependencies = [
     "click          >= 8.1.7",
     "cryptography   == 43.0.1",
-    "pydotbot       >= 0.25.0",
+    "pydotbot       >= 0.26.0",
     "rich           >= 14.0.0",
     "structlog      >= 24.4.0",
     "tqdm           >= 4.66.5",
-    "marilib-pkg    == 0.7.0rc1",
+    "marilib-pkg    == 0.7.1",
 ]
 description = "Run Your Own Robot Swarm Testbed."
 readme = "README.md"
