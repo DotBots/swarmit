@@ -361,6 +361,27 @@ def status(ctx, watch):
     controller.status(watch)
     controller.terminate()
 
+@main.command()
+@click.pass_context
+def web(ctx):
+    """Start the user application."""
+    try:
+        controller = Controller(ctx.obj["settings"])
+    except (
+        SerialInterfaceException,
+        serial.serialutil.SerialException,
+    ) as exc:
+        console = Console()
+        console.print(f"[bold red]Error:[/] {exc}")
+        return
+    try:
+        print(controller.__class__, controller.__class__.__module__)
+
+        asyncio.run(controller.start_web())
+    except KeyboardInterrupt:
+        print("Stopping monitor.")
+    finally:
+        controller.terminate()
 
 @main.command()
 @click.argument("message", type=str, required=True)
