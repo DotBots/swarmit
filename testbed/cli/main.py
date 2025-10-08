@@ -352,11 +352,17 @@ def monitor(ctx):
 
 
 @main.command()
+@click.option(
+    "-w",
+    "--watch",
+    is_flag=True,
+    help="Keep watching the testbed status.",
+)
 @click.pass_context
-def status(ctx):
+def status(ctx, watch):
     """Print current status of the robots."""
     controller = Controller(ctx.obj["settings"])
-    controller.status()
+    controller.status(watch)
     controller.terminate()
 
 

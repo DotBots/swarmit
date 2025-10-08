@@ -405,14 +405,14 @@ class Controller:
             )
 
     def _live_status(
-        self, devices=[], timeout=STATUS_TIMEOUT, message="found"
+        self, devices=[], timeout=STATUS_TIMEOUT, message="found", watch=False
     ):
         """Request the live status of the testbed."""
         with Live(
             generate_status(self.status_data, devices, status_message=message),
             refresh_per_second=4,
         ) as live:
-            while timeout > 0:
+            while watch is True or timeout > 0:
                 live.update(
                     generate_status(
                         self.status_data, devices, status_message=message
@@ -421,9 +421,9 @@ class Controller:
                 timeout -= 0.01
                 time.sleep(0.01)
 
-    def status(self):
+    def status(self, watch=False):
         """Request the status of the testbed."""
-        self._live_status(self.settings.devices)
+        self._live_status(self.settings.devices, watch=watch)
 
     def _send_start(self, device_addr: str):
         payload = PayloadStartRequest()
