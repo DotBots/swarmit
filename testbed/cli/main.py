@@ -2,6 +2,7 @@
 
 import logging
 import time
+import tomllib
 
 import click
 import serial
@@ -22,43 +23,50 @@ from testbed.swarmit.controller import (
     print_transfer_status,
 )
 
-SERIAL_PORT_DEFAULT = get_default_port()
-BAUDRATE_DEFAULT = 1000000
-MQTT_HOST_DEFAULT = "localhost"
-MQTT_PORT_DEFAULT = 1883
-# Default network ID for SwarmIT tests is 0x12**
-# See https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
-SWARMIT_NETWORK_ID_DEFAULT = "1200"
+DEFAULTS = {
+    "adapter": "edge",
+    "serial_port": get_default_port(),
+    "baudrate": 1000000,
+    "mqtt_host": "localhost",
+    "mqtt_port": 1883,
+    # Default network ID for SwarmIT tests is 0x12**
+    # See https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
+    "swarmit_network_id": "1200",
+    "mqtt_use_tls": False,
+    "verbose": False,
+}
 
 
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option(
+    "-c",
+    "--config-path",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to a .toml configuration file.",
+)
+@click.option(
     "-p",
     "--port",
     type=str,
-    default=SERIAL_PORT_DEFAULT,
-    help=f"Serial port to use to send the bitstream to the gateway. Default: {SERIAL_PORT_DEFAULT}.",
+    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS["serial_port"]}.",
 )
 @click.option(
     "-b",
     "--baudrate",
     type=int,
-    default=BAUDRATE_DEFAULT,
-    help=f"Serial port baudrate. Default: {BAUDRATE_DEFAULT}.",
+    help=f"Serial port baudrate. Default: {DEFAULTS["baudrate"]}.",
 )
 @click.option(
     "-H",
     "--mqtt-host",
     type=str,
-    default=MQTT_HOST_DEFAULT,
-    help=f"MQTT host. Default: {MQTT_HOST_DEFAULT}.",
+    help=f"MQTT host. Default: {DEFAULTS["mqtt_host"]}.",
 )
 @click.option(
     "-P",
     "--mqtt-port",
     type=int,
-    default=MQTT_PORT_DEFAULT,
-    help=f"MQTT port. Default: {MQTT_PORT_DEFAULT}.",
+    help=f"MQTT port. Default: {DEFAULTS["mqtt_port"]}.",
 )
 @click.option(
     "-T",
@@ -70,16 +78,13 @@ SWARMIT_NETWORK_ID_DEFAULT = "1200"
     "-n",
     "--network-id",
     type=str,
-    default=SWARMIT_NETWORK_ID_DEFAULT,
-    help=f"Marilib network ID to use. Default: 0x{SWARMIT_NETWORK_ID_DEFAULT}",
+    help=f"Marilib network ID to use. Default: 0x{DEFAULTS["swarmit_network_id"]}",
 )
 @click.option(
     "-a",
     "--adapter",
     type=click.Choice(["edge", "cloud"], case_sensitive=True),
-    default="edge",
-    show_default=True,
-    help="Choose the adapter to communicate with the gateway.",
+    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS["adapter"]}",
 )
 @click.option(
     "-d",
@@ -98,6 +103,7 @@ SWARMIT_NETWORK_ID_DEFAULT = "1200"
 @click.pass_context
 def main(
     ctx,
+    config_path,
     port,
     baudrate,
     mqtt_host,
@@ -108,6 +114,26 @@ def main(
     devices,
     verbose,
 ):
+    config_data = load_toml_config(config_path)
+    cli_args = {
+        "adapter": adapter,
+        "serial_port": port,
+        "baudrate": baudrate,
+        "mqtt_host": mqtt_host,
+        "mqtt_port": mqtt_port,
+        "mqtt_use_tls": mqtt_use_tls,
+        "swarmit_network_id": network_id,
+        "devices": devices,
+        "verbose": verbose,
+    }
+
+    # Merge in order of priority: CLI > config > defaults
+    final_config = {
+        **DEFAULTS,
+        **{k: v for k, v in config_data.items() if v is not None},
+        **{k: v for k, v in cli_args.items() if v not in (None, False)},
+    }
+
     if ctx.invoked_subcommand != "monitor":
         # Disable logging if not monitoring
         structlog.configure(
@@ -117,15 +143,15 @@ def main(
         )
     ctx.ensure_object(dict)
     ctx.obj["settings"] = ControllerSettings(
-        serial_port=port,
-        serial_baudrate=baudrate,
-        mqtt_host=mqtt_host,
-        mqtt_port=mqtt_port,
-        mqtt_use_tls=mqtt_use_tls,
-        network_id=int(network_id, 16),
-        adapter=adapter,
-        devices=[d for d in devices.split(",") if d],
-        verbose=verbose,
+        serial_port=final_config["serial_port"],
+        serial_baudrate=final_config["baudrate"],
+        mqtt_host=final_config["mqtt_host"],
+        mqtt_port=final_config["mqtt_port"],
+        mqtt_use_tls=final_config["mqtt_use_tls"],
+        network_id=int(final_config["swarmit_network_id"], 16),
+        adapter=final_config["adapter"],
+        devices=[d for d in final_config["devices"].split(",") if d],
+        verbose=final_config["verbose"],
     )
 
 
@@ -342,6 +368,13 @@ def message(ctx, message):
     controller = Controller(ctx.obj["settings"])
     controller.send_message(message)
     controller.terminate()
+
+
+def load_toml_config(path):
+    if not path:
+        return {}
+    with open(path, "rb") as f:
+        return tomllib.load(f)
 
 
 if __name__ == "__main__":
