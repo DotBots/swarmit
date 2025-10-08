@@ -2,6 +2,7 @@
 
 import logging
 import time
+import tomllib
 
 import click
 import serial
@@ -10,7 +11,6 @@ from dotbot.serial_interface import SerialInterfaceException, get_default_port
 from rich import print
 from rich.console import Console
 from rich.pretty import pprint
-import tomllib
 
 from testbed.swarmit import __version__
 from testbed.swarmit.controller import (
@@ -37,10 +37,10 @@ DEFAULTS = {
 }
 
 
-
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option(
-    "-c", "--config-path",
+    "-c",
+    "--config-path",
     type=click.Path(exists=True, dir_okay=False),
     help="Path to a .toml configuration file.",
 )
@@ -128,7 +128,11 @@ def main(
     }
 
     # Merge in order of priority: CLI > config > defaults
-    final_config = {**DEFAULTS, **{k: v for k, v in config_data.items() if v is not None}, **{k: v for k, v in cli_args.items() if v not in (None, False)}}
+    final_config = {
+        **DEFAULTS,
+        **{k: v for k, v in config_data.items() if v is not None},
+        **{k: v for k, v in cli_args.items() if v not in (None, False)},
+    }
 
     if ctx.invoked_subcommand != "monitor":
         # Disable logging if not monitoring
@@ -365,11 +369,13 @@ def message(ctx, message):
     controller.send_message(message)
     controller.terminate()
 
+
 def load_toml_config(path):
     if not path:
         return {}
     with open(path, "rb") as f:
         return tomllib.load(f)
+
 
 if __name__ == "__main__":
     main(obj={})
