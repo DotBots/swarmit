@@ -1,5 +1,6 @@
 """Module containing classes for interfacing with the DotBot gateway."""
 
+import sys
 import time
 from abc import ABC, abstractmethod
 
@@ -56,9 +57,13 @@ class MarilibEdgeAdapter(GatewayAdapterBase):
 
     def __init__(self, port: str, baudrate: int, verbose: bool = False):
         self.verbose = verbose
-        self.mari = MarilibEdge(
-            self.on_event, MarilibSerialAdapter(port, baudrate)
-        )
+        try:
+            self.mari = MarilibEdge(
+                self.on_event, MarilibSerialAdapter(port, baudrate)
+            )
+        except Exception as exc:
+            print(f"[red]Error initializing MarilibEdge: {exc}[/]")
+            sys.exit(1)
 
     def _busy_wait(self, timeout: int):
         """Wait for the condition to be met."""
@@ -114,11 +119,15 @@ class MarilibCloudAdapter(GatewayAdapterBase):
         verbose: bool = False,
     ):
         self.verbose = verbose
-        self.mari = MarilibCloud(
-            self.on_event,
-            MarilibMQTTAdapter(host, port, use_tls=use_tls, is_edge=False),
-            network_id,
-        )
+        try:
+            self.mari = MarilibCloud(
+                self.on_event,
+                MarilibMQTTAdapter(host, port, use_tls=use_tls, is_edge=False),
+                network_id,
+            )
+        except Exception as exc:
+            print(f"[red]Error initializing MarilibCloud: {exc}[/]")
+            sys.exit(1)
 
     def _busy_wait(self, timeout):
         """Wait for the condition to be met."""
