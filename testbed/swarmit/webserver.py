@@ -33,4 +33,10 @@ api.add_middleware(
 
 @api.get("/")
 async def root():
+    FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+    print(FRONTEND_DIR)
     return {"message": "Hello World"}
+
+# Mount static files after all routes are defined
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+api.mount("/frontend", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
