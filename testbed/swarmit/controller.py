@@ -1,10 +1,7 @@
 """Module containing the swarmit controller class."""
 
-import asyncio
 import dataclasses
 import time
-import uvicorn
-import webbrowser
 from binascii import hexlify
 from dataclasses import dataclass
 
@@ -36,7 +33,6 @@ from testbed.swarmit.protocol import (
     StatusType,
     register_parsers,
 )
-from testbed.swarmit.webserver import api
 
 CHUNK_SIZE = 128
 COMMAND_TIMEOUT = 6
@@ -708,56 +704,3 @@ class Controller:
                 )
                 self.transfer_data[device] = device_data
         return self.transfer_data
-
-    async def _open_webbrowser(self):
-        """Wait until the server is ready before opening a web browser."""
-        while 1:
-            try:
-                print("aaa")
-                _, writer = await asyncio.open_connection(
-                    "127.0.0.1", self.settings.mqtt_port
-                )
-            except ConnectionRefusedError:
-                await asyncio.sleep(0.1)
-            else:
-                writer.close()
-                break
-
-        url = f"http://localhost:{self.settings.mqtt_port}"
-        self.logger.info("Opening webbrowser", url=url)
-        webbrowser.open(url)
-        
-    async def web(self):
-        """Starts the web server application."""
-        logger = LOGGER.bind(context=__name__)
-        config = uvicorn.Config(
-            api, port=self.settings.mqtt_port, log_level="critical"
-        )
-        server = uvicorn.Server(config)
-
-        try:
-            logger.info("Starting web server")
-            await server.serve()
-        except asyncio.exceptions.CancelledError:
-            logger.info("Web server cancelled")
-        else:
-            logger.info("Stopping web server")
-            raise SystemExit()
-    
-    async def start_web(self):
-        try:
-            tasks = [
-                asyncio.create_task(name="Web server", coro=self.web()),
-                asyncio.create_task(name="Web browser", coro=self._open_webbrowser()),
-            ]
-            await asyncio.gather(*tasks)
-        except Exception as exc:  # TODO: add this exception 
-            self.logger.error(f"Error: {exc}")
-        except SystemExit:
-            pass
-        finally:
-            self.logger.info("Stopping controller")
-            for task in tasks:
-                self.logger.info(f"Cancelling task '{task.get_name()}'")
-                task.cancel()
-            self.logger.info("Controller stopped")
