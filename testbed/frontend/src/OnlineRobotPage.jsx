@@ -1,4 +1,11 @@
 export default function OnlineRobotPage() {
+  const applyColor = async (r, g, b) => {
+    let application = "DotBot";
+    let address = "482f353f8dd6ce8e";
+    print("publish command");
+    await publishCommand(address, application, "rgb_led", { red: r, green: g, blue: b });
+  }
+
   return (
     <div className="animate-fadeIn">
       <h2 className="text-2xl font-semibold mb-6 text-gray-800">Data Table</h2>
@@ -24,7 +31,7 @@ export default function OnlineRobotPage() {
               >
                 <td className="py-3 px-4 border-t">{row.name}</td>
                 <td className="py-3 px-4 border-t">{row.role}</td>
-                <td className="py-3 px-4 border-t">{row.team}</td>
+                <td className="py-3 px-4 border-t" onClick={() => applyColor()}>{row.team}</td>
               </tr>
             ))}
           </tbody>
