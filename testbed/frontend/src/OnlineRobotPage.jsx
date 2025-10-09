@@ -1,8 +1,8 @@
-export default function OnlineRobotPage() {
+export default function OnlineRobotPage({ publishCommand }) {
   const applyColor = async (r, g, b) => {
-    let application = "DotBot";
+    let application = "0";
     let address = "482f353f8dd6ce8e";
-    print("publish command");
+    console.log("publish command");
     await publishCommand(address, application, "rgb_led", { red: r, green: g, blue: b });
   }
 
@@ -29,9 +29,9 @@ export default function OnlineRobotPage() {
                 className={`hover:bg-[#C9191E]/5 transition-colors ${i % 2 === 0 ? "bg-gray-50" : "bg-white"
                   }`}
               >
-                <td className="py-3 px-4 border-t">{row.name}</td>
-                <td className="py-3 px-4 border-t">{row.role}</td>
-                <td className="py-3 px-4 border-t" onClick={() => applyColor()}>{row.team}</td>
+                <td className="py-3 px-4 border-t" onClick={() => applyColor(255, 0, 0)}>{row.name}</td>
+                <td className="py-3 px-4 border-t" onClick={() => applyColor(0, 255, 0)}>{row.role}</td>
+                <td className="py-3 px-4 border-t" onClick={() => applyColor(0, 0, 255)}>{row.team}</td>
               </tr>
             ))}
           </tbody>
