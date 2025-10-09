@@ -1,9 +1,20 @@
 import { useState } from "react";
 import OnlineRobotPage from "./OnlineRobotPage";
 import BlankPage from "./BlankPage";
+import { useQrKey } from "qrkey";
+import { useSearchParams } from 'react-router-dom';
 
 export default function InriaDashboard() {
   const [page, setPage] = useState(1);
+  const [message, setMessage] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // const [ready, clientId, mqttData, setMqttData, publish, publishCommand, sendRequest] = useQrKey({
+  //   // rootTopic: process.env.REACT_APP_ROOT_TOPIC,
+  //   rootTopic: "/pydotbot",
+  //   setQrKeyMessage: setMessage,
+  //   searchParams: searchParams,
+  //   setSearchParams: setSearchParams,
+  // });
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#C9191E]/10 to-white">
@@ -33,19 +44,19 @@ export default function InriaDashboard() {
         {/* Main Content */}
         <main className="flex-1 p-8">
           {page === 1 && (
-            BlankPage()
+            < BlankPage />
           )}
 
           {page === 2 && (
-            BlankPage()
+            < BlankPage />
           )}
 
           {page === 3 && (
-            BlankPage()
+            < BlankPage />
           )}
 
           {page === 4 && (
-            OnlineRobotPage()
+            <OnlineRobotPage />
           )}
         </main>
       </div>

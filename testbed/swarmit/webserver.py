@@ -39,4 +39,4 @@ async def root():
 
 # Mount static files after all routes are defined
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-api.mount("/frontend", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+api.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
