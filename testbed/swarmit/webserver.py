@@ -6,17 +6,19 @@
 """Module for the web server application."""
 
 import os
-import base64
-import tempfile
+from dataclasses import asdict
 from typing import List
 from pydantic import BaseModel
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 from dotbot import pydotbot_version
+
+from testbed.swarmit.controller import Controller, ControllerSettings
 
 api = FastAPI(
     debug=0,
@@ -33,6 +35,20 @@ api.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def init_api(api: FastAPI, settings: ControllerSettings):
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Run on startup 
+        controller: Controller = Controller(settings)
+        app.state.controller = controller
+
+        yield
+        
+        # Run on shutdown 
+        controller.terminate()
+    api.router.lifespan_context = lifespan
+
 
 
 @api.get("/")
@@ -70,6 +86,19 @@ async def flash_firmware():
     #     raise HTTPException(status_code=500, detail=str(e))
     
     return JSONResponse(content={"response": "success"})
+
+@api.get("/status")
+async def status(request: Request):
+    controller: Controller = request.app.state.controller
+    response = {
+        k: {
+            **asdict(v),
+            "device": v.device.name,
+            "status": v.status.name,
+        }
+        for k, v in controller.status_data.items()
+    }
+    return JSONResponse(content={"response": response})
 
 
 # Mount static files after all routes are defined
