@@ -26,7 +26,7 @@ from testbed.swarmit.controller import (
     print_transfer_status,
 )
 from testbed.swarmit.logger import setup_logging
-from testbed.swarmit.webserver import api
+from testbed.swarmit.webserver import api, init_api
 
 DEFAULTS = {
     "adapter": "edge",
@@ -383,17 +383,16 @@ def load_toml_config(path):
 @main.command()
 @click.pass_context
 def web(ctx):
-    asyncio.run(async_web(ctx.obj["settings"].mqtt_port))
+    asyncio.run(async_web(ctx.obj["settings"]))
 
 
-async def async_web(mqtt_port: int):
+async def async_web(settings: ControllerSettings):
     tasks = []
     try:
         tasks = [
-            asyncio.create_task(name="Web server", coro=_serve_fast_api(mqtt_port)),
-            asyncio.create_task(name="Web browser", coro=_open_webbrowser(mqtt_port)),
+            asyncio.create_task(name="Web server", coro=_serve_fast_api(settings)),
+            asyncio.create_task(name="Web browser", coro=_open_webbrowser(settings.mqtt_port)),
         ]
-        print("here")
         await asyncio.gather(*tasks)
     except Exception as exc:  # TODO: use the right exception here 
         print(f"Error: {exc}")
@@ -406,10 +405,11 @@ async def async_web(mqtt_port: int):
             task.cancel()
         print("Controller stopped")
 
-async def _serve_fast_api(mqtt_port: int):
+async def _serve_fast_api(settings: ControllerSettings):
     """Starts the web server application."""
+    init_api(api, settings)
     config = uvicorn.Config(
-        api, port=mqtt_port, log_level="critical"
+        api, port=settings.mqtt_port, log_level="critical"
     )
     server = uvicorn.Server(config)
 
