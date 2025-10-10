@@ -123,7 +123,7 @@ export default function InriaDashboard() {
           )}
 
           {page === 4 && (
-            <OnlineRobotPage publishCommand={publishCommand} />
+            <OnlineRobotPage />
           )}
         </main>
       </div>

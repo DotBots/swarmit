@@ -51,14 +51,6 @@ def init_api(api: FastAPI, settings: ControllerSettings):
     api.router.lifespan_context = lifespan
 
 
-
-@api.get("/")
-async def root():
-    FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-    print(FRONTEND_DIR)
-    return {"message": "Hello World"}
-
-
 class FirmwareUpload(BaseModel):
     firmware_b64: str  # firmware encoded as base64 string
 
