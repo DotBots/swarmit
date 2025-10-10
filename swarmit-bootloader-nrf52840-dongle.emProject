@@ -1,0 +1,72 @@
+<!DOCTYPE CrossStudio_Project_File>
+<solution Name="Bootloader nRF52840 Dongle" version="2" target="8">
+  <configuration
+    LIBRARY_IO_TYPE="RTT"
+    Name="Common"
+    arm_architecture="v7EM"
+    arm_compiler_variant="SEGGER"
+    arm_core_type="Cortex-M4"
+    arm_endian="Little"
+    arm_fp_abi="Hard"
+    arm_fpu_type="FPv4-SP-D16"
+    arm_keep_assembly="Yes"
+    arm_linker_heap_size="2048"
+    arm_linker_stack_size="1024"
+    arm_linker_variant="GNU"
+    arm_rtl_variant="SEGGER"
+    arm_target_debug_interface_type="ADIv5"
+    arm_target_device_name="nRF52840_xxAA"
+    arm_target_interface_type="SWD"
+    arm_use_builtins="Yes"
+    build_intermediate_directory="Output/$(BuildTarget)/$(Configuration)/Obj"
+    build_output_directory="Output/$(BuildTarget)/$(Configuration)/Exe"
+    build_output_file_name="$(OutDir)/$(ProjectName)-$(BuildTarget)$(EXE)"
+    build_treat_warnings_as_errors="Yes"
+    c_only_additional_options="-Wno-missing-prototypes;-Wno-strict-prototypes"
+    c_preprocessor_definitions="ARM_MATH_CM4;NRF52840_XXAA;__NRF_FAMILY;CONFIG_NFCT_PINS_AS_GPIOS;BOARD_NRF52840DK;USE_MARI"
+    c_user_include_directories="$(SolutionDir)/../../dotbot-firmware/bsp;$(SolutionDir)/../../dotbot-firmware/drv;$(SolutionDir)/../../dotbot-firmware/crypto;$(SolutionDir)/../../mari/mari;$(SolutionDir)/../../mari/drv;$(PackagesDir)/nRF/Device/Include;$(PackagesDir)/CMSIS_5/CMSIS/Core/Include"
+    clang_machine_outliner="Yes"
+    compiler_color_diagnostics="Yes"
+    debug_register_definition_file="$(ProjectDir)/Setup/nrf52840_Registers.xml"
+    debug_stack_pointer_start="__stack_end__"
+    debug_start_from_entry_point_symbol="No"
+    debug_target_connection="J-Link"
+    gcc_c_language_standard="gnu17"
+    gcc_cplusplus_language_standard="gnu++20"
+    gcc_enable_all_warnings="Yes"
+    gcc_entry_point="Reset_Handler"
+    gcc_strip_symbols="No"
+    link_dedupe_code="Yes"
+    link_time_optimization="No"
+    linker_additional_options="--gc-sections"
+    linker_memory_map_file="$(ProjectDir)/Setup/MemoryMap.xml"
+    linker_output_format="hex"
+    linker_printf_fmt_level="int"
+    linker_printf_fp_enabled="Float"
+    linker_printf_width_precision_supported="Yes"
+    linker_section_placement_file="Setup/flash_placement.xml"
+    macros="BuildTarget=nrf52840dk"
+    target_reset_script="Reset();"
+    target_script_file="$(ProjectDir)/Setup/nRF_Target.js"
+    target_trace_initialize_script="EnableTrace(&quot;$(TraceInterfaceType)&quot;)"
+    use_compiler_driver="Yes" />
+  <configuration
+    Name="Debug"
+    c_preprocessor_definitions="DEBUG"
+    gcc_debugging_level="Level 3"
+    gcc_omit_frame_pointer="Yes"
+    gcc_optimization_level="None" />
+  <configuration
+    Name="Release"
+    arm_compiler_variant="SEGGER"
+    c_preprocessor_definitions="NDEBUG"
+    gcc_debugging_level="Level 2"
+    gcc_omit_frame_pointer="Yes"
+    gcc_optimization_level="Level 2 balanced" />
+  <import file_name="device/bootloader-single-core/bootloader-app.emProject" />
+  <import file_name="dotbot-firmware/bsp/bsp.emProject" />
+  <import file_name="dotbot-firmware/crypto/crypto.emProject" />
+  <import file_name="dotbot-firmware/drv/drv.emProject" />
+  <import file_name="mari/mari/mari.emProject" />
+  <import file_name="mari/drv/drv.emProject" />
+</solution>

@@ -1,0 +1,29 @@
+<!DOCTYPE CrossStudio_Project_File>
+<solution Name="Bootloader" target="8" version="2">
+  <project Name="bootloader">
+    <configuration
+      Name="Common"
+      project_dependencies="00bsp_dotbot_lh2(bsp);00bsp_timer(bsp);00bsp_pwm(bsp);00bsp_gpio(bsp);00bsp_saadc(bsp);00crypto_sha256(crypto);01mari(01mari);00bsp_clock(bsp)"
+      project_directory=""
+      project_type="Executable" />
+    <configuration Name="Release" gcc_optimization_level="Level 0" />
+    <folder Name="Setup">
+      <file file_name="Setup/flash_placement.xml" />
+      <file file_name="Setup/MemoryMap.xml" />
+    </folder>
+    <folder Name="Source">
+      <file file_name="Source/battery.c" />
+      <file file_name="Source/battery.h" />
+      <file file_name="Source/main.c" />
+      <file file_name="Source/nvmc.c" />
+      <file file_name="Source/nvmc.h" />
+      <file file_name="Source/protocol.h" />
+    </folder>
+    <folder Name="System">
+      <file file_name="System/fault_handlers.c" />
+      <file file_name="System/fault_handlers.h" />
+      <file file_name="System/startup.c" />
+      <file file_name="System/system_init.c" />
+    </folder>
+  </project>
+</solution>
