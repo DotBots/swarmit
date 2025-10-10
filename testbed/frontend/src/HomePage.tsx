@@ -17,7 +17,7 @@ export default function HomePage() {
           return res
             .json()
             .then((data) => {
-              setMessage(`Error: ${data || "Failed to start testbed"}`);
+              setMessage(`Error: ${data.detail || "Failed to start testbed"}`);
             })
             .catch(() => {
               setMessage("Failed to start testbed");
@@ -44,7 +44,7 @@ export default function HomePage() {
           return res
             .json()
             .then((data) => {
-              setMessage(`Error: ${data || "Failed to stop testbed"}`);
+              setMessage(`Error: ${data.detail || "Failed to stop testbed"}`);
             })
             .catch(() => {
               setMessage("Failed to stop testbed");
@@ -89,7 +89,7 @@ export default function HomePage() {
           if (ok) {
             setMessage("File flashed successfully");
           } else {
-            setMessage(data.error || "Unknown error");
+            setMessage(data.detail || "Unknown error");
           }
           setLoading(false);
         })

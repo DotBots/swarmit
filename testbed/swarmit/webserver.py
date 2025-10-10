@@ -12,7 +12,7 @@ from typing import List
 from pydantic import BaseModel
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -52,41 +52,29 @@ def init_api(api: FastAPI, settings: ControllerSettings):
 
 
 class FirmwareUpload(BaseModel):
-    firmware_b64: str  # firmware encoded as base64 string
+    firmware_b64: str
 
 @api.post("/flash")
 async def flash_firmware(request: Request, payload: FirmwareUpload):
     controller: Controller = request.app.state.controller
 
     if not controller.ready_devices:
-        return JSONResponse(
-            content={"error": "no ready devices to flash"},
-            status_code=400
-        )
+        raise HTTPException(status_code=400, detail="no ready devices to flash")
     
     try:
         fw_bytes = base64.b64decode(payload.firmware_b64)
         fw = bytearray(fw_bytes)
     except Exception as e:
-        return JSONResponse(
-            content={"error": f"invalid firmware encoding: {str(e)}"},
-            status_code=400
-        )
+        raise HTTPException(status_code=400, detail="invalid firmware encoding: {str(e)}")
 
     start_data = controller.start_ota(fw)
     if start_data["missed"]:
-        return JSONResponse(
-            content={"error": f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}). "},
-            status_code=400
-        )
+        raise HTTPException(status_code=400, detail=f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}).")
 
     data = controller.transfer(fw, start_data["acked"])
     
     if all(device.success for device in data.values()) is False:
-        return JSONResponse(
-            content={"error": f"transfer failed"},
-            status_code=400
-        )
+        raise HTTPException(status_code=400, detail="transfer failed")
 
     return JSONResponse(content={"response": "success"})
 
