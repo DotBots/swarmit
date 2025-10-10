@@ -5,6 +5,7 @@
 
 """Module for the web server application."""
 
+import base64
 import os
 from dataclasses import asdict
 from typing import List
@@ -58,33 +59,43 @@ async def root():
     return {"message": "Hello World"}
 
 
-class FlashRequest(BaseModel):
-    yes: bool = False
-    start: bool = False
-    ota_timeout: float = 0.7 # TODO: use default
-    ota_max_retries: int = 10 # TODO: use default
-    firmware_base64: str
+class FirmwareUpload(BaseModel):
+    firmware_b64: str  # firmware encoded as base64 string
 
 @api.post("/flash")
-async def flash_firmware():
-    # firmware_path = None
+async def flash_firmware(request: Request, payload: FirmwareUpload):
+    controller: Controller = request.app.state.controller
 
-    # # If firmware is base64-encoded, decode and save to a temp file
-    # if req.firmware_base64:
-    #     try:
-    #         data = base64.b64decode(req.firmware_base64)
-    #         with tempfile.NamedTemporaryFile(delete=False) as tmp:
-    #             tmp.write(data)
-    #             firmware_path = tmp.name
-    #     except Exception as e:
-    #         raise HTTPException(status_code=400, detail=f"Invalid base64 firmware: {e}")
-
-    # try:
-    #     flash(req.yes, req.start, req.ota_timeout, req.ota_max_retries, firmware_path)
-    #     return JSONResponse(content={"response": "success"})
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    if not controller.ready_devices:
+        return JSONResponse(
+            content={"error": "no ready devices to flash"},
+            status_code=400
+        )
     
+    try:
+        fw_bytes = base64.b64decode(payload.firmware_b64)
+        fw = bytearray(fw_bytes)
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"invalid firmware encoding: {str(e)}"},
+            status_code=400
+        )
+
+    start_data = controller.start_ota(fw)
+    if start_data["missed"]:
+        return JSONResponse(
+            content={"error": f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}). "},
+            status_code=400
+        )
+
+    data = controller.transfer(fw, start_data["acked"])
+    
+    if all(device.success for device in data.values()) is False:
+        return JSONResponse(
+            content={"error": f"transfer failed"},
+            status_code=400
+        )
+
     return JSONResponse(content={"response": "success"})
 
 @api.get("/status")
