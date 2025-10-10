@@ -1,6 +1,7 @@
 import { useState } from "react";
 import OnlineRobotPage from "./OnlineRobotPage";
 import BlankPage from "./BlankPage";
+import HomePage from "./HomePage";
 
 export default function InriaDashboard() {
   const [page, setPage] = useState(1);
@@ -33,7 +34,7 @@ export default function InriaDashboard() {
         {/* Main Content */}
         <main className="flex-1 p-8">
           {page === 1 && (
-            < BlankPage />
+            < HomePage />
           )}
 
           {page === 2 && (
