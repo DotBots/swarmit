@@ -101,6 +101,24 @@ async def status(request: Request):
     return JSONResponse(content={"response": response})
 
 
+@api.post("/start")
+async def start(request: Request):
+    controller: Controller = request.app.state.controller
+
+    controller.start()
+
+    return JSONResponse(content={"response": "done"})
+
+
+@api.post("/stop")
+async def stop(request: Request):
+    controller: Controller = request.app.state.controller
+
+    controller.stop()
+
+    return JSONResponse(content={"response": "done"})
+
+
 # Mount static files after all routes are defined
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 api.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
