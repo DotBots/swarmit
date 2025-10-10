@@ -6,9 +6,11 @@
 """Module for the web server application."""
 
 import base64
+import datetime
 import os
 from dataclasses import asdict
 from typing import List
+import jwt
 from pydantic import BaseModel
 
 from contextlib import asynccontextmanager
@@ -109,6 +111,39 @@ async def stop(request: Request):
 
     return JSONResponse(content={"response": "done"})
 
+
+# Load RSA keys
+with open("private.pem", "r") as f:
+    PRIVATE_KEY = f.read()
+
+with open("public.pem", "r") as f:
+    PUBLIC_KEY = f.read()
+
+class IssueRequest(BaseModel):
+    start: str  # ISO8601 string
+
+@api.post("/issue_jwt")
+def issue_token(req: IssueRequest):
+    try:
+        start = datetime.datetime.fromisoformat(req.start.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid 'start' time format (use ISO8601)")
+
+
+    end = start + datetime.timedelta(minutes=30)
+    payload = {
+        "iat": datetime.datetime.now(datetime.timezone.utc),
+        "nbf": start,
+        "exp": end,
+    }
+    token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
+    return {"data": token}
+
+
+@api.get("/public_key", response_class=None)
+def public_key():
+    """Expose the public key (frontend can use this to verify JWT signatures)."""
+    return JSONResponse(content={"data": PUBLIC_KEY})
 
 # Mount static files after all routes are defined
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
