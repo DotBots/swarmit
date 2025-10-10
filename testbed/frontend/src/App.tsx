@@ -1,6 +1,6 @@
 import { useState } from "react";
 import OnlineRobotPage from "./OnlineRobotPage";
-import BlankPage from "./BlankPage";
+import CalendarPage from "./CalendarPage";
 import HomePage from "./HomePage";
 
 export default function InriaDashboard() {
@@ -17,7 +17,7 @@ export default function InriaDashboard() {
       <div className="flex flex-1">
         {/* Sidebar */}
         <aside className="w-56 bg-white/70 backdrop-blur-md border-r border-gray-200 shadow-sm flex flex-col p-4 space-y-3">
-          {["Home", "Research", "Projects", "Data Table"].map((label, i) => (
+          {["Home", "Calendar", "Data Table"].map((label, i) => (
             <button
               key={label}
               onClick={() => setPage(i + 1)}
@@ -38,14 +38,10 @@ export default function InriaDashboard() {
           )}
 
           {page === 2 && (
-            < BlankPage />
+            < CalendarPage />
           )}
 
           {page === 3 && (
-            < BlankPage />
-          )}
-
-          {page === 4 && (
             <OnlineRobotPage />
           )}
         </main>
