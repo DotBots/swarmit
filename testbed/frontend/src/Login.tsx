@@ -4,7 +4,7 @@ type VerifyResult =
   | { valid: true; fresh: boolean; payload: TokenPayload }
   | { valid: false; reason: string };
 
-interface TokenPayload {
+export interface TokenPayload {
   iat: number; // issued at
   nbf: number; // not before
   exp: number; // expiration
@@ -76,15 +76,14 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
   return (
     <div className="p-4">
       {open && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50">
-          <div className="bg-white p-6 rounded-2xl shadow-lg w-80">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-2">
+          <div className="bg-white p-6 rounded-2xl shadow-lg w-160">
             <h2 className="text-lg font-semibold mb-3">Enter JWT</h2>
-            <input
-              type="text"
+            <textarea
               value={unverifiedToken}
               onChange={(e) => setUnverifiedToken(e.target.value)}
               placeholder={token}
-              className="w-full border p-2 rounded mb-4"
+              className="w-full border p-2 rounded mb-4 h-32 overflow-auto font-mono"
             />
             <div className="flex justify-end gap-2">
               <button

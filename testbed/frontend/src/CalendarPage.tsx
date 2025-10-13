@@ -52,7 +52,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-600">
-              Start (ISO 8601)
+              Start (datetime local)
             </label>
             <input
               type="datetime-local"
