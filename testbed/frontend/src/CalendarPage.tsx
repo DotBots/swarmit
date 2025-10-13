@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useState } from "react";
+import { ChangeEvent, Dispatch, SetStateAction, useState } from "react";
 
 interface IssueRequest {
   start: string;
@@ -10,11 +10,11 @@ interface CalendarPageProps {
 }
 
 export default function CalendarPage({ token, setToken }: CalendarPageProps) {
-  const [start, setStart] = useState<string>("");
+  const [dateTime, setDateTime] = useState<Date | null>(null);
+
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // --- Issue JWT ---
   const handleIssue = async () => {
     setResult(null);
     setToken("");
@@ -24,22 +24,97 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
       const res = await fetch("http://localhost:8883/issue_jwt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start } as IssueRequest),
+        body: JSON.stringify({
+          start: dateTime
+            ? `${dateTime.getUTCFullYear()}-${(dateTime.getUTCMonth() + 1)
+              .toString()
+              .padStart(2, "0")}-${dateTime.getUTCDate().toString().padStart(2, "0")}T${dateTime
+                .getUTCHours()
+                .toString()
+                .padStart(2, "0")}:${dateTime.getUTCMinutes().toString().padStart(2, "0")}Z`
+            : null
+        } as IssueRequest),
       });
 
       if (!res.ok) {
         const err = await res.text();
-        setResult(`❌ ${err}`);
+        setResult(`${err}`);
         return;
       }
 
       const data: { data: string } = await res.json();
       setToken(data.data);
     } catch (e: any) {
-      setResult(`❌ ${e.message}`);
+      setResult(`${e.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDownload = () => {
+    if (!dateTime) return;
+
+    const start = new Date(dateTime);
+    const end = new Date(dateTime);
+    end.setMinutes(end.getMinutes() + 30);
+
+    const fmt = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      "SUMMARY:DotBots Event",
+      `DTSTART:${fmt(start)}`,
+      `DTEND:${fmt(end)}`,
+      `DESCRIPTION:${token}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+
+    const blob = new Blob([ics], { type: "text/calendar" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "event.ics";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const generateTimeOptions = (): string[] => {
+    const options: string[] = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (let min of [0, 30]) {
+        const hh = hour.toString().padStart(2, "0");
+        const mm = min.toString().padStart(2, "0");
+        options.push(`${hh}:${mm}`);
+      }
+    }
+    return options;
+  };
+
+  const displayValue = dateTime
+    ? `${dateTime.getFullYear()}-${(dateTime.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}-${dateTime.getDate().toString().padStart(2, "0")}T${dateTime
+        .getHours()
+        .toString()
+        .padStart(2, "0")}:${dateTime.getMinutes().toString().padStart(2, "0")}`
+    : "";
+
+  const handleDateChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const [year, month, day] = e.target.value.split("-").map(Number);
+    const newDate = dateTime ? new Date(dateTime) : new Date();
+    newDate.setFullYear(year, month - 1, day);
+    setDateTime(newDate);
+  };
+
+  const handleTimeChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const [hours, minutes] = e.target.value.split(":").map(Number);
+    const newDate = dateTime ? new Date(dateTime) : new Date();
+    newDate.setHours(hours, minutes, 0, 0);
+    setDateTime(newDate);
   };
 
   return (
@@ -54,12 +129,32 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
             <label className="block text-sm font-medium text-gray-600">
               Start (datetime local)
             </label>
-            <input
-              type="datetime-local"
-              className="w-full p-2 border rounded-lg mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-            />
+
+            <div>
+              <label className="block">Date:</label>
+              <input
+                type="date"
+                className="w-full p-2 border rounded-lg mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={dateTime ? displayValue.slice(0, 10) : ""}
+                onChange={handleDateChange}
+              />
+            </div>
+
+            <div>
+              <label className="block">Time:</label>
+              <select
+                value={dateTime ? displayValue.slice(11, 16) : ""}
+                onChange={handleTimeChange}
+                className="w-full p-2 border rounded-lg mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a time</option>
+                {generateTimeOptions().map((t: string) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <button
@@ -81,6 +176,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
                 rows={10}
                 className="w-full p-2 border rounded-lg bg-gray-50 font-mono text-xs"
               />
+              <button onClick={handleDownload}>Add to Calendar</button>
             </div>
           )}
 
