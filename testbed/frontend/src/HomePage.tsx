@@ -1,15 +1,23 @@
 import { useState } from "react";
 
-export default function HomePage() {
+interface HomePageProps {
+  token: string;
+}
+
+export default function HomePage({ token }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const handleStart = () => {
     setLoading(true);
-    setMessage(null);
+    setMessage("Starting...");
 
-    fetch("http://localhost:8883/start", { method: "POST" })
+    fetch("http://localhost:8883/start", {
+      method: "POST", headers: {
+        "Authorization": `Bearer ${token}`,
+      }
+    })
       .then((res) => {
         if (res.ok) {
           setMessage("Testbed started successfully");
@@ -24,8 +32,8 @@ export default function HomePage() {
             });
         }
       })
-      .catch((err) => {
-        setMessage(`Error: ${err.message}`);
+      .catch((_err) => {
+        setMessage(`Error: couldn't authorize token`);
       })
       .finally(() => {
         setLoading(false);
@@ -34,9 +42,13 @@ export default function HomePage() {
 
   const handleStop = () => {
     setLoading(true);
-    setMessage(null);
+    setMessage("Stopping...");
 
-    fetch("http://localhost:8883/stop", { method: "POST" })
+    fetch("http://localhost:8883/stop", {
+      method: "POST", headers: {
+        "Authorization": `Bearer ${token}`,
+      }
+    })
       .then((res) => {
         if (res.ok) {
           setMessage("Testbed stopped successfully");
@@ -51,8 +63,8 @@ export default function HomePage() {
             });
         }
       })
-      .catch((err) => {
-        setMessage(`Error: ${err.message}`);
+      .catch((_err) => {
+        setMessage(`Error: couldn't authorize token`);
       })
       .finally(() => {
         setLoading(false);
@@ -76,7 +88,10 @@ export default function HomePage() {
 
       fetch("http://localhost:8883/flash", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({ firmware_b64: base64 }),
       })
         .then((res) =>
@@ -93,8 +108,8 @@ export default function HomePage() {
           }
           setLoading(false);
         })
-        .catch((err) => {
-          setMessage(`Error: ${err.message}`);
+        .catch((_err) => {
+          setMessage(`Error: couldn't authorize token`);
           setLoading(false);
         });
     };
