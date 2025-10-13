@@ -19,10 +19,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
+from sqlalchemy import asc
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from dotbot import pydotbot_version
 
 from testbed.swarmit.controller import Controller, ControllerSettings
+from testbed.swarmit.model import JWTRecord, get_db
 
 api = FastAPI(
     debug=0,
@@ -53,7 +57,6 @@ security = HTTPBearer()
 def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, PUBLIC_KEY, algorithms=[ALGORITHM])
-        print(payload)
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -140,7 +143,7 @@ class IssueRequest(BaseModel):
     start: str  # ISO8601 string
 
 @api.post("/issue_jwt")
-def issue_token(req: IssueRequest):
+def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
     try:
         start = datetime.datetime.fromisoformat(req.start.replace("Z", "+00:00"))
     except ValueError:
@@ -154,6 +157,16 @@ def issue_token(req: IssueRequest):
         "exp": end,
     }
     token = jwt.encode(payload, PRIVATE_KEY, algorithm=ALGORITHM)
+
+    db_record = JWTRecord(jwt=token, date_start=start, date_end=end)
+    db.add(db_record)
+    try:
+        db.commit()
+        db.refresh(db_record)
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Timeslot already full")
+        
     return {"data": token}
 
 
@@ -161,6 +174,27 @@ def issue_token(req: IssueRequest):
 def public_key():
     """Expose the public key (frontend can use this to verify JWT signatures)."""
     return JSONResponse(content={"data": PUBLIC_KEY})
+
+class JWTRecordOut(BaseModel):
+    date_start: datetime.datetime
+    date_end: datetime.datetime
+    model_config = {"arbitrary_types_allowed": True}
+
+@api.get("/records", response_model=list[JWTRecordOut])
+def list_records(db: Session = Depends(get_db)):
+    now = datetime.datetime.now(datetime.timezone.utc) 
+    yesterday = now - datetime.timedelta(days=1)
+    one_month_later = now + datetime.timedelta(days=30)
+    records = (
+        db.query(JWTRecord)
+        .filter(
+            JWTRecord.date_start >= yesterday,
+            JWTRecord.date_start <= one_month_later
+        )
+        .order_by(asc(JWTRecord.date_start))
+        .all()
+    )
+    return records
 
 # Mount static files after all routes are defined
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

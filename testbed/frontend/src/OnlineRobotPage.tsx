@@ -62,7 +62,7 @@ export default function OnlineRobotPage() {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(data).map(([id, robot], i) => (
+            {data && Object.entries(data).map(([id, robot], i) => (
               <tr
                 key={id}
                 className={`hover:bg-[#C9191E]/5 transition-colors ${i % 2 === 0 ? "bg-gray-50" : "bg-white"
