@@ -10,16 +10,46 @@ interface CalendarPageProps {
   setToken: Dispatch<SetStateAction<Token | null>>;
 }
 
+type RecordType = {
+  date_start: string;
+  date_end: string;
+};
+
+
 export default function CalendarPage({ token, setToken }: CalendarPageProps) {
-  const [dateTime, setDateTime] = useState<Date | null>(null);
+  const [dateTime, setDateTime] = useState<Date>(new Date(new Date().setHours(0, 0, 0, 0)));
 
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [records, setRecords] = useState<RecordType[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    const fetchRecords = async () => {
+      try {
+        const response = await fetch("http://localhost:8883/records");
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data: RecordType[] = await response.json();
+        setRecords(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRecords();
+  }, [token]);
+
 
   const handleIssue = async () => {
     setResult(null);
     setToken(null);
     setLoading(true);
+    if (!dateTime) { return; };
 
     try {
       const res = await fetch("http://localhost:8883/issue_jwt", {
@@ -189,6 +219,26 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="overflow-x-auto bg-white rounded-2xl shadow">
+        <table className="min-w-full border-collapse">
+          <thead>
+            <tr className="bg-[#C9191E]/90 text-white">
+              <th className="py-3 px-4 text-left font-semibold">Start Date</th>
+              <th className="py-3 px-4 text-left font-semibold">End Date</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {records.map((record, i) => (
+              <tr key={i} className={`hover:bg-[#C9191E]/5 transition-colors ${i % 2 === 0 ? "bg-gray-50" : "bg-white"
+                }`}>
+                <td className="py-3 px-4 border-t">{record.date_start}</td>
+                <td className="py-3 px-4 border-t">{record.date_end}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
