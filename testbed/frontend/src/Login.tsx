@@ -1,20 +1,15 @@
 import { useState, Dispatch, SetStateAction } from "react";
+import { Token, TokenPayload } from "./App";
 
 type VerifyResult =
   | { valid: true; fresh: boolean; payload: TokenPayload }
   | { valid: false; reason: string };
 
-export interface TokenPayload {
-  iat: number; // issued at
-  nbf: number; // not before
-  exp: number; // expiration
-}
-
 interface LoginProps {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  token: string;
-  setToken: Dispatch<SetStateAction<string>>;
+  token: Token | null;
+  setToken: Dispatch<SetStateAction<Token | null>>;
 }
 
 export default function LoginModal({ open, setOpen, token, setToken }: LoginProps) {
@@ -27,7 +22,7 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
     const publicKeyPem = await fetch("http://localhost:8883/public_key").then((r) => r.json());
     const res = await verifyJWT(unverifiedToken, publicKeyPem.data);
     if (res.valid) {
-      setToken(unverifiedToken);
+      setToken({ token: unverifiedToken, payload: res.payload });
       setUnverifiedToken("");
       setOpen(false);
     } else {
@@ -82,7 +77,7 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
             <textarea
               value={unverifiedToken}
               onChange={(e) => setUnverifiedToken(e.target.value)}
-              placeholder={token}
+              placeholder={token?.token || "Paste your JSON web token here"}
               className="w-full border p-2 rounded mb-4 h-32 overflow-auto font-mono"
             />
             <div className="flex justify-end gap-2">
