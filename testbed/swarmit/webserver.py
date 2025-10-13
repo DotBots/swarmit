@@ -14,9 +14,10 @@ import jwt
 from pydantic import BaseModel
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 
 from dotbot import pydotbot_version
@@ -39,6 +40,31 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
+# Load RSA keys
+with open("private.pem", "r") as f:
+    PRIVATE_KEY = f.read()
+
+with open("public.pem", "r") as f:
+    PUBLIC_KEY = f.read()
+
+ALGORITHM = "RS256"
+security = HTTPBearer()
+
+def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, PUBLIC_KEY, algorithms=[ALGORITHM])
+        print(payload)
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )
+
+
 def init_api(api: FastAPI, settings: ControllerSettings):
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -56,7 +82,7 @@ def init_api(api: FastAPI, settings: ControllerSettings):
 class FirmwareUpload(BaseModel):
     firmware_b64: str
 
-@api.post("/flash")
+@api.post("/flash", dependencies=[Depends(verify_jwt)])
 async def flash_firmware(request: Request, payload: FirmwareUpload):
     controller: Controller = request.app.state.controller
 
@@ -95,7 +121,7 @@ async def status(request: Request):
 
 
 @api.post("/start")
-async def start(request: Request):
+async def start(request: Request, _token_payload=Depends(verify_jwt)):
     controller: Controller = request.app.state.controller
 
     controller.start()
@@ -103,22 +129,13 @@ async def start(request: Request):
     return JSONResponse(content={"response": "done"})
 
 
-@api.post("/stop")
+@api.post("/stop", dependencies=[Depends(verify_jwt)])
 async def stop(request: Request):
     controller: Controller = request.app.state.controller
 
     controller.stop()
 
     return JSONResponse(content={"response": "done"})
-
-
-# Load RSA keys
-with open("private.pem", "r") as f:
-    PRIVATE_KEY = f.read()
-
-with open("public.pem", "r") as f:
-    PUBLIC_KEY = f.read()
-
 class IssueRequest(BaseModel):
     start: str  # ISO8601 string
 
@@ -136,7 +153,7 @@ def issue_token(req: IssueRequest):
         "nbf": start,
         "exp": end,
     }
-    token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
+    token = jwt.encode(payload, PRIVATE_KEY, algorithm=ALGORITHM)
     return {"data": token}
 
 

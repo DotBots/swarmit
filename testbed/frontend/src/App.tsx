@@ -36,7 +36,7 @@ export default function InriaDashboard() {
 
         <main className="flex-1 p-8">
           {page === 1 && (
-            < HomePage />
+            < HomePage token={token} />
           )}
 
           {page === 2 && (
