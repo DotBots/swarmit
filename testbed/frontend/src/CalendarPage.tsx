@@ -1,18 +1,16 @@
-import { useState } from "react";
+import { Dispatch, SetStateAction, useState } from "react";
 
 interface IssueRequest {
   start: string;
 }
 
-interface VerifyResult {
-  valid: boolean;
-  reason?: string;
-  payload?: any;
+interface CalendarPageProps {
+  token: string;
+  setToken: Dispatch<SetStateAction<string>>;
 }
 
-export default function CalendarPage() {
+export default function CalendarPage({ token, setToken }: CalendarPageProps) {
   const [start, setStart] = useState<string>("");
-  const [token, setToken] = useState<string>("");
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -44,55 +42,11 @@ export default function CalendarPage() {
     }
   };
 
-  // --- Web Crypto helpers ---
-  const importPublicKey = async (pem: string): Promise<CryptoKey> => {
-    const pemHeader = "-----BEGIN PUBLIC KEY-----";
-    const pemFooter = "-----END PUBLIC KEY-----";
-    const base64 = pem.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
-    const binaryDer = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    return crypto.subtle.importKey(
-      "spki",
-      binaryDer.buffer,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      true,
-      ["verify"]
-    );
-  };
-
-  const verifyJWT = async (token: string, publicKeyPem: string): Promise<VerifyResult> => {
-    const [headerB64, payloadB64, signatureB64] = token.split(".");
-    const payload = JSON.parse(atob(payloadB64));
-
-    const enc = new TextEncoder();
-    const data = enc.encode(`${headerB64}.${payloadB64}`);
-    const signature = Uint8Array.from(
-      atob(signatureB64.replace(/-/g, "+").replace(/_/g, "/")),
-      (c) => c.charCodeAt(0)
-    );
-
-    const key = await importPublicKey(publicKeyPem);
-    const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, data);
-
-    const now = Math.floor(Date.now() / 1000);
-    if (!valid) return { valid: false, reason: "Invalid signature" };
-    if (payload.nbf && now < payload.nbf) return { valid: false, reason: "Token not active yet" };
-    if (payload.exp && now > payload.exp) return { valid: false, reason: "Token expired" };
-
-    return { valid: true, payload };
-  };
-
-  const handleVerify = async () => {
-    if (!token) return;
-    const publicKeyPem = await fetch("http://localhost:8883/public_key").then((r) => r.json());
-    const res = await verifyJWT(token, publicKeyPem.data);
-    setResult(res.valid ? `✅ Valid: ${JSON.stringify(res.payload, null, 2)}` : `❌ ${res.reason}`);
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
       <div className="bg-white shadow-lg rounded-2xl p-8 w-full max-w-lg">
         <h1 className="text-2xl font-bold mb-6 text-gray-800">
-          🔐 JWT Time Window Demo (TSX)
+          JWT Time Window Demo
         </h1>
 
         <div className="space-y-4">
@@ -119,20 +73,14 @@ export default function CalendarPage() {
           {token && (
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-600 mb-1">
-                JWT Token
+                JWT Token (Please copy and don't share with anyone!)
               </label>
               <textarea
                 readOnly
                 value={token}
-                rows={5}
+                rows={10}
                 className="w-full p-2 border rounded-lg bg-gray-50 font-mono text-xs"
               />
-              <button
-                onClick={handleVerify}
-                className="mt-3 w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition"
-              >
-                Verify Token
-              </button>
             </div>
           )}
 

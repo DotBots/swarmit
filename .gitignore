@@ -26,3 +26,6 @@ dist/
 
 # Allow cmse-implib archive
 !sample/cmse_implib.a
+
+# Private Key
+private.pem
