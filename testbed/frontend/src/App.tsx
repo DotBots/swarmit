@@ -5,9 +5,20 @@ import HomePage from "./HomePage";
 import LoginModal from "./Login";
 
 
+export interface Token {
+  token: string;
+  payload: TokenPayload
+}
+
+export interface TokenPayload {
+  iat: number; // issued at
+  nbf: number; // not before
+  exp: number; // expiration
+}
+
 export default function InriaDashboard() {
   const [page, setPage] = useState(1);
-  const [token, setToken] = useState<string>("");
+  const [token, setToken] = useState<Token | null>(null);
   const [open, setOpen] = useState(false);
 
   return (

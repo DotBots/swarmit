@@ -1,29 +1,14 @@
 import { useEffect, useState } from "react";
-import { TokenPayload } from "./Login";
+import { Token } from "./App";
 
 interface HomePageProps {
-  token: string;
+  token: Token | null;
 }
 
 export default function HomePage({ token }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [payload, setPayload] = useState<TokenPayload | null>(null);
-
-  useEffect(() => {
-    if (!token) {
-      setPayload(null);
-      return;
-    }
-
-    try {
-      const [_headerB64, payloadB64, _signatureB64] = token.split(".");
-      setPayload(JSON.parse(atob(payloadB64)));
-    } catch (e) {
-      setPayload(null);
-    }
-  }, [token]);
 
   const handleStart = () => {
     setLoading(true);
@@ -136,11 +121,11 @@ export default function HomePage({ token }: HomePageProps) {
 
   return (
     <div className="max-w-md mx-auto p-6 space-y-6 bg-white rounded-2xl shadow mt-10 animate-fadeIn">
-      {payload && <div className="border p-4 rounded-lg bg-gray-50">
+      {token?.payload && <div className="border p-4 rounded-lg bg-gray-50">
         <h3 className="font-semibold mb-2">Token Info</h3>
-        <p><span className="font-medium">Issued at:</span> {unixToLocale(payload.iat)}</p>
-        <p><span className="font-medium">Not before:</span> {unixToLocale(payload.nbf)}</p>
-        <p><span className="font-medium">Expiration:</span> {unixToLocale(payload.exp)}</p>
+        <p><span className="font-medium">Issued at:</span> {unixToLocale(token?.payload.iat)}</p>
+        <p><span className="font-medium">Not before:</span> {unixToLocale(token?.payload.nbf)}</p>
+        <p><span className="font-medium">Expiration:</span> {unixToLocale(token?.payload.exp)}</p>
       </div>}
       <h1 className="text-2xl font-semibold text-gray-800 text-center">Testbed Control</h1>
 

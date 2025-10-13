@@ -1,12 +1,13 @@
-import { ChangeEvent, Dispatch, SetStateAction, useState } from "react";
+import { ChangeEvent, Dispatch, SetStateAction, useEffect, useState } from "react";
+import { Token } from "./App";
 
 interface IssueRequest {
   start: string;
 }
 
 interface CalendarPageProps {
-  token: string;
-  setToken: Dispatch<SetStateAction<string>>;
+  token: Token | null;
+  setToken: Dispatch<SetStateAction<Token | null>>;
 }
 
 export default function CalendarPage({ token, setToken }: CalendarPageProps) {
@@ -17,7 +18,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
 
   const handleIssue = async () => {
     setResult(null);
-    setToken("");
+    setToken(null);
     setLoading(true);
 
     try {
@@ -43,7 +44,9 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
       }
 
       const data: { data: string } = await res.json();
-      setToken(data.data);
+      const [_headerB64, payloadB64, _signatureB64] = data.data.split(".");
+      const payload = JSON.parse(atob(payloadB64));
+      setToken({ token: data.data, payload });
     } catch (e: any) {
       setResult(`${e.message}`);
     } finally {
@@ -52,10 +55,10 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
   };
 
   const handleDownload = () => {
-    if (!dateTime) return;
+    if (!token) return;
 
-    const start = new Date(dateTime);
-    const end = new Date(dateTime);
+    const start = new Date(token.payload.nbf * 1000);
+    const end = new Date(token.payload.nbf * 1000);
     end.setMinutes(end.getMinutes() + 30);
 
     const fmt = (d: Date) =>
@@ -172,7 +175,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
               </label>
               <textarea
                 readOnly
-                value={token}
+                value={token?.token}
                 rows={10}
                 className="w-full p-2 border rounded-lg bg-gray-50 font-mono text-xs"
               />
