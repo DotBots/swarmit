@@ -300,7 +300,7 @@ int main(void) {
                 } break;
                 case SWRMT_REQUEST_OTA_CHUNK:
                 {
-                    if (_swarmit_vars.status != SWRMT_APPLICATION_PROGRAMMING) {
+                    if (_swarmit_vars.status != SWRMT_APPLICATION_PROGRAMMING && _swarmit_vars.status != SWRMT_APPLICATION_READY) {
                         break;
                     }
 

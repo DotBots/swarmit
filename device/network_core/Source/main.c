@@ -208,7 +208,7 @@ int main(void) {
                 } break;
                 case SWRMT_REQUEST_OTA_CHUNK:
                 {
-                    if (ipc_shared_data.status != SWRMT_APPLICATION_PROGRAMMING) {
+                    if (ipc_shared_data.status != SWRMT_APPLICATION_PROGRAMMING && ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;
                     }
 
