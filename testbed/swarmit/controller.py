@@ -639,6 +639,7 @@ class Controller:
             and retries_count <= self.settings.ota_max_retries
         ):
             if send is True:
+                self.send_payload(int(device_addr, 16), payload)
                 if self.settings.verbose:
                     missing_acks = [
                         addr
@@ -649,11 +650,10 @@ class Controller:
                         .acked
                     ]
                     print(
-                        f"Transferring chunk {chunk.index}/{len(self.start_ota_data.chunks)} to {device_addr} "
+                        f"Transferring chunk {chunk.index + 1}/{self.start_ota_data.chunks} to {device_addr} "
                         f"- {retries_count} retries "
                         f"- {len(missing_acks)} missing acks: {', '.join(missing_acks) if missing_acks else 'none'}"
                     )
-                self.send_payload(int(device_addr, 16), payload)
                 if int(device_addr, 16) == BROADCAST_ADDRESS:
                     for addr in devices_to_flash:
                         self.transfer_data[addr].chunks[
@@ -684,9 +684,9 @@ class Controller:
                 f"Loading firmware ({int(data_size / 1024)}kB)"
             )
         self.transfer_data = {}
-        for device_addr in devices:
-            self.transfer_data[device_addr] = TransferDataStatus()
-            self.transfer_data[device_addr].chunks = [
+        for _addr in devices:
+            self.transfer_data[_addr] = TransferDataStatus()
+            self.transfer_data[_addr].chunks = [
                 Chunk(index=f"{i:03d}", size=f"{self.chunks[i].size:03d}B")
                 for i in range(len(self.chunks))
             ]
@@ -698,10 +698,19 @@ class Controller:
                     devices,
                 )
             else:
-                for addr in devices:
-                    self.send_chunk(chunk, addr, devices)
+                for _addr in devices:
+                    self.send_chunk(chunk, _addr, devices)
             if use_progress_bar:
                 progress.update(chunk.size)
+        if self.settings.verbose:
+            retries_count = sum(
+                self.transfer_data[_addr].chunks[_chunk].retries
+                for _chunk in range(len(self.chunks))
+                for _addr in devices
+            )
+            if not self.settings.devices:
+                retries_count = int(retries_count / len(devices))
+            print(f"Transfer completed with {retries_count} retries")
         if use_progress_bar:
             progress.close()
         for device in devices:
