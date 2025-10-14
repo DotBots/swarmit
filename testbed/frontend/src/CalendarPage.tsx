@@ -173,6 +173,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
                 className="w-full p-2 border rounded-lg mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={dateTime ? displayValue.slice(0, 10) : ""}
                 onChange={handleDateChange}
+                min={new Date().toISOString().split("T")[0]}
               />
             </div>
 
@@ -212,7 +213,10 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
                 rows={10}
                 className="w-full p-2 border rounded-lg bg-gray-50 font-mono text-xs"
               />
-              <button onClick={handleDownload}>Add to Calendar</button>
+              <button
+                onClick={handleDownload}
+                className="w-full bg-blue-600 text-white py-2 mt-4 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              >Add to Calendar</button>
             </div>
           )}
 
@@ -224,7 +228,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-white rounded-2xl shadow">
+      <div className="overflow-x-auto bg-white rounded-2xl shadow m-4">
         <table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-[#C9191E]/90 text-white">
