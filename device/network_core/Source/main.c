@@ -208,7 +208,7 @@ int main(void) {
                 } break;
                 case SWRMT_REQUEST_OTA_CHUNK:
                 {
-                    if (ipc_shared_data.status != SWRMT_APPLICATION_PROGRAMMING) {
+                    if (ipc_shared_data.status != SWRMT_APPLICATION_PROGRAMMING && ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;
                     }
 
@@ -308,7 +308,7 @@ int main(void) {
             length += ipc_shared_data.log.length + 1;
             mari_node_tx_payload(_app_vars.notification_buffer, length);
         }
-    };
+    }
 }
 
 void IPC_IRQHandler(void) {
