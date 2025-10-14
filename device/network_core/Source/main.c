@@ -308,7 +308,7 @@ int main(void) {
             length += ipc_shared_data.log.length + 1;
             mari_node_tx_payload(_app_vars.notification_buffer, length);
         }
-    };
+    }
 }
 
 void IPC_IRQHandler(void) {
