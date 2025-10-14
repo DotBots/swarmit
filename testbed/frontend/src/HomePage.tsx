@@ -11,12 +11,16 @@ export default function HomePage({ token }: HomePageProps) {
   const [message, setMessage] = useState<string | null>(null);
 
   const handleStart = () => {
+    if (!token) {
+      setMessage("Please fill a token first");
+      return;
+    };
     setLoading(true);
     setMessage("Starting...");
 
     fetch("http://localhost:8883/start", {
       method: "POST", headers: {
-        "Authorization": `Bearer ${token}`,
+        "Authorization": `Bearer ${token.token}`,
       }
     })
       .then((res) => {
@@ -42,12 +46,16 @@ export default function HomePage({ token }: HomePageProps) {
   };
 
   const handleStop = () => {
+    if (!token) {
+      setMessage("Please fill a token first");
+      return;
+    };
     setLoading(true);
     setMessage("Stopping...");
 
     fetch("http://localhost:8883/stop", {
       method: "POST", headers: {
-        "Authorization": `Bearer ${token}`,
+        "Authorization": `Bearer ${token.token}`,
       }
     })
       .then((res) => {
@@ -73,6 +81,10 @@ export default function HomePage({ token }: HomePageProps) {
   };
 
   const handleFlash = () => {
+    if (!token) {
+      setMessage("Please fill a token first");
+      return;
+    };
     if (!file) {
       setMessage("Please select a file first");
       return;
@@ -90,7 +102,7 @@ export default function HomePage({ token }: HomePageProps) {
       fetch("http://localhost:8883/flash", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "Authorization": `Bearer ${token.token}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ firmware_b64: base64 }),

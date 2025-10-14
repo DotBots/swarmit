@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import OnlineRobotPage from "./OnlineRobotPage";
 import CalendarPage from "./CalendarPage";
 import HomePage from "./HomePage";
@@ -16,10 +16,31 @@ export interface TokenPayload {
   exp: number; // expiration
 }
 
+// Note: Storing a token in localStorage is not the most secure approach,
+// as it can be exposed to XSS attacks. We accept this trade-off here because
+// losing the JWT is low impact — generating a new one is cheap and does not
+// compromise sensitive data.
+export function usePersistedToken() {
+  const [token, setToken] = useState<Token | null>(() => {
+    const stored = localStorage.getItem("token");
+    return stored ? JSON.parse(stored) : null;
+  });
+
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem("token", JSON.stringify(token));
+    } else {
+      localStorage.removeItem("token");
+    }
+  }, [token]);
+
+  return { token, setToken };
+}
+
 export default function InriaDashboard() {
   const [page, setPage] = useState(1);
-  const [token, setToken] = useState<Token | null>(null);
   const [open, setOpen] = useState(false);
+  const { token, setToken } = usePersistedToken();
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#C9191E]/10 to-white">
