@@ -11,10 +11,9 @@ interface CalendarPageProps {
 }
 
 type RecordType = {
-  date_start: string;
-  date_end: string;
+  date_start: Date;
+  date_end: Date;
 };
-
 
 export default function CalendarPage({ token, setToken }: CalendarPageProps) {
   const [dateTime, setDateTime] = useState<Date>(new Date(new Date().setHours(0, 0, 0, 0)));
@@ -32,8 +31,12 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data: RecordType[] = await response.json();
-        setRecords(data);
+        let resp = await response.json();
+        const records: RecordType[] = resp.map(item => ({
+          date_start: new Date(item.date_start),
+          date_end: new Date(item.date_end),
+        }));
+        setRecords(records);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -233,8 +236,8 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
             {records.map((record, i) => (
               <tr key={i} className={`hover:bg-[#C9191E]/5 transition-colors ${i % 2 === 0 ? "bg-gray-50" : "bg-white"
                 }`}>
-                <td className="py-3 px-4 border-t">{record.date_start}</td>
-                <td className="py-3 px-4 border-t">{record.date_end}</td>
+                <td className="py-3 px-4 border-t">{record.date_start.toLocaleString()}</td>
+                <td className="py-3 px-4 border-t">{record.date_end.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
