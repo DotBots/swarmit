@@ -191,12 +191,8 @@ int main(void) {
     _bootloader_vars.device_id = db_device_id();
 
     // Write device type value to shared memory
-#if defined(BOARD_DOTBOT_V3)
-    _swarmit_vars.device_type = SWRMT_DEVICE_TYPE_DOTBOTV3;
-#elif defined(BOARD_DOTBOT_V2)
-    _swarmit_vars.device_type = SWRMT_DEVICE_TYPE_DOTBOTV2;
-#elif defined(BOARD_NRF5340DK)
-    _swarmit_vars.device_type = SWRMT_DEVICE_TYPE_NRF5340DK;
+#if defined(BOARD_NRF52840DK)
+    _swarmit_vars.device_type = SWRMT_DEVICE_TYPE_NRF52840DK;
 #else
     _swarmit_vars.device_type = SWRMT_DEVICE_TYPE_UNKNOWN;
 #endif

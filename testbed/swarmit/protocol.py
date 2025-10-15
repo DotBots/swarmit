@@ -25,6 +25,7 @@ class DeviceType(Enum):
     DotBotV3 = 1
     DotBotV2 = 2
     nRF5340DK = 3
+    nRF52840DK = 4
 
 
 class SwarmitPayloadType(IntEnum):
