@@ -73,6 +73,7 @@ typedef enum {
     SWRMT_DEVICE_TYPE_DOTBOTV3 = 1,
     SWRMT_DEVICE_TYPE_DOTBOTV2 = 2,
     SWRMT_DEVICE_TYPE_NRF5340DK = 3,
+    SWRMT_DEVICE_TYPE_NRF52840DK = 4,
 } swrmt_device_type_t;
 
 /// Protocol packet type

@@ -1,5 +1,5 @@
 <!DOCTYPE CrossStudio_Project_File>
-<solution Name="Bootloader nRF52840 Dongle" version="2" target="8">
+<solution Name="Bootloader nRF52840DK" version="2" target="8">
   <configuration
     LIBRARY_IO_TYPE="RTT"
     Name="Common"
