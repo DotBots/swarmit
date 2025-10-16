@@ -197,7 +197,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
           <button
             onClick={handleIssue}
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+            className="w-full bg-[#1E91C7] hover:bg-[#187AA3] text-white py-2 rounded-lg transition disabled:opacity-50"
           >
             {loading ? "Issuing..." : "Generate Token"}
           </button>
@@ -215,7 +215,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
               />
               <button
                 onClick={handleDownload}
-                className="w-full bg-blue-600 text-white py-2 mt-4 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                className="w-full bg-[#1E91C7] hover:bg-[#187AA3] text-white py-2 mt-4 rounded-lg transition disabled:opacity-50"
               >Add to Calendar</button>
             </div>
           )}
@@ -231,14 +231,14 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
       <div className="overflow-x-auto bg-white rounded-2xl shadow m-4">
         <table className="min-w-full border-collapse">
           <thead>
-            <tr className="bg-[#C9191E]/90 text-white">
+            <tr className="bg-[#1E91C7]/90 text-white">
               <th className="py-3 px-4 text-left font-semibold">Start Date</th>
               <th className="py-3 px-4 text-left font-semibold">End Date</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {records.map((record, i) => (
-              <tr key={i} className={`hover:bg-[#C9191E]/5 transition-colors ${i % 2 === 0 ? "bg-gray-50" : "bg-white"
+              <tr key={i} className={`hover:bg-[#1E91C7]/5 transition-colors ${i % 2 === 0 ? "bg-gray-50" : "bg-white"
                 }`}>
                 <td className="py-3 px-4 border-t">{record.date_start.toLocaleString()}</td>
                 <td className="py-3 px-4 border-t">{record.date_end.toLocaleString()}</td>
