@@ -101,3 +101,18 @@ Commands:
   status   Print current status of the robots.
   stop     Stop the user application.
 ```
+
+## Web
+
+To work with the web, you need to
+1. Generate a private and public key for the JWT
+```bash
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
+
+2. Build the frontend, I am using (node: v24.9.0 and npm v11.6.0)
+```bash
+cd testbed/frontend
+npm run build
+```
