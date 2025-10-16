@@ -176,7 +176,7 @@ export default function HomePage({ token }: HomePageProps) {
           className="block w-full text-sm text-gray-600"
         />
         <button
-          className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:cursor-not-allowed disabled:bg-blue-900"
+          className="w-full py-2 px-4 bg-[#1E91C7] text-white rounded-lg hover:bg-[#187AA3] transition disabled:cursor-not-allowed disabled:bg-[#135C7B]"
           onClick={handleFlash}
           disabled={loading || !file}
         >

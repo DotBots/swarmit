@@ -69,7 +69,7 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
   };
 
   return (
-    <div className="p-4">
+    <div className="">
       {open && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-2">
           <div className="bg-white p-6 rounded-2xl shadow-lg w-160">
