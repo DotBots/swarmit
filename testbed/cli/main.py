@@ -4,12 +4,12 @@ import asyncio
 import logging
 import time
 import tomllib
-import uvicorn
 import webbrowser
 
 import click
 import serial
 import structlog
+import uvicorn
 from dotbot.serial_interface import SerialInterfaceException, get_default_port
 from rich import print
 from rich.console import Console
@@ -399,7 +399,7 @@ async def async_web(settings: ControllerSettings):
             asyncio.create_task(name="Web browser", coro=_open_webbrowser(settings.mqtt_port)),
         ]
         await asyncio.gather(*tasks)
-    except Exception as exc:  # TODO: use the right exception here 
+    except Exception as exc:  # TODO: use the right exception here
         print(f"Error: {exc}")
     except SystemExit:
         pass
@@ -441,7 +441,7 @@ async def _open_webbrowser(mqtt_port: int):
     url = f"http://localhost:{mqtt_port}"
     print(f"Opening webbrowser: {url}")
     webbrowser.open(url)
-    
+
 
 
 if __name__ == "__main__":

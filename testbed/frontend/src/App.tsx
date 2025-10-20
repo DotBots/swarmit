@@ -212,4 +212,3 @@ const checkTokenActiveness = (payload: TokenPayload): tokenActivenessType => {
   if (payload.exp && now > payload.exp) return "Expired";
   return "Active";
 };
-

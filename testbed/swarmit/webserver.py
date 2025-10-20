@@ -8,22 +8,20 @@
 import base64
 import datetime
 import os
-from dataclasses import asdict
-from typing import List
-import jwt
-from pydantic import BaseModel
-
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse
-from sqlalchemy import asc
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from dataclasses import asdict
 
+import jwt
 from dotbot import pydotbot_version
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from sqlalchemy import asc
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from testbed.swarmit.controller import Controller, ControllerSettings
 from testbed.swarmit.model import JWTRecord, get_db
@@ -45,10 +43,10 @@ api.add_middleware(
 )
 
 # Load RSA keys
-with open("private.pem", "r") as f:
+with open("private.pem") as f:
     PRIVATE_KEY = f.read()
 
-with open("public.pem", "r") as f:
+with open("public.pem") as f:
     PUBLIC_KEY = f.read()
 
 ALGORITHM = "RS256"
@@ -71,13 +69,13 @@ def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
 def init_api(api: FastAPI, settings: ControllerSettings):
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Run on startup 
+        # Run on startup
         controller: Controller = Controller(settings)
         app.state.controller = controller
 
         yield
-        
-        # Run on shutdown 
+
+        # Run on shutdown
         controller.terminate()
     api.router.lifespan_context = lifespan
 
@@ -91,11 +89,11 @@ async def flash_firmware(request: Request, payload: FirmwareUpload):
 
     if not controller.ready_devices:
         raise HTTPException(status_code=400, detail="no ready devices to flash")
-    
+
     try:
         fw_bytes = base64.b64decode(payload.firmware_b64)
         fw = bytearray(fw_bytes)
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=400, detail="invalid firmware encoding: {str(e)}")
 
     start_data = controller.start_ota(fw)
@@ -103,7 +101,7 @@ async def flash_firmware(request: Request, payload: FirmwareUpload):
         raise HTTPException(status_code=400, detail=f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}).")
 
     data = controller.transfer(fw, start_data["acked"])
-    
+
     if all(device.success for device in data.values()) is False:
         raise HTTPException(status_code=400, detail="transfer failed")
 
@@ -124,7 +122,7 @@ async def status(request: Request):
 
 
 @api.get("/settings")
-async def status(request: Request):
+async def settings(request: Request):
     controller: Controller = request.app.state.controller
     return JSONResponse(content={"response": {"network_id": controller.settings.network_id}})
 
@@ -169,10 +167,10 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
     try:
         db.commit()
         db.refresh(db_record)
-    except IntegrityError as e:
+    except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Timeslot already full")
-        
+
     return {"data": token}
 
 
@@ -188,7 +186,7 @@ class JWTRecordOut(BaseModel):
 
 @api.get("/records", response_model=list[JWTRecordOut])
 def list_records(db: Session = Depends(get_db)):
-    now = datetime.datetime.now(datetime.timezone.utc) 
+    now = datetime.datetime.now(datetime.timezone.utc)
     yesterday = now - datetime.timedelta(days=1)
     one_month_later = now + datetime.timedelta(days=30)
     records = (
