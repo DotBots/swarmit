@@ -30,7 +30,7 @@ export default function OnlineDotBotPage({ dotbots }: CalendarPageProps) {
                 <td className="py-3 px-4 border-t">{id}</td>
                 <td className="py-3 px-4 border-t">{bot.device}</td>
                 <td className="py-3 px-4 border-t">{bot.status}</td>
-                <td className="py-3 px-4 border-t">{`${bot.battery / 1000}V`}</td>
+                <td className="py-3 px-4 border-t">{`${bot.battery}V`}</td>
                 <td className="py-3 px-4 border-t">{`(${bot.pos_x}, ${bot.pos_y})`}</td>
               </tr>
             ))}
