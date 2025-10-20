@@ -42,9 +42,9 @@ type SettingsType = {
   network_id: number;
 };
 
-export type tokenFreshnessType =
+export type tokenActivenessType =
   | "NoToken"
-  | "Fresh"
+  | "Active"
   | "NotValidYet"
   | "Expired"
 
@@ -74,7 +74,7 @@ export default function InriaDashboard() {
   const [openLoginPopup, setOpenLoginPopup] = useState<boolean>(false);
   const [dotbots, setDotBots] = useState<Record<string, DotBotData>>({});
   const { token, setToken } = usePersistedToken();
-  const [tokenFreshness, setTokenFreshness] = useState<tokenFreshnessType>("NoToken");
+  const [tokenActiveness, setTokenActiveness] = useState<tokenActivenessType>("NoToken");
   const [settings, setSettings] = useState<SettingsType | null>(null);
 
   useEffect(() => {
@@ -98,23 +98,23 @@ export default function InriaDashboard() {
   useEffect(() => {
     if (!token) return;
     let canceled = false;
-    const checkFreshness = () => {
+    const checkActiveness = () => {
       if (canceled) return;
 
-      const fresh = checkTokenFreshness(token.payload);
-      setTokenFreshness(fresh);
-      if (fresh === "NotValidYet") {
+      const active = checkTokenActiveness(token.payload);
+      setTokenActiveness(active);
+      if (active === "NotValidYet") {
         const now = Math.floor(Date.now() / 1000);
-        const diff = now - token.payload.nbf;
-        setTimeout(checkFreshness, diff * 1000);
-      } else if (fresh === "Fresh") {
+        const diff = token.payload.nbf - now;
+        setTimeout(checkActiveness, diff * 1000);
+      } else if (active === "Active") {
         const now = Math.floor(Date.now() / 1000);
         const diff = token.payload.exp - now;
-        setTimeout(checkFreshness, diff * 1000);
+        setTimeout(checkActiveness, diff * 1000);
       }
     };
 
-    checkFreshness();
+    checkActiveness();
 
     return () => {
       canceled = true;
@@ -144,9 +144,9 @@ export default function InriaDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const loginLabel: Record<tokenFreshnessType, string> = {
+  const loginLabel: Record<tokenActivenessType, string> = {
     NoToken: "Login",
-    Fresh: "Logged-in",
+    Active: "Logged-in",
     NotValidYet: "Token not valid yet",
     Expired: "Token expired",
   };
@@ -156,7 +156,7 @@ export default function InriaDashboard() {
       <header className="bg-[#1E91C7] text-white py-4 px-8 shadow-md flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-wide">OpenSwarm Testbed</h1>
         <h1 className="text-m font-semibold tracking-wide">Network ID: {settings?.network_id}</h1>
-        <div onClick={() => setOpenLoginPopup(true)} className="text-sm opacity-80">{loginLabel[tokenFreshness]}</div>
+        <div onClick={() => setOpenLoginPopup(true)} className="text-sm opacity-80">{loginLabel[tokenActiveness]}</div>
       </header>
 
       <LoginModal open={openLoginPopup} setOpen={setOpenLoginPopup} token={token} setToken={setToken} />
@@ -178,7 +178,7 @@ export default function InriaDashboard() {
 
         <main className="flex-1 p-8">
           {page === 1 && (
-            < HomePage token={token} tokenFreshness={tokenFreshness} />
+            < HomePage token={token} tokenActiveness={tokenActiveness} />
           )}
 
           {page === 2 && (
@@ -194,12 +194,12 @@ export default function InriaDashboard() {
   );
 }
 
-const checkTokenFreshness = (payload: TokenPayload): tokenFreshnessType => {
+const checkTokenActiveness = (payload: TokenPayload): tokenActivenessType => {
   const now = Math.floor(Date.now() / 1000);
   // Token not active yet
   if (payload.nbf && now < payload.nbf) return "NotValidYet";
   // Token expired
   if (payload.exp && now > payload.exp) return "Expired";
-  return "Fresh";
+  return "Active";
 };
 

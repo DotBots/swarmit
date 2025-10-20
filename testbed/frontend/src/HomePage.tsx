@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { tokenFreshnessType, Token } from "./App";
+import { tokenActivenessType, Token } from "./App";
 
 interface HomePageProps {
   token: Token | null;
-  tokenFreshness: tokenFreshnessType;
+  tokenActiveness: tokenActivenessType;
 }
 
-export default function HomePage({ token, tokenFreshness }: HomePageProps) {
+export default function HomePage({ token, tokenActiveness }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -149,12 +149,12 @@ export default function HomePage({ token, tokenFreshness }: HomePageProps) {
                hover:bg-green-700 transition disabled:cursor-not-allowed 
                disabled:bg-green-900"
             onClick={() => handleStart()}
-            disabled={loading || (tokenFreshness !== "Fresh")}
+            disabled={loading || (tokenActiveness !== "Active")}
           >
             Start
           </button>
 
-          {((tokenFreshness !== "Fresh") || loading) && (
+          {((tokenActiveness !== "Active") || loading) && (
             <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
                     hidden group-hover:block bg-gray-800 text-white text-sm
                     rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
@@ -169,12 +169,12 @@ export default function HomePage({ token, tokenFreshness }: HomePageProps) {
                hover:bg-red-700 transition disabled:cursor-not-allowed 
                disabled:bg-red-900"
             onClick={() => handleStop()}
-            disabled={loading || (tokenFreshness !== "Fresh")}
+            disabled={loading || (tokenActiveness !== "Active")}
           >
             Stop
           </button>
 
-          {((tokenFreshness !== "Fresh") || loading) && (
+          {((tokenActiveness !== "Active") || loading) && (
             <div
               className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
                  hidden group-hover:block bg-gray-800 text-white text-sm
@@ -213,12 +213,12 @@ export default function HomePage({ token, tokenFreshness }: HomePageProps) {
                hover:bg-[#187AA3] transition disabled:cursor-not-allowed 
                disabled:bg-[#135C7B]"
           onClick={handleFlash}
-          disabled={loading || (tokenFreshness !== "Fresh") || !file}
+          disabled={loading || (tokenActiveness !== "Active") || !file}
         >
           Flash
         </button>
 
-        {(loading || (tokenFreshness !== "Fresh") || !file) && (
+        {(loading || (tokenActiveness !== "Active") || !file) && (
           <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 
                     hidden group-hover:block bg-gray-800 text-white text-sm 
                     rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
