@@ -1,8 +1,17 @@
 import datetime
-from sqlalchemy import TypeDecorator, create_engine, Column, Integer, String, DateTime, event, text
+
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    String,
+    TypeDecorator,
+    create_engine,
+    text,
+)
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.engine import Connection
 
 DATABASE_URL = "sqlite:///./test.db"
 

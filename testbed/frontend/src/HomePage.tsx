@@ -150,8 +150,8 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
         <div className="flex justify-between space-x-4">
           <div className="relative group flex-1">
             <button
-              className="w-full py-2 px-4 bg-green-600 text-white rounded-lg 
-               hover:bg-green-700 transition disabled:cursor-not-allowed 
+              className="w-full py-2 px-4 bg-green-600 text-white rounded-lg
+               hover:bg-green-700 transition disabled:cursor-not-allowed
                disabled:bg-green-900"
               onClick={() => handleStart()}
               disabled={loading || (tokenActiveness !== "Active")}
@@ -170,8 +170,8 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
 
           <div className="relative group flex-1">
             <button
-              className="w-full py-2 px-4 bg-red-600 text-white rounded-lg 
-               hover:bg-red-700 transition disabled:cursor-not-allowed 
+              className="w-full py-2 px-4 bg-red-600 text-white rounded-lg
+               hover:bg-red-700 transition disabled:cursor-not-allowed
                disabled:bg-red-900"
               onClick={() => handleStop()}
               disabled={loading || (tokenActiveness !== "Active")}
@@ -214,8 +214,8 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
         <div className="space-y-2 relative group">
 
           <button
-            className="w-full py-2 px-4 bg-[#1E91C7] text-white rounded-lg 
-               hover:bg-[#187AA3] transition disabled:cursor-not-allowed 
+            className="w-full py-2 px-4 bg-[#1E91C7] text-white rounded-lg
+               hover:bg-[#187AA3] transition disabled:cursor-not-allowed
                disabled:bg-[#135C7B]"
             onClick={handleFlash}
             disabled={loading || (tokenActiveness !== "Active") || !file}
@@ -224,8 +224,8 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
           </button>
 
           {(loading || (tokenActiveness !== "Active") || !file) && (
-            <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 
-                    hidden group-hover:block bg-gray-800 text-white text-sm 
+            <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
+                    hidden group-hover:block bg-gray-800 text-white text-sm
                     rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
               {loading
                 ? "Action disabled while loading"
