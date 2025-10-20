@@ -24,7 +24,7 @@
     build_treat_warnings_as_errors="Yes"
     c_only_additional_options="-Wno-missing-prototypes;-Wno-strict-prototypes"
     c_preprocessor_definitions="ARM_MATH_CM4;NRF52840_XXAA;__NRF_FAMILY;CONFIG_NFCT_PINS_AS_GPIOS;BOARD_NRF52840DK;USE_MARI"
-    c_user_include_directories="$(SolutionDir)/../../dotbot-firmware/bsp;$(SolutionDir)/../../dotbot-firmware/drv;$(SolutionDir)/../../dotbot-firmware/crypto;$(SolutionDir)/../../mari/mari;$(SolutionDir)/../../mari/drv;$(PackagesDir)/nRF/Device/Include;$(PackagesDir)/CMSIS_5/CMSIS/Core/Include"
+    c_user_include_directories="$(SolutionDir)/../../dotbot-libs/bsp;$(SolutionDir)/../../dotbot-libs/drv;$(SolutionDir)/../../dotbot-libs/crypto;$(SolutionDir)/../../mari/mari;$(SolutionDir)/../../mari/drv;$(PackagesDir)/nRF/Device/Include;$(PackagesDir)/CMSIS_5/CMSIS/Core/Include"
     clang_machine_outliner="Yes"
     compiler_color_diagnostics="Yes"
     debug_register_definition_file="$(ProjectDir)/Setup/nrf52840_Registers.xml"
@@ -64,9 +64,9 @@
     gcc_omit_frame_pointer="Yes"
     gcc_optimization_level="Level 2 balanced" />
   <import file_name="device/bootloader-single-core/bootloader-app.emProject" />
-  <import file_name="dotbot-firmware/bsp/bsp.emProject" />
-  <import file_name="dotbot-firmware/crypto/crypto.emProject" />
-  <import file_name="dotbot-firmware/drv/drv.emProject" />
+  <import file_name="dotbot-libs/bsp/bsp.emProject" />
+  <import file_name="dotbot-libs/crypto/crypto.emProject" />
+  <import file_name="dotbot-libs/drv/drv.emProject" />
   <import file_name="mari/mari/mari.emProject" />
   <import file_name="mari/drv/drv.emProject" />
 </solution>

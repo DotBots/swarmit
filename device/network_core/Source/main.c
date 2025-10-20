@@ -42,6 +42,7 @@ typedef struct {
     ipc_req_t   ipc_req;
     bool        ipc_log_received;
     uint8_t     gpio_event_idx;
+    crypto_sha256_ctx_t sha256_ctx;
     uint8_t     expected_hash[SWRMT_OTA_SHA256_LENGTH];
     uint8_t     computed_hash[SWRMT_OTA_SHA256_LENGTH];
     uint64_t    device_id;
@@ -233,11 +234,11 @@ int main(void) {
                         memcpy(_app_vars.expected_hash, pkt->sha, SWRMT_OTA_SHA256_LENGTH);
 
                         // Compute and compare the chunk hash with the received one
-                        crypto_sha256_init();
+                        crypto_sha256_init(&_app_vars.sha256_ctx);
                         mutex_lock();
-                        crypto_sha256_update((const uint8_t *)ipc_shared_data.ota.chunk, ipc_shared_data.ota.chunk_size);
+                        crypto_sha256_update(&_app_vars.sha256_ctx, (const uint8_t *)ipc_shared_data.ota.chunk, ipc_shared_data.ota.chunk_size);
                         mutex_unlock();
-                        crypto_sha256(_app_vars.computed_hash);
+                        crypto_sha256(&_app_vars.sha256_ctx, _app_vars.computed_hash);
 
                         if (memcmp(_app_vars.computed_hash, _app_vars.expected_hash, 8) != 0) {
                             puts("Failed");
