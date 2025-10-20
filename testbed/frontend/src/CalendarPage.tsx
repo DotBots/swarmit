@@ -10,7 +10,7 @@ interface CalendarPageProps {
   setToken: Dispatch<SetStateAction<Token | null>>;
 }
 
-type RecordType = {
+export type RecordType = {
   date_start: Date;
   date_end: Date;
 };
@@ -31,7 +31,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        let resp = await response.json();
+        let resp = await response.json() as { date_start: string; date_end: string }[];
         const records: RecordType[] = resp.map(item => ({
           date_start: new Date(item.date_start),
           date_end: new Date(item.date_end),
