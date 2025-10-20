@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { DotBotData } from "./App";
+import { DotBotData, StatusType } from "./App";
 
 interface DotBotsMapPointProps {
   dotbot: DotBotData;
@@ -15,24 +15,36 @@ function DotBotsMapPoint({
   const posX = mapSize * dotbot.pos_x;
   const posY = mapSize * dotbot.pos_y;
 
-  // const posX = mapSize * 0.5;
-  // const posY = mapSize * 0.5;
+  const getStatusColor = (status: StatusType) => {
+    switch (status) {
+      case "Bootloader":
+        return "rgb(30, 145, 199)";
+      case "Running":
+        return "rgb(34, 197, 94)";
+      default:
+        return "rgb(107, 114, 128)";
+    }
+  };
 
   return (
     <>
       <g
         stroke={"black"}
-        strokeWidth={1}
+        strokeWidth={0.5}
       >
         <circle
           cx={posX}
           cy={posY}
           r={5}
           opacity="100%"
-          fill="rgb(0, 0, 0)"
+          fill={getStatusColor(dotbot.status)}
           className="cursor-pointer"
         >
-          <title>{`${address}@${posX}x${posY}`}</title>
+          <title>{`Address: ${address}
+Device: ${dotbot.device}
+Status: ${dotbot.status}
+Battery: ${dotbot.battery}
+Position: ${posX}x${posY}`}</title>
         </circle>
       </g>
     </>
@@ -71,7 +83,6 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots }: DotBotsMapPro
             />
 
             {Object.entries(dotbots)
-              .filter(([_address, dotbot]) => dotbot.status !== "dead")
               .map(([address, dotbot]) => (
                 <DotBotsMapPoint key={address} dotbot={dotbot} address={address} mapSize={mapSize} />
               ))}
