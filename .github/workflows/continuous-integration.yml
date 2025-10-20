@@ -89,10 +89,12 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+        working-directory: testbed/frontend
 
       - name: TypeScript type check
         run: npm run typecheck
+        working-directory: testbed/frontend
 
   release:
     runs-on: ubuntu-latest
