@@ -4,6 +4,7 @@ import CalendarPage from "./CalendarPage";
 import HomePage from "./HomePage";
 import LoginModal from "./Login";
 
+export const API_URL = import.meta.env.BACKEND_API_URL || "http://localhost:8883";
 
 export interface Token {
   token: string;
@@ -39,7 +40,7 @@ export type DotBotData = {
 };
 
 type SettingsType = {
-  network_id: number;
+  network_id: string;
 };
 
 export type tokenActivenessType =
@@ -69,6 +70,13 @@ export function usePersistedToken() {
   return { token, setToken };
 }
 
+export interface SettingsResponse {
+  response: {
+    network_id: number;
+  };
+}
+
+
 export default function InriaDashboard() {
   const [page, setPage] = useState<number>(1);
   const [openLoginPopup, setOpenLoginPopup] = useState<boolean>(false);
@@ -78,22 +86,24 @@ export default function InriaDashboard() {
   const [settings, setSettings] = useState<SettingsType | null>(null);
 
   useEffect(() => {
-    const fetchSettings = () => {
-      fetch("http://localhost:8883/settings")
-        .then((res) => {
-          if (!res.ok) throw new Error("network response was not ok");
-          return res.json();
-        })
-        .then((json) => {
-          let settings: SettingsType = { network_id: json.response.network_id.toString(16) }
-          setSettings(settings)
-        })
-        .catch((_err) => {
-        });
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(`${API_URL}/settings`);
+        if (!res.ok) throw new Error("Network response was not ok");
+
+        const json: SettingsResponse = await res.json();
+        const settings: SettingsType = {
+          network_id: json.response.network_id.toString(16),
+        };
+        setSettings(settings);
+      } catch (err) {
+        console.error("Error fetching settings:", err);
+      }
     };
 
     fetchSettings();
   }, []);
+
 
   useEffect(() => {
     if (!token) return;
@@ -123,7 +133,7 @@ export default function InriaDashboard() {
 
   useEffect(() => {
     const fetchStatus = () => {
-      fetch("http://localhost:8883/status")
+      fetch(`${API_URL}/status`)
         .then((res) => {
           if (!res.ok) throw new Error("network response was not ok");
           return res.json();
