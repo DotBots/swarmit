@@ -52,9 +52,12 @@ with open("public.pem") as f:
 ALGORITHM = "RS256"
 security = HTTPBearer()
 
+
 def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        payload = jwt.decode(credentials.credentials, PUBLIC_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            credentials.credentials, PUBLIC_KEY, algorithms=[ALGORITHM]
+        )
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -77,28 +80,37 @@ def init_api(api: FastAPI, settings: ControllerSettings):
 
         # Run on shutdown
         controller.terminate()
+
     api.router.lifespan_context = lifespan
 
 
 class FirmwareUpload(BaseModel):
     firmware_b64: str
 
+
 @api.post("/flash", dependencies=[Depends(verify_jwt)])
 async def flash_firmware(request: Request, payload: FirmwareUpload):
     controller: Controller = request.app.state.controller
 
     if not controller.ready_devices:
-        raise HTTPException(status_code=400, detail="no ready devices to flash")
+        raise HTTPException(
+            status_code=400, detail="no ready devices to flash"
+        )
 
     try:
         fw_bytes = base64.b64decode(payload.firmware_b64)
         fw = bytearray(fw_bytes)
     except Exception:
-        raise HTTPException(status_code=400, detail="invalid firmware encoding: {str(e)}")
+        raise HTTPException(
+            status_code=400, detail="invalid firmware encoding: {str(e)}"
+        )
 
     start_data = controller.start_ota(fw)
     if start_data["missed"]:
-        raise HTTPException(status_code=400, detail=f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}).")
+        raise HTTPException(
+            status_code=400,
+            detail=f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}).",
+        )
 
     data = controller.transfer(fw, start_data["acked"])
 
@@ -106,6 +118,7 @@ async def flash_firmware(request: Request, payload: FirmwareUpload):
         raise HTTPException(status_code=400, detail="transfer failed")
 
     return JSONResponse(content={"response": "success"})
+
 
 @api.get("/status")
 async def status(request: Request):
@@ -124,7 +137,9 @@ async def status(request: Request):
 @api.get("/settings")
 async def settings(request: Request):
     controller: Controller = request.app.state.controller
-    return JSONResponse(content={"response": {"network_id": controller.settings.network_id}})
+    return JSONResponse(
+        content={"response": {"network_id": controller.settings.network_id}}
+    )
 
 
 @api.post("/start")
@@ -143,16 +158,22 @@ async def stop(request: Request):
     controller.stop()
 
     return JSONResponse(content={"response": "done"})
+
+
 class IssueRequest(BaseModel):
     start: str  # ISO8601 string
+
 
 @api.post("/issue_jwt")
 def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
     try:
-        start = datetime.datetime.fromisoformat(req.start.replace("Z", "+00:00"))
+        start = datetime.datetime.fromisoformat(
+            req.start.replace("Z", "+00:00")
+        )
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid 'start' time format (use ISO8601)")
-
+        raise HTTPException(
+            status_code=400, detail="Invalid 'start' time format (use ISO8601)"
+        )
 
     end = start + datetime.timedelta(minutes=30)
     payload = {
@@ -179,10 +200,12 @@ def public_key():
     """Expose the public key (frontend can use this to verify JWT signatures)."""
     return JSONResponse(content={"data": PUBLIC_KEY})
 
+
 class JWTRecordOut(BaseModel):
     date_start: datetime.datetime
     date_end: datetime.datetime
     model_config = {"arbitrary_types_allowed": True}
+
 
 @api.get("/records", response_model=list[JWTRecordOut])
 def list_records(db: Session = Depends(get_db)):
@@ -193,13 +216,16 @@ def list_records(db: Session = Depends(get_db)):
         db.query(JWTRecord)
         .filter(
             JWTRecord.date_start >= yesterday,
-            JWTRecord.date_start <= one_month_later
+            JWTRecord.date_start <= one_month_later,
         )
         .order_by(asc(JWTRecord.date_start))
         .all()
     )
     return records
 
+
 # Mount static files after all routes are defined
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+FRONTEND_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "frontend", "dist"
+)
 api.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

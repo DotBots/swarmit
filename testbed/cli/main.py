@@ -363,6 +363,7 @@ def status(ctx, watch):
     controller.status(watch)
     controller.terminate()
 
+
 @main.command()
 @click.argument("message", type=str, required=True)
 @click.pass_context
@@ -379,6 +380,7 @@ def load_toml_config(path):
     with open(path, "rb") as f:
         return tomllib.load(f)
 
+
 @main.command()
 @click.pass_context
 def web(ctx):
@@ -389,8 +391,12 @@ async def async_web(settings: ControllerSettings):
     tasks = []
     try:
         tasks = [
-            asyncio.create_task(name="Web server", coro=_serve_fast_api(settings)),
-            asyncio.create_task(name="Web browser", coro=_open_webbrowser(settings.mqtt_port)),
+            asyncio.create_task(
+                name="Web server", coro=_serve_fast_api(settings)
+            ),
+            asyncio.create_task(
+                name="Web browser", coro=_open_webbrowser(settings.mqtt_port)
+            ),
         ]
         await asyncio.gather(*tasks)
     except Exception as exc:  # TODO: use the right exception here
@@ -404,12 +410,11 @@ async def async_web(settings: ControllerSettings):
             task.cancel()
         print("Controller stopped")
 
+
 async def _serve_fast_api(settings: ControllerSettings):
     """Starts the web server application."""
     init_api(api, settings)
-    config = uvicorn.Config(
-        api, port=settings.mqtt_port, log_level="critical"
-    )
+    config = uvicorn.Config(api, port=settings.mqtt_port, log_level="critical")
     server = uvicorn.Server(config)
 
     try:
@@ -419,13 +424,12 @@ async def _serve_fast_api(settings: ControllerSettings):
     else:
         raise SystemExit()
 
+
 async def _open_webbrowser(mqtt_port: int):
     """Wait until the server is ready before opening a web browser."""
     while 1:
         try:
-            _, writer = await asyncio.open_connection(
-                "127.0.0.1", mqtt_port
-            )
+            _, writer = await asyncio.open_connection("127.0.0.1", mqtt_port)
         except ConnectionRefusedError:
             await asyncio.sleep(0.1)
         else:
@@ -435,7 +439,6 @@ async def _open_webbrowser(mqtt_port: int):
     url = f"http://localhost:{mqtt_port}"
     print(f"Opening webbrowser: {url}")
     webbrowser.open(url)
-
 
 
 if __name__ == "__main__":

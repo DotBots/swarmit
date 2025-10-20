@@ -19,6 +19,7 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
 class AwareDateTime(TypeDecorator):
     impl = DateTime(timezone=True)
     cache_ok = True
@@ -41,7 +42,9 @@ class JWTRecord(Base):
     date_start = Column(AwareDateTime, nullable=False)
     date_end = Column(AwareDateTime, nullable=False)
 
+
 Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()
@@ -50,8 +53,11 @@ def get_db():
     finally:
         db.close()
 
+
 def create_prevent_overlap_trigger(conn: Connection):
-    conn.execute(text("""
+    conn.execute(
+        text(
+            """
     CREATE TRIGGER IF NOT EXISTS prevent_overlap
     BEFORE INSERT ON jwt_records
     FOR EACH ROW
@@ -67,8 +73,12 @@ def create_prevent_overlap_trigger(conn: Connection):
                 RAISE (ABORT, 'Overlapping date range detected')
         END;
     END;
-    """))
-    conn.execute(text("""
+    """
+        )
+    )
+    conn.execute(
+        text(
+            """
     CREATE TRIGGER IF NOT EXISTS prevent_overlap_update
     BEFORE UPDATE ON jwt_records
     FOR EACH ROW
@@ -85,7 +95,10 @@ def create_prevent_overlap_trigger(conn: Connection):
                 RAISE (ABORT, 'Overlapping date range detected')
         END;
     END;
-    """))
+    """
+        )
+    )
+
 
 # Run trigger creation
 with engine.connect() as conn:
