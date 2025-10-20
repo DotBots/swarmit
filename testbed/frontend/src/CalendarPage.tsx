@@ -1,5 +1,5 @@
 import { ChangeEvent, Dispatch, SetStateAction, useEffect, useState } from "react";
-import { Token } from "./App";
+import { API_URL, Token } from "./App";
 
 interface IssueRequest {
   start: string;
@@ -27,7 +27,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
   useEffect(() => {
     const fetchRecords = async () => {
       try {
-        const response = await fetch("http://localhost:8883/records");
+        const response = await fetch(`${API_URL}/records`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -55,7 +55,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
     if (!dateTime) { return; };
 
     try {
-      const res = await fetch("http://localhost:8883/issue_jwt", {
+      const res = await fetch(`${API_URL}/issue_jwt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

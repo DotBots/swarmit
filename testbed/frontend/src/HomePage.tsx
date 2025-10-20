@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { tokenActivenessType, Token, DotBotData } from "./App";
+import { tokenActivenessType, Token, DotBotData, API_URL } from "./App";
 import { DotBotsMap } from "./BotMap";
 
 interface HomePageProps {
@@ -22,7 +22,7 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
     setLoading(true);
     setMessage("Starting...");
 
-    fetch("http://localhost:8883/start", {
+    fetch(`${API_URL}/start`, {
       method: "POST", headers: {
         "Authorization": `Bearer ${token.token}`,
       }
@@ -57,7 +57,7 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
     setLoading(true);
     setMessage("Stopping...");
 
-    fetch("http://localhost:8883/stop", {
+    fetch(`${API_URL}/stop`, {
       method: "POST", headers: {
         "Authorization": `Bearer ${token.token}`,
       }
@@ -103,7 +103,7 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
       const base64 = (reader.result as string).split(",")[1];
       setMessage("Flashing...");
 
-      fetch("http://localhost:8883/flash", {
+      fetch(`${API_URL}/flash`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token.token}`,

@@ -1,5 +1,5 @@
 import { useState, Dispatch, SetStateAction } from "react";
-import { Token, TokenPayload } from "./App";
+import { API_URL, Token, TokenPayload } from "./App";
 
 type VerifyResult =
   | { valid: true; payload: TokenPayload }
@@ -19,7 +19,7 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
   const handleVerify = async () => {
     if (!unverifiedToken) return;
     setMessage("");
-    const publicKeyPem = await fetch("http://localhost:8883/public_key").then((r) => r.json());
+    const publicKeyPem = await fetch(`${API_URL}/public_key`).then((r) => r.json());
     const res = await verifyJWT(unverifiedToken, publicKeyPem.data);
     if (res.valid) {
       setToken({ token: unverifiedToken, payload: res.payload });
