@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Token } from "./App";
+import { tokenFreshnessType, Token } from "./App";
 
 interface HomePageProps {
   token: Token | null;
-  isTokenFresh: boolean;
+  tokenFreshness: tokenFreshnessType;
 }
 
-export default function HomePage({ token, isTokenFresh }: HomePageProps) {
+export default function HomePage({ token, tokenFreshness }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -149,12 +149,12 @@ export default function HomePage({ token, isTokenFresh }: HomePageProps) {
                hover:bg-green-700 transition disabled:cursor-not-allowed 
                disabled:bg-green-900"
             onClick={() => handleStart()}
-            disabled={loading || !isTokenFresh}
+            disabled={loading || (tokenFreshness !== "Fresh")}
           >
             Start
           </button>
 
-          {(!isTokenFresh || loading) && (
+          {((tokenFreshness !== "Fresh") || loading) && (
             <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
                     hidden group-hover:block bg-gray-800 text-white text-sm
                     rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
@@ -169,13 +169,12 @@ export default function HomePage({ token, isTokenFresh }: HomePageProps) {
                hover:bg-red-700 transition disabled:cursor-not-allowed 
                disabled:bg-red-900"
             onClick={() => handleStop()}
-            disabled={loading || !isTokenFresh}
+            disabled={loading || (tokenFreshness !== "Fresh")}
           >
             Stop
           </button>
 
-          {/* Tooltip */}
-          {(!isTokenFresh || loading) && (
+          {((tokenFreshness !== "Fresh") || loading) && (
             <div
               className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
                  hidden group-hover:block bg-gray-800 text-white text-sm
@@ -214,12 +213,12 @@ export default function HomePage({ token, isTokenFresh }: HomePageProps) {
                hover:bg-[#187AA3] transition disabled:cursor-not-allowed 
                disabled:bg-[#135C7B]"
           onClick={handleFlash}
-          disabled={loading || !isTokenFresh || !file}
+          disabled={loading || (tokenFreshness !== "Fresh") || !file}
         >
           Flash
         </button>
 
-        {(loading || !isTokenFresh || !file) && (
+        {(loading || (tokenFreshness !== "Fresh") || !file) && (
           <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 
                     hidden group-hover:block bg-gray-800 text-white text-sm 
                     rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
@@ -234,6 +233,6 @@ export default function HomePage({ token, isTokenFresh }: HomePageProps) {
 
 
       {message && <p className="text-center text-gray-700">{message}</p>}
-    </div>
+    </div >
   );
 }

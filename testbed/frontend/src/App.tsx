@@ -38,6 +38,16 @@ export type DotBotData = {
   pos_y: number;
 };
 
+type SettingsType = {
+  network_id: number;
+};
+
+export type tokenFreshnessType =
+  | "NoToken"
+  | "Fresh"
+  | "NotValidYet"
+  | "Expired"
+
 // Note: Storing a token in localStorage is not the most secure approach,
 // as it can be exposed to XSS attacks. We accept this trade-off here because
 // losing the JWT is low impact — generating a new one is cheap and does not
@@ -64,17 +74,51 @@ export default function InriaDashboard() {
   const [openLoginPopup, setOpenLoginPopup] = useState<boolean>(false);
   const [dotbots, setDotBots] = useState<Record<string, DotBotData>>({});
   const { token, setToken } = usePersistedToken();
-  const [isTokenFresh, setIsTokenFresh] = useState<boolean>(false);
+  const [tokenFreshness, setTokenFreshness] = useState<tokenFreshnessType>("NoToken");
+  const [settings, setSettings] = useState<SettingsType | null>(null);
+
+  useEffect(() => {
+    const fetchSettings = () => {
+      fetch("http://localhost:8883/settings")
+        .then((res) => {
+          if (!res.ok) throw new Error("network response was not ok");
+          return res.json();
+        })
+        .then((json) => {
+          let settings: SettingsType = { network_id: json.response.network_id.toString(16) }
+          setSettings(settings)
+        })
+        .catch((_err) => {
+        });
+    };
+
+    fetchSettings();
+  }, []);
 
   useEffect(() => {
     if (!token) return;
+    let canceled = false;
+    const checkFreshness = () => {
+      if (canceled) return;
 
-    // Run check immediately and then every second
-    const checkFreshness = () => setIsTokenFresh(isJWTFresh(token.payload));
+      const fresh = checkTokenFreshness(token.payload);
+      setTokenFreshness(fresh);
+      if (fresh === "NotValidYet") {
+        const now = Math.floor(Date.now() / 1000);
+        const diff = now - token.payload.nbf;
+        setTimeout(checkFreshness, diff * 1000);
+      } else if (fresh === "Fresh") {
+        const now = Math.floor(Date.now() / 1000);
+        const diff = token.payload.exp - now;
+        setTimeout(checkFreshness, diff * 1000);
+      }
+    };
+
     checkFreshness();
 
-    const interval = setInterval(checkFreshness, 100);
-    return () => clearInterval(interval);
+    return () => {
+      canceled = true;
+    };
   }, [token]);
 
   useEffect(() => {
@@ -95,16 +139,24 @@ export default function InriaDashboard() {
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 100);
+    const interval = setInterval(fetchStatus, 1000);
 
     return () => clearInterval(interval);
   }, []);
+
+  const loginLabel: Record<tokenFreshnessType, string> = {
+    NoToken: "Login",
+    Fresh: "Logged-in",
+    NotValidYet: "Token not valid yet",
+    Expired: "Token expired",
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#1E91C7]/10 to-white">
       <header className="bg-[#1E91C7] text-white py-4 px-8 shadow-md flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-wide">OpenSwarm Testbed</h1>
-        <div onClick={() => setOpenLoginPopup(true)} className="text-sm opacity-80">{token ? "Logged-in" : "Login"}</div>
+        <h1 className="text-m font-semibold tracking-wide">Network ID: {settings?.network_id}</h1>
+        <div onClick={() => setOpenLoginPopup(true)} className="text-sm opacity-80">{loginLabel[tokenFreshness]}</div>
       </header>
 
       <LoginModal open={openLoginPopup} setOpen={setOpenLoginPopup} token={token} setToken={setToken} />
@@ -126,7 +178,7 @@ export default function InriaDashboard() {
 
         <main className="flex-1 p-8">
           {page === 1 && (
-            < HomePage token={token} isTokenFresh={isTokenFresh} />
+            < HomePage token={token} tokenFreshness={tokenFreshness} />
           )}
 
           {page === 2 && (
@@ -142,11 +194,12 @@ export default function InriaDashboard() {
   );
 }
 
-const isJWTFresh = (payload: TokenPayload): boolean => {
+const checkTokenFreshness = (payload: TokenPayload): tokenFreshnessType => {
   const now = Math.floor(Date.now() / 1000);
   // Token not active yet
-  if (payload.nbf && now < payload.nbf) return false;
+  if (payload.nbf && now < payload.nbf) return "NotValidYet";
   // Token expired
-  if (payload.exp && now > payload.exp) return false;
-  return true;
+  if (payload.exp && now > payload.exp) return "Expired";
+  return "Fresh";
 };
+
