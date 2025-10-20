@@ -3,9 +3,10 @@ import { Token } from "./App";
 
 interface HomePageProps {
   token: Token | null;
+  isTokenFresh: boolean;
 }
 
-export default function HomePage({ token }: HomePageProps) {
+export default function HomePage({ token, isTokenFresh }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -142,20 +143,51 @@ export default function HomePage({ token }: HomePageProps) {
       <h1 className="text-2xl font-semibold text-gray-800 text-center">Testbed Control</h1>
 
       <div className="flex justify-between space-x-4">
-        <button
-          className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:cursor-not-allowed disabled:bg-green-900"
-          onClick={() => handleStart()}
-          disabled={loading}
-        >
-          Start
-        </button>
-        <button
-          className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:cursor-not-allowed disabled:bg-red-900"
-          onClick={() => handleStop()}
-          disabled={loading}
-        >
-          Stop
-        </button>
+        <div className="relative group flex-1">
+          <button
+            className="w-full py-2 px-4 bg-green-600 text-white rounded-lg 
+               hover:bg-green-700 transition disabled:cursor-not-allowed 
+               disabled:bg-green-900"
+            onClick={() => handleStart()}
+            disabled={loading || !isTokenFresh}
+          >
+            Start
+          </button>
+
+          {(!isTokenFresh || loading) && (
+            <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
+                    hidden group-hover:block bg-gray-800 text-white text-sm
+                    rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
+              {loading ? "Action disabled while loading" : "Your token isn’t valid yet or has expired"}
+            </div>
+          )}
+        </div>
+
+        <div className="relative group flex-1">
+          <button
+            className="w-full py-2 px-4 bg-red-600 text-white rounded-lg 
+               hover:bg-red-700 transition disabled:cursor-not-allowed 
+               disabled:bg-red-900"
+            onClick={() => handleStop()}
+            disabled={loading || !isTokenFresh}
+          >
+            Stop
+          </button>
+
+          {/* Tooltip */}
+          {(!isTokenFresh || loading) && (
+            <div
+              className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
+                 hidden group-hover:block bg-gray-800 text-white text-sm
+                 rounded-md px-3 py-1 whitespace-nowrap shadow-lg"
+            >
+              {loading
+                ? "Action disabled while loading"
+                : "Your token isn’t valid yet or has expired"}
+            </div>
+          )}
+        </div>
+
       </div>
 
       {loading && (
@@ -168,21 +200,38 @@ export default function HomePage({ token }: HomePageProps) {
         </div>
       )}
 
-      <div className="space-y-2">
-        <input
-          type="file"
-          accept=".bin"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-          className="block w-full text-sm text-gray-600"
-        />
+
+      <input
+        type="file"
+        accept=".bin"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        className="block w-full text-sm text-gray-600"
+      />
+      <div className="space-y-2 relative group">
+
         <button
-          className="w-full py-2 px-4 bg-[#1E91C7] text-white rounded-lg hover:bg-[#187AA3] transition disabled:cursor-not-allowed disabled:bg-[#135C7B]"
+          className="w-full py-2 px-4 bg-[#1E91C7] text-white rounded-lg 
+               hover:bg-[#187AA3] transition disabled:cursor-not-allowed 
+               disabled:bg-[#135C7B]"
           onClick={handleFlash}
-          disabled={loading || !file}
+          disabled={loading || !isTokenFresh || !file}
         >
           Flash
         </button>
+
+        {(loading || !isTokenFresh || !file) && (
+          <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 
+                    hidden group-hover:block bg-gray-800 text-white text-sm 
+                    rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
+            {loading
+              ? "Action disabled while loading"
+              : !file
+                ? "Select a file to flash"
+                : "Your token isn’t valid yet or has expired"}
+          </div>
+        )}
       </div>
+
 
       {message && <p className="text-center text-gray-700">{message}</p>}
     </div>
