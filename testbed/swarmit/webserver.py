@@ -123,6 +123,12 @@ async def status(request: Request):
     return JSONResponse(content={"response": response})
 
 
+@api.get("/settings")
+async def status(request: Request):
+    controller: Controller = request.app.state.controller
+    return JSONResponse(content={"response": {"network_id": controller.settings.network_id}})
+
+
 @api.post("/start")
 async def start(request: Request, _token_payload=Depends(verify_jwt)):
     controller: Controller = request.app.state.controller
