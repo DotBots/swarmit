@@ -16,9 +16,23 @@ export interface TokenPayload {
   exp: number; // expiration
 }
 
+export type StatusType =
+  | "Bootloader"
+  | "Running"
+  | "Stopping"
+  | "Resetting"
+  | "Programming";
+
+type DeviceType =
+  | "Unknown"
+  | "DotBotV3"
+  | "DotBotV2"
+  | "nRF5340DK"
+  | "nRF52840DK";
+
 export type DotBotData = {
-  device: string;
-  status: string;
+  device: DeviceType;
+  status: StatusType;
   battery: number;
   pos_x: number;
   pos_y: number;
