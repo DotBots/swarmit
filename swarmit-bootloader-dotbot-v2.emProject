@@ -29,7 +29,7 @@
     c_additional_options="-Wall;-Wextra;-Wunused-variable;-Wuninitialized;-Wmissing-field-initializers;-Wundef;-ffunction-sections;-fdata-sections"
     c_only_additional_options="-Wno-missing-prototypes;-Wno-strict-prototypes"
     c_preprocessor_definitions="ARM_MATH_ARMV8MML;NRF5340_XXAA;NRF_APPLICATION;__NRF_FAMILY;CONFIG_NFCT_PINS_AS_GPIOS;BOARD_DOTBOT_V2;USE_LH2"
-    c_user_include_directories="$(SolutionDir)/../../dotbot-firmware/bsp;$(SolutionDir)/../../dotbot-firmware/drv;$(PackagesDir)/nRF/Device/Include;$(PackagesDir)/CMSIS_5/CMSIS/Core/Include"
+    c_user_include_directories="$(SolutionDir)/../../dotbot-libs/bsp;$(SolutionDir)/../../dotbot-libs/drv;$(PackagesDir)/nRF/Device/Include;$(PackagesDir)/CMSIS_5/CMSIS/Core/Include"
     compile_post_build_command=""
     compiler_color_diagnostics="Yes"
     debug_register_definition_file="$(ProjectDir)/Setup/nrf5340_application_Registers.xml"
@@ -69,7 +69,7 @@
     gcc_omit_frame_pointer="Yes"
     gcc_optimization_level="Level 2 balanced" />
   <import file_name="device/bootloader/bootloader-app.emProject" />
-  <import file_name="dotbot-firmware/bsp/bsp.emProject" />
-  <import file_name="dotbot-firmware/crypto/crypto.emProject" />
-  <import file_name="dotbot-firmware/drv/drv.emProject" />
+  <import file_name="dotbot-libs/bsp/bsp.emProject" />
+  <import file_name="dotbot-libs/crypto/crypto.emProject" />
+  <import file_name="dotbot-libs/drv/drv.emProject" />
 </solution>

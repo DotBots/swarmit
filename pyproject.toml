@@ -57,7 +57,7 @@ swarmit = "testbed.cli.main:main"
 lint.select = ["E", "F"]
 line-length = 88
 lint.ignore = ["E501", "E722"]
-exclude = ["dotbot-firmware"]
+exclude = ["dotbot-libs"]
 
 [tool.isort]
 multi_line_output = 3  # Use Vertical Hanging Indent

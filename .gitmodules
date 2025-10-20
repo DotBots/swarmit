@@ -1,7 +1,6 @@
-[submodule "dotbot-firmware"]
-    path = dotbot-firmware
-    url = https://github.com/DotBots/dotbot-firmware
-    branch = main
 [submodule "mari"]
 	path = mari
 	url = https://github.com/DotBots/mari.git
+[submodule "DotBot-libs"]
+	path = dotbot-libs
+	url = https://github.com/DotBots/DotBot-libs.git

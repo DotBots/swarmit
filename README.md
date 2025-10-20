@@ -18,7 +18,7 @@ under test, without requiring a control co-processor attached to it.
 
 ### Get the code
 
-Swarmit depends on the [DotBot-firmware](https://github.com/DotBots/DotBot-firmware)
+Swarmit depends on the [DotBot-libs](https://github.com/DotBots/DotBot-libs)
 and [Mari](https://github.com/DotBots/mari) repositories. They are included
 in the codebase as [Git submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules).
 
