@@ -1,5 +1,4 @@
 import { DotBotData } from "./App";
-import { DotBotsMap } from "./BotMap";
 
 interface CalendarPageProps {
   dotbots: Record<string, DotBotData>;
@@ -37,7 +36,6 @@ export default function OnlineDotBotPage({ dotbots }: CalendarPageProps) {
           </tbody>
         </table>
       </div>
-      <DotBotsMap dotbots={dotbots} />
     </div>
   );
 }

@@ -178,7 +178,7 @@ export default function InriaDashboard() {
 
         <main className="flex-1 p-8">
           {page === 1 && (
-            < HomePage token={token} tokenActiveness={tokenActiveness} />
+            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} />
           )}
 
           {page === 2 && (
@@ -186,7 +186,7 @@ export default function InriaDashboard() {
           )}
 
           {page === 3 && (
-            <OnlineDotBotPage dotbots={dotbots} />
+            < OnlineDotBotPage dotbots={dotbots} />
           )}
         </main>
       </div>
