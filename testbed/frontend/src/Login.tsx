@@ -2,7 +2,7 @@ import { useState, Dispatch, SetStateAction } from "react";
 import { Token, TokenPayload } from "./App";
 
 type VerifyResult =
-  | { valid: true; fresh: boolean; payload: TokenPayload }
+  | { valid: true; payload: TokenPayload }
   | { valid: false; reason: string };
 
 interface LoginProps {
@@ -61,11 +61,11 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
     const now = Math.floor(Date.now() / 1000);
     if (!valid) return { valid: false, reason: "Invalid signature" };
     // Token not active yet
-    if (payload.nbf && now < payload.nbf) return { valid: true, fresh: false, payload };
+    if (payload.nbf && now < payload.nbf) return { valid: true, payload };
     // Token expired
-    if (payload.exp && now > payload.exp) return { valid: true, fresh: false, payload };
+    if (payload.exp && now > payload.exp) return { valid: true, payload };
 
-    return { valid: true, fresh: true, payload };
+    return { valid: true, payload };
   };
 
   return (
