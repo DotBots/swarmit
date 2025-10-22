@@ -82,8 +82,10 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
         return;
     }
 
+    mutex_lock();
     ipc_shared_data.rx_pdu.length = length;
     memcpy((uint8_t *)ipc_shared_data.rx_pdu.buffer, packet, length);
+    mutex_unlock();
     _app_vars.data_received = true;
 }
 
@@ -305,7 +307,9 @@ int main(void) {
             uint32_t timestamp = mr_timer_hf_now(NETCORE_MAIN_TIMER);
             memcpy(_app_vars.notification_buffer + length, &timestamp, sizeof(uint32_t));
             length += sizeof(uint32_t);
+            mutex_lock();
             memcpy(_app_vars.notification_buffer + length, (void *)&ipc_shared_data.log, ipc_shared_data.log.length + 1);
+            mutex_unlock();
             length += ipc_shared_data.log.length + 1;
             mari_node_tx_payload(_app_vars.notification_buffer, length);
         }

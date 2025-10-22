@@ -39,18 +39,22 @@ bool localization_process_data(void) {
     return (_localization_data.lh2.data_ready[0][0] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][0] == DB_LH2_PROCESSED_DATA_AVAILABLE);
 }
 
-void localization_get_position(position_2d_t *position) {
+bool localization_get_position(position_2d_t *position) {
     //puts("Get position");
     if ((LH2_CALIBRATION_IS_VALID) && (_localization_data.lh2.data_ready[0][0] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][0] == DB_LH2_PROCESSED_DATA_AVAILABLE)) {
         //puts("Data available");
         db_lh2_stop();
         db_lh2_calculate_position(_localization_data.lh2.locations[0][0].lfsr_location, _localization_data.lh2.locations[1][0].lfsr_location, 0, _localization_data.coordinates);
+        if (_localization_data.coordinates[0] < 0 || _localization_data.coordinates[0] > 1.0 || _localization_data.coordinates[1] < 0 || _localization_data.coordinates[1] > 1) {
+            printf("Invalid coordinates (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
+            return false;
+        }
         position->x = (uint32_t)(_localization_data.coordinates[0] * 1e6);
         position->y = (uint32_t)(_localization_data.coordinates[1] * 1e6);
-        //printf("Position (%u,%u)\n", position->x, position->y);
+        printf("Position (%u,%u)\n", position->x, position->y);
         db_lh2_start();
-    } else {
-        position->x = 0;
-        position->y = 0;
+        return true;
     }
+
+    return false;
 }
