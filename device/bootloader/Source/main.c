@@ -235,7 +235,6 @@ static void setup_ns_user(void) {
 }
 
 static void _update_position(void) {
-    puts("Update position");
     _bootloader_vars.position_update = true;
 }
 
@@ -507,32 +506,46 @@ int main(void) {
 
         if (_bootloader_vars.battery_update) {
             db_gpio_toggle(&_status_led);
+            mutex_lock();
             ipc_shared_data.battery_level = battery_level_read();
+            mutex_unlock();
             _bootloader_vars.battery_update = false;
         }
 
         // Process available lighthouse data
         localization_process_data();
         if (_bootloader_vars.position_update) {
-            puts("Update position");
-            localization_get_position((position_2d_t *)&ipc_shared_data.current_position);
+            position_2d_t position = { 0 };
+            bool valid_position = localization_get_position(&position);
+            if (valid_position) {
+                mutex_lock();
+                ipc_shared_data.current_position.x = position.x;
+                ipc_shared_data.current_position.y = position.y;
+                mutex_unlock();
+                printf("Position (%u,%u)\n", position.x, position.y);
+            } else {
+                puts("Invalid position");
+            }
 
             if (ipc_shared_data.status != SWRMT_APPLICATION_RESETTING) {
                 continue;
             }
 
             int16_t new_direction = -1000;
+            mutex_lock();
             _compute_angle(
                 (const position_2d_t *)&ipc_shared_data.current_position,
                 &_control_loop_vars.previous_position,
                 &new_direction
             );
+            mutex_unlock();
             if (new_direction != -1000) {
                 _control_loop_vars.direction = new_direction;
             }
-
+            mutex_lock();
             _control_loop_vars.previous_position.x = ipc_shared_data.current_position.x;
             _control_loop_vars.previous_position.y = ipc_shared_data.current_position.y;
+            mutex_unlock();
 
             if (!_control_loop_vars.initial_direction_compensated) {
                 _compensate_initial_direction();

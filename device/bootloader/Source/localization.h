@@ -31,6 +31,6 @@ void localization_init(void);
 
 bool localization_process_data(void);
 
-void localization_get_position(position_2d_t *position);
+bool localization_get_position(position_2d_t *position);
 
 #endif // __LOCALIZATION_H
