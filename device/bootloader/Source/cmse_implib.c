@@ -15,7 +15,7 @@
 #include "lh2.h"
 #include "saadc.h"
 
-static __attribute__((aligned(8))) uint8_t _tx_data_buffer[UINT8_MAX];
+static __attribute__((aligned(4))) uint8_t _tx_data_buffer[UINT8_MAX];
 
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
 

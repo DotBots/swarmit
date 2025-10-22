@@ -11,7 +11,7 @@ typedef struct {
     double                  coordinates[2];
 } localization_data_t;
 
-static localization_data_t _localization_data = { 0 };
+static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 
 
 void localization_init(void) {
