@@ -429,8 +429,10 @@ class Controller:
         payload = PayloadStartRequest()
         self.send_payload(int(device_addr, 16), payload)
 
-    def start(self):
+    def start(self, devices=None):
         """Start the application."""
+        if devices is None:
+            devices = self.settings.devices or []
         ready_devices = self.ready_devices
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
@@ -450,8 +452,10 @@ class Controller:
             ready_devices, timeout=COMMAND_TIMEOUT, message="to start"
         )
 
-    def stop(self):
+    def stop(self, devices=None):
         """Stop the application."""
+        if devices is None:
+            devices = self.settings.devices or []
         stoppable_devices = self.running_devices + self.resetting_devices
 
         attempts = 0
@@ -460,10 +464,10 @@ class Controller:
             in [StatusType.Stopping, StatusType.Bootloader]
             for addr in stoppable_devices
         ):
-            if not self.settings.devices:
+            if not devices:
                 self.send_payload(BROADCAST_ADDRESS, PayloadStopRequest())
             else:
-                for device_addr in self.settings.devices:
+                for device_addr in devices:
                     if (
                         device_addr not in stoppable_devices
                         or self.status_data[device_addr].status
