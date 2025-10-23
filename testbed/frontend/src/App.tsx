@@ -172,7 +172,7 @@ export default function InriaDashboard() {
       <LoginModal open={openLoginPopup} setOpen={setOpenLoginPopup} token={token} setToken={setToken} />
       <div className="flex flex-1">
         <aside className="w-56 bg-white/70 backdrop-blur-md border-r border-gray-200 shadow-sm flex flex-col p-4 space-y-3">
-          {["Home", "Calendar", "Data Table"].map((label, i) => (
+          {["Home", "Reservations", "DotBots Info"].map((label, i) => (
             <button
               key={label}
               onClick={() => setPage(i + 1)}

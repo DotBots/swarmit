@@ -11,15 +11,18 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
   const [loading, setLoading] = useState(false);
   return (
     <div className="animate-fadeIn">
-      <h2 className="text-2xl font-semibold mb-6 text-gray-800">Data Table</h2>
+      <h2 className="text-2xl font-semibold mb-6 text-gray-800">DotBots Info</h2>
       {token && checkTokenActiveness(token.payload) === "Active" && (<input
         type="file"
         accept=".bin"
         onChange={(e) => setFile(e.target.files?.[0] || null)}
         className="block w-full text-sm text-gray-600"
       />)}
-      <div className="overflow-x-auto bg-white rounded-2xl shadow">
-        <table className="min-w-full border-collapse">
+      {Object.keys(dotbots).length === 0 ?
+        <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-500">
+          No devices available
+        </div> :
+        <div className="overflow-x-auto bg-white rounded-2xl shadow"><table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-[#1E91C7]/90 text-white">
               <th className="py-3 px-4 text-left font-semibold">Node Address</th>
@@ -66,7 +69,7 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
             ))}
           </tbody>
         </table>
-      </div>
+        </div>}
     </div>
   );
 }
