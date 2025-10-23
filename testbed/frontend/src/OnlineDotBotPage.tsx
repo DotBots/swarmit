@@ -232,5 +232,3 @@ function ActionButtons({ handleStart, handleStop, handleFlash, loading, hasFile,
     </div>
   );
 }
-
-
