@@ -157,7 +157,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
       <div className="bg-white shadow-lg rounded-2xl p-8 w-full max-w-lg">
         <h1 className="text-2xl font-bold mb-6 text-gray-800">
-          JWT Time Window Demo
+          Reservations
         </h1>
 
         <div className="space-y-4">
@@ -205,7 +205,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
           {token && (
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-600 mb-1">
-                JWT Token (Please copy and don't share with anyone!)
+                Token (Please copy and don't share with anyone!)
               </label>
               <textarea
                 readOnly
@@ -229,7 +229,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
       </div>
 
       <div className="overflow-x-auto bg-white rounded-2xl shadow m-4">
-        <table className="min-w-full border-collapse">
+        {records.length > 0 && (<table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-[#1E91C7]/90 text-white">
               <th className="py-3 px-4 text-left font-semibold">Start Date</th>
@@ -245,7 +245,7 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>)}
       </div>
     </div>
   );
