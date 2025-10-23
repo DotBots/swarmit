@@ -145,8 +145,15 @@ async def settings(request: Request):
 @api.post("/start")
 async def start(request: Request, _token_payload=Depends(verify_jwt)):
     controller: Controller = request.app.state.controller
+    body = await request.json()
 
-    controller.start()
+    devices = body.get("devices")
+    if devices is None:
+        controller.start()
+    else:
+        if isinstance(devices, str):
+            devices = [devices]
+        controller.start(devices)
 
     return JSONResponse(content={"response": "done"})
 
@@ -154,8 +161,15 @@ async def start(request: Request, _token_payload=Depends(verify_jwt)):
 @api.post("/stop", dependencies=[Depends(verify_jwt)])
 async def stop(request: Request):
     controller: Controller = request.app.state.controller
+    body = await request.json()
 
-    controller.stop()
+    devices = body.get("devices")
+    if devices is None:
+        controller.stop()
+    else:
+        if isinstance(devices, str):
+            devices = [devices]
+        controller.stop(devices)
 
     return JSONResponse(content={"response": "done"})
 

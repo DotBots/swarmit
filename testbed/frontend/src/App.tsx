@@ -196,7 +196,7 @@ export default function InriaDashboard() {
           )}
 
           {page === 3 && (
-            < OnlineDotBotPage dotbots={dotbots} />
+            < OnlineDotBotPage dotbots={dotbots} token={token} />
           )}
         </main>
       </div>
@@ -204,7 +204,7 @@ export default function InriaDashboard() {
   );
 }
 
-const checkTokenActiveness = (payload: TokenPayload): tokenActivenessType => {
+export const checkTokenActiveness = (payload: TokenPayload): tokenActivenessType => {
   const now = Math.floor(Date.now() / 1000);
   // Token not active yet
   if (payload.nbf && now < payload.nbf) return "NotValidYet";
