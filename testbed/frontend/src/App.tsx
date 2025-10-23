@@ -165,7 +165,7 @@ export default function InriaDashboard() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#1E91C7]/10 to-white">
       <header className="bg-[#1E91C7] text-white py-4 px-8 shadow-md flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-wide">OpenSwarm Testbed</h1>
-        <h1 className="text-m font-semibold tracking-wide">Network ID: {settings?.network_id}</h1>
+        {settings?.network_id && <h1 className="text-m font-semibold tracking-wide">Network ID: 0x{settings?.network_id.toUpperCase()}</h1>}
         <div onClick={() => setOpenLoginPopup(true)} className="text-sm opacity-80">{loginLabel[tokenActiveness]}</div>
       </header>
 

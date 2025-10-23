@@ -7,10 +7,17 @@ interface CalendarPageProps {
 }
 
 export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) {
+  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   return (
     <div className="animate-fadeIn">
       <h2 className="text-2xl font-semibold mb-6 text-gray-800">Data Table</h2>
+      {token && checkTokenActiveness(token.payload) === "Active" && (<input
+        type="file"
+        accept=".bin"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        className="block w-full text-sm text-gray-600"
+      />)}
       <div className="overflow-x-auto bg-white rounded-2xl shadow">
         <table className="min-w-full border-collapse">
           <thead>
@@ -22,8 +29,9 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
               <th className="py-3 px-4 text-left font-semibold">Pos (x, y)</th>
               {token && checkTokenActiveness(token.payload) === "Active" && (
                 <>
-                  <th className="py-3 px-4 text-left font-semibold">Start</th>
-                  <th className="py-3 px-4 text-left font-semibold">Stop</th>
+                  <th className="py-3 px-4 text-left font-semibold w-1"></th>
+                  <th className="py-3 px-4 text-left font-semibold w-1"></th>
+                  <th className="py-3 px-4 text-left font-semibold w-1"></th>
                 </>
               )}
 
@@ -49,6 +57,9 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
                     <td className="py-3 px-4 border-t">
                       <StopSingleBotButton device_id={id} token={token} loading={loading} setLoading={setLoading} />
                     </td>
+                    <td className="py-3 px-4 border-t">
+                      <FlashSingleBotButton device_id={id} token={token} loading={loading} setLoading={setLoading} file={file} />
+                    </td>
                   </>
                 )}
               </tr>
@@ -67,6 +78,9 @@ interface StartStopButtonProps {
   setLoading: Dispatch<SetStateAction<boolean>>;
 }
 
+interface FlashButtonProps extends StartStopButtonProps {
+  file: File | null
+}
 
 function StartSingleBotButton({ device_id, token, loading, setLoading }: StartStopButtonProps) {
   const handleStart = (devices: string[]) => {
@@ -85,22 +99,6 @@ function StartSingleBotButton({ device_id, token, loading, setLoading }: StartSt
       },
       body: JSON.stringify({ devices }),
     })
-      .then((res) => {
-        if (res.ok) {
-          // setMessage("Testbed started successfully");
-        } else {
-          return res.json()
-            .then((data) => {
-              // setMessage(`Error: ${data.detail || "Failed to start testbed"}`);
-            })
-            .catch(() => {
-              // setMessage("Failed to start testbed");
-            });
-        }
-      })
-      .catch(() => {
-        // setMessage(`Error: couldn't authorize token`);
-      })
       .finally(() => {
         setLoading(false);
       });
@@ -110,7 +108,7 @@ function StartSingleBotButton({ device_id, token, loading, setLoading }: StartSt
   return (
     <div>
       <button
-        className="w-full py-2 px-4 bg-green-600 text-white rounded-lg
+        className="w-min py-2 px-4 bg-green-600 text-white rounded-lg
                hover:bg-green-700 transition disabled:cursor-not-allowed
                disabled:bg-green-900"
         onClick={() => handleStart([device_id])}
@@ -128,7 +126,6 @@ function StopSingleBotButton({ device_id, token, loading, setLoading }: StartSto
       return;
     }
     setLoading(true);
-    // setMessage("Stopping...");
 
     fetch(`${API_URL}/stop`, {
       method: "POST",
@@ -138,22 +135,6 @@ function StopSingleBotButton({ device_id, token, loading, setLoading }: StartSto
       },
       body: JSON.stringify({ devices }),
     })
-      .then((res) => {
-        if (res.ok) {
-          // setMessage("Testbed stopped successfully");
-        } else {
-          return res.json()
-            .then((data) => {
-              // setMessage(`Error: ${data.detail || "Failed to stop testbed"}`);
-            })
-            .catch(() => {
-              // setMessage("Failed to stop testbed");
-            });
-        }
-      })
-      .catch(() => {
-        // setMessage(`Error: couldn't authorize token`);
-      })
       .finally(() => {
         setLoading(false);
       });
@@ -161,15 +142,60 @@ function StopSingleBotButton({ device_id, token, loading, setLoading }: StartSto
   return (
     <div>
       <button
-        className="w-full py-2 px-4 bg-red-600 text-white rounded-lg
+        className="w-min py-2 px-4 bg-red-600 text-white rounded-lg
                hover:bg-red-700 transition disabled:cursor-not-allowed
                disabled:bg-red-900"
         onClick={() => handleStop([device_id])}
         disabled={loading}
       >
-        Start
+        Stop
       </button>
     </div >
   );
 }
 
+function FlashSingleBotButton({ device_id, token, loading, setLoading, file }: FlashButtonProps) {
+  const handleFlash = (file: File | null, devices: string[]) => {
+    if (!token) {
+      return;
+    };
+    if (!file) {
+      return;
+    }
+
+    setLoading(true);
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+
+      fetch(`${API_URL}/flash`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token.token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ firmware_b64: base64, devices }),
+      })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+
+    reader.readAsDataURL(file);
+  };
+  return (
+    <div>
+      <button
+        className="w-min py-2 px-4 bg-[#1E91C7] text-white rounded-lg
+               hover:bg-[#187AA3] transition disabled:cursor-not-allowed
+               disabled:bg-[#135C7B]"
+        onClick={() => handleFlash(file, [device_id])}
+        disabled={loading || !file}
+      >
+        Flash
+      </button>
+    </div >
+  );
+}

@@ -105,7 +105,16 @@ async def flash_firmware(request: Request, payload: FirmwareUpload):
             status_code=400, detail="invalid firmware encoding: {str(e)}"
         )
 
-    start_data = controller.start_ota(fw)
+    body = await request.json()
+    devices = body.get("devices")
+
+    if devices is None:
+        start_data = controller.start_ota(fw)
+    else:
+        if isinstance(devices, str):
+            devices = [devices]
+        start_data = controller.start_ota(fw, devices)
+
     if start_data["missed"]:
         raise HTTPException(
             status_code=400,

@@ -25,7 +25,9 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
     fetch(`${API_URL}/start`, {
       method: "POST", headers: {
         "Authorization": `Bearer ${token.token}`,
-      }
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
     })
       .then((res) => {
         if (res.ok) {
@@ -60,7 +62,9 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
     fetch(`${API_URL}/stop`, {
       method: "POST", headers: {
         "Authorization": `Bearer ${token.token}`,
-      }
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
     })
       .then((res) => {
         if (res.ok) {
