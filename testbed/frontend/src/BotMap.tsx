@@ -21,6 +21,12 @@ function DotBotsMapPoint({
         return "rgb(30, 145, 199)";
       case "Running":
         return "rgb(34, 197, 94)";
+      case "Programming":
+        return "rgb(249, 115, 22)";
+      case "Stopping":
+        return "rgb(239, 68, 68)";
+      case "Resetting":
+        return "rgb(168, 85, 247)";
       default:
         return "rgb(107, 114, 128)";
     }
