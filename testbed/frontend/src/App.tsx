@@ -77,7 +77,7 @@ export interface SettingsResponse {
 }
 
 
-export default function InriaDashboard() {
+export default function MainDashboard() {
   const [page, setPage] = useState<number>(1);
   const [openLoginPopup, setOpenLoginPopup] = useState<boolean>(false);
   const [dotbots, setDotBots] = useState<Record<string, DotBotData>>({});
