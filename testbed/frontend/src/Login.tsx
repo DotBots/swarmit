@@ -38,7 +38,7 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
     return crypto.subtle.importKey(
       "spki",
       binaryDer.buffer,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      { name: "Ed25519" },
       true,
       ["verify"]
     );
@@ -56,7 +56,7 @@ export default function LoginModal({ open, setOpen, token, setToken }: LoginProp
     );
 
     const key = await importPublicKey(publicKeyPem);
-    const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, data);
+    const valid = await crypto.subtle.verify({ name: "Ed25519" }, key, signature, data);
 
     const now = Math.floor(Date.now() / 1000);
     if (!valid) return { valid: false, reason: "Invalid signature" };
