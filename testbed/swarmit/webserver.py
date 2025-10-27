@@ -49,7 +49,7 @@ with open("private.pem") as f:
 with open("public.pem") as f:
     PUBLIC_KEY = f.read()
 
-ALGORITHM = "RS256"
+ALGORITHM = "EdDSA"
 security = HTTPBearer()
 
 
