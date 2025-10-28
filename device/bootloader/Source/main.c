@@ -524,8 +524,9 @@ int main(void) {
                 mutex_unlock();
                 printf("Position (%u,%u)\n", position.x, position.y);
             } else {
-                puts("Invalid position");
+                printf("Invalid position (%u,%u)\n", position.x, position.y);
             }
+            _bootloader_vars.position_update = false;
 
             if (ipc_shared_data.status != SWRMT_APPLICATION_RESETTING) {
                 continue;
@@ -565,8 +566,6 @@ int main(void) {
                 _control_loop_vars.previous_position.x = 0;
                 _control_loop_vars.previous_position.y = 0;
             }
-
-            _bootloader_vars.position_update = false;
         }
     }
 }
