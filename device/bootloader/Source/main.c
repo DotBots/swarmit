@@ -513,8 +513,8 @@ int main(void) {
         }
 
         // Process available lighthouse data
-        localization_process_data();
-        if (_bootloader_vars.position_update) {
+        bool data_available = localization_process_data();
+        if (_bootloader_vars.position_update && data_available) {
             position_2d_t position = { 0 };
             bool valid_position = localization_get_position(&position);
             if (valid_position) {
