@@ -25,7 +25,7 @@ from testbed.swarmit.controller import (
     ResetLocation,
     print_transfer_status,
 )
-from testbed.swarmit.webserver import api, init_api
+from testbed.swarmit.webserver import api, init_api, mount_frontend
 
 DEFAULTS = {
     "adapter": "edge",
@@ -420,7 +420,8 @@ async def async_web(settings: ControllerSettings):
 async def _serve_fast_api(settings: ControllerSettings):
     """Starts the web server application."""
     init_api(api, settings)
-    config = uvicorn.Config(api, port=settings.mqtt_port, log_level="critical")
+    mount_frontend(api)
+    config = uvicorn.Config(api, port=settings.mqtt_port, log_level="info")
     server = uvicorn.Server(config)
 
     try:
