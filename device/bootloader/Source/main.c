@@ -31,7 +31,7 @@
 #define SWARMIT_BASE_ADDRESS        (0x10000)
 
 #define BATTERY_UPDATE_DELAY        (1000U)
-#define POSITION_UPDATE_DELAY_MS    (500U) ///< 100ms delay between each position update
+#define POSITION_UPDATE_DELAY_MS    (100U) ///< 100ms delay between each position update
 
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
 
