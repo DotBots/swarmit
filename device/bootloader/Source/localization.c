@@ -42,6 +42,8 @@ bool localization_get_position(position_2d_t *position) {
     if ((LH2_CALIBRATION_IS_VALID) && (_localization_data.lh2.data_ready[0][0] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][0] == DB_LH2_PROCESSED_DATA_AVAILABLE)) {
         db_lh2_stop();
         db_lh2_calculate_position(_localization_data.lh2.locations[0][0].lfsr_counts, _localization_data.lh2.locations[1][0].lfsr_counts, _localization_data.lh2.locations[0][0].selected_polynomial, _localization_data.coordinates);
+        _localization_data.lh2.data_ready[0][0] = DB_LH2_NO_NEW_DATA;
+        _localization_data.lh2.data_ready[1][0] = DB_LH2_NO_NEW_DATA;
         if (_localization_data.coordinates[0] < 0 || _localization_data.coordinates[0] > 1.0 || _localization_data.coordinates[1] < 0 || _localization_data.coordinates[1] > 1) {
             printf("Invalid coordinates (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
             db_lh2_start();
