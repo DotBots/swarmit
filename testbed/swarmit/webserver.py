@@ -42,12 +42,17 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
-# Load RSA keys
-with open("private.pem") as f:
-    PRIVATE_KEY = f.read()
 
-with open("public.pem") as f:
-    PUBLIC_KEY = f.read()
+# Load RSA keys
+def get_private_key() -> str:
+    with open("private.pem") as f:
+        return f.read()
+
+
+def get_public_key() -> str:
+    with open("public.pem") as f:
+        return f.read()
+
 
 ALGORITHM = "EdDSA"
 security = HTTPBearer()
@@ -55,8 +60,15 @@ security = HTTPBearer()
 
 def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
+        public_key = get_public_key()
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="public.pem not found; public key unavailable",
+        )
+    try:
         payload = jwt.decode(
-            credentials.credentials, PUBLIC_KEY, algorithms=[ALGORITHM]
+            credentials.credentials, public_key, algorithms=[ALGORITHM]
         )
         return payload
     except jwt.ExpiredSignatureError:
@@ -204,7 +216,15 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
         "nbf": start,
         "exp": end,
     }
-    token = jwt.encode(payload, PRIVATE_KEY, algorithm=ALGORITHM)
+
+    try:
+        private_key = get_private_key()
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="private.pem not found; private key unavailable",
+        )
+    token = jwt.encode(payload, private_key, algorithm=ALGORITHM)
 
     db_record = JWTRecord(jwt=token, date_start=start, date_end=end)
     db.add(db_record)
@@ -221,7 +241,15 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
 @api.get("/public_key", response_class=None)
 def public_key():
     """Expose the public key (frontend can use this to verify JWT signatures)."""
-    return JSONResponse(content={"data": PUBLIC_KEY})
+    try:
+        public_key = get_public_key()
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="public.pem not found; public key unavailable",
+        )
+
+    return JSONResponse(content={"data": public_key})
 
 
 class JWTRecordOut(BaseModel):
@@ -248,7 +276,15 @@ def list_records(db: Session = Depends(get_db)):
 
 
 # Mount static files after all routes are defined
-FRONTEND_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "frontend", "dist"
-)
-api.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+def mount_frontend(api):
+    frontend_dir = os.path.join(
+        os.path.dirname(__file__), "..", "frontend", "dist"
+    )
+    if os.path.isdir(frontend_dir):
+        api.mount(
+            "/",
+            StaticFiles(directory=frontend_dir, html=True),
+            name="frontend",
+        )
+    else:
+        print("Warning: frontend directory not found; skipping static mount")
