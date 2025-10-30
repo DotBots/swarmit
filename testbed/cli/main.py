@@ -1,15 +1,12 @@
 #!/usr/bin/env python
 
-import asyncio
 import logging
 import time
 import tomllib
-import webbrowser
 
 import click
 import serial
 import structlog
-import uvicorn
 from dotbot.serial_interface import SerialInterfaceException, get_default_port
 from rich import print
 from rich.console import Console
@@ -25,7 +22,6 @@ from testbed.swarmit.controller import (
     ResetLocation,
     print_transfer_status,
 )
-from testbed.swarmit.webserver import api, init_api, mount_frontend
 
 DEFAULTS = {
     "adapter": "edge",
@@ -385,67 +381,6 @@ def load_toml_config(path):
         return {}
     with open(path, "rb") as f:
         return tomllib.load(f)
-
-
-@main.command()
-@click.pass_context
-def web(ctx):
-    asyncio.run(async_web(ctx.obj["settings"]))
-
-
-async def async_web(settings: ControllerSettings):
-    tasks = []
-    try:
-        tasks = [
-            asyncio.create_task(
-                name="Web server", coro=_serve_fast_api(settings)
-            ),
-            asyncio.create_task(
-                name="Web browser", coro=_open_webbrowser(settings.mqtt_port)
-            ),
-        ]
-        await asyncio.gather(*tasks)
-    except Exception as exc:  # TODO: use the right exception here
-        print(f"Error: {exc}")
-    except SystemExit:
-        pass
-    finally:
-        print("Stopping controller")
-        for task in tasks:
-            print(f"Cancelling task '{task.get_name()}'")
-            task.cancel()
-        print("Controller stopped")
-
-
-async def _serve_fast_api(settings: ControllerSettings):
-    """Starts the web server application."""
-    init_api(api, settings)
-    mount_frontend(api)
-    config = uvicorn.Config(api, port=settings.mqtt_port, log_level="info")
-    server = uvicorn.Server(config)
-
-    try:
-        await server.serve()
-    except asyncio.exceptions.CancelledError:
-        print("Web server cancelled")
-    else:
-        raise SystemExit()
-
-
-async def _open_webbrowser(mqtt_port: int):
-    """Wait until the server is ready before opening a web browser."""
-    while 1:
-        try:
-            _, writer = await asyncio.open_connection("127.0.0.1", mqtt_port)
-        except ConnectionRefusedError:
-            await asyncio.sleep(0.1)
-        else:
-            writer.close()
-            break
-
-    url = f"http://localhost:{mqtt_port}"
-    print(f"Opening webbrowser: {url}")
-    webbrowser.open(url)
 
 
 if __name__ == "__main__":
