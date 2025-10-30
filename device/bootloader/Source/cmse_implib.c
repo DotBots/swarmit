@@ -87,16 +87,6 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
-    if (_localization_data_available) {
-        position_2d_t new_position;
-        if (!localization_get_position(&new_position)) {
-            return;
-        }
-        mutex_lock();
-        memcpy((void *)&ipc_shared_data.current_position, &new_position, sizeof(position_2d_t));
-        mutex_unlock();
-    }
-
     mutex_lock();
     position->x = ipc_shared_data.current_position.x;
     position->y = ipc_shared_data.current_position.y;
