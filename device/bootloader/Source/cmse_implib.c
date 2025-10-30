@@ -16,6 +16,7 @@
 #include "saadc.h"
 
 static __attribute__((aligned(4))) uint8_t _tx_data_buffer[UINT8_MAX];
+static __attribute__((aligned(4))) uint32_t _localization_data_available = 0;
 
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
 
@@ -24,7 +25,7 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
     mutex_lock();
     ipc_shared_data.battery_level = battery_level_read();
     mutex_unlock();
-    if (localization_process_data()) {
+    if (_localization_data_available) {
         position_2d_t position;
         if (!localization_get_position(&position)) {
             return;
@@ -85,11 +86,17 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_
     NRF_IPC_S->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
 }
 
-__attribute__((cmse_nonsecure_entry)) void swarmit_localization_process_data(void) {
-    localization_process_data();
-}
-
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
+    if (_localization_data_available) {
+        position_2d_t new_position;
+        if (!localization_get_position(&new_position)) {
+            return;
+        }
+        mutex_lock();
+        memcpy((void *)&ipc_shared_data.current_position, &new_position, sizeof(position_2d_t));
+        mutex_unlock();
+    }
+
     mutex_lock();
     position->x = ipc_shared_data.current_position.x;
     position->y = ipc_shared_data.current_position.y;
@@ -101,6 +108,7 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_localization_handle_isr(void)
         // Clear the Interrupt flag
         NRF_SPIM4_S->EVENTS_END = 0;
         db_lh2_handle_isr();
+        _localization_data_available = localization_process_data();
     }
 }
 

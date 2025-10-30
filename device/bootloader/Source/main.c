@@ -26,24 +26,12 @@
 #include "board_config.h"
 #include "gpio.h"
 #include "localization.h"
-#include "motors.h"
-#include "move.h"
 #include "timer.h"
 
 #define SWARMIT_BASE_ADDRESS        (0x10000)
 
 #define BATTERY_UPDATE_DELAY        (1000U)
-#define POSITION_UPDATE_DELAY_MS    (500U) ///< 100ms delay between each position update
-
-#define ROBOT_DISTANCE_THRESHOLD    (0.05)
-#define ROBOT_DIRECTION_THRESHOLD   (0.01)
-#define ROBOT_ROTATE_SPEED          (45)
-#define ROBOT_STRAIGHT_SPEED        (45)
-#define ROBOT_MAX_SPEED             (50)   ///< Max speed in autonomous control mode
-#define ROBOT_REDUCE_SPEED_FACTOR   (0.8)  ///< Reduction factor applied to speed when close to target or error angle is too large
-#define ROBOT_REDUCE_SPEED_ANGLE    (25)   ///< Max angle amplitude where speed reduction factor is applied
-#define ROBOT_ANGULAR_SPEED_FACTOR  (35)   ///< Constant applied to the normalized angle to target error
-#define ROBOT_ANGULAR_SIDE_FACTOR   (-1)   ///< Angular side factor
+#define POSITION_UPDATE_DELAY_MS    (100U) ///< 100ms delay between each position update
 
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
 
@@ -59,15 +47,6 @@ typedef struct {
     bool            battery_update;
 } bootloader_app_data_t;
 
-typedef struct {
-    position_2d_t   previous_position;
-    int16_t         direction;
-    bool            initial_direction_compensated;
-    bool            final_direction_compensated;
-    bool            target_reached;
-} control_loop_data_t;
-
-static control_loop_data_t _control_loop_vars = { 0 };
 static const gpio_t _status_led = { .port = 1, .pin = 5 };  // TODO: use board specific values
 
 static bootloader_app_data_t _bootloader_vars = { 0 };
@@ -242,100 +221,6 @@ static void _read_battery(void) {
     _bootloader_vars.battery_update = true;
 }
 
-static void _compute_angle(const position_2d_t *head, const position_2d_t *tail, int16_t *angle) {
-    float dx = ((float)head->x / 1e6) - ((float)tail->x / 1e6);
-    float dy = ((float)head->y / 1e6) - ((float)tail->y / 1e6);
-    float distance = sqrtf(powf(dx, 2) + powf(dy, 2));
-
-    if (distance < ROBOT_DIRECTION_THRESHOLD) {
-        return;
-    }
-
-    int8_t sideFactor = (dx > 0) ? -1 : 1;
-    int16_t result = (int16_t)(acosf(dy / distance) * 180 / M_PI) * sideFactor;
-    if (result < -360) {
-        result += 360;
-    }
-    *angle = result;
-}
-
-static void _compensate_angle(int16_t angle) {
-    int8_t speed = ROBOT_ROTATE_SPEED * -1;
-
-    if (angle < 0) {
-        speed *= -1;
-        angle *= -1;
-    }
-    db_move_rotate(angle, speed);
-}
-
-static void _compensate_initial_direction(void) {
-    // Move straight to be able to compute the current angle
-    if (_control_loop_vars.direction == -1000) {
-        db_move_straight(50, 50);
-        return;
-    }
-
-    // Compute angle to target and rotate
-    int16_t angle_to_target = 0;
-    _compute_angle((const position_2d_t *)&ipc_shared_data.target_position, (const position_2d_t *)&_bootloader_vars.last_position, &angle_to_target);
-    int16_t error_angle = angle_to_target - _control_loop_vars.direction;
-    _compensate_angle(error_angle);
-    db_move_straight(ROBOT_STRAIGHT_SPEED, ROBOT_STRAIGHT_SPEED);
-    _control_loop_vars.initial_direction_compensated = true;
-}
-
-static void _update_control_loop(void) {
-    if (ipc_shared_data.status != SWRMT_APPLICATION_RESETTING) {
-        return;
-    }
-
-    float dx = ((float)ipc_shared_data.target_position.x / 1e6) - ((float)_bootloader_vars.last_position.x / 1e6);
-    float dy = ((float)ipc_shared_data.target_position.y / 1e6) - ((float)_bootloader_vars.last_position.y / 1e6);
-    float distanceToTarget = sqrtf(powf(dx, 2) + powf(dy, 2));
-    float speedReductionFactor = 1.0;  // No reduction by default
-
-    if ((uint32_t)(distanceToTarget) < 0.2) {
-        speedReductionFactor = ROBOT_REDUCE_SPEED_FACTOR;
-    }
-
-    int16_t left_speed      = 0;
-    int16_t right_speed     = 0;
-    int16_t angular_speed   = 0;
-    int16_t error_angle     = 0;
-    int16_t angle_to_target = 0;
-    if (distanceToTarget < ROBOT_DISTANCE_THRESHOLD) {
-        _control_loop_vars.target_reached = true;
-     } else if (_control_loop_vars.direction == -1000) {
-        // Unknown direction, just move forward a bit
-        left_speed  = (int16_t)ROBOT_MAX_SPEED * speedReductionFactor;
-        right_speed = (int16_t)ROBOT_MAX_SPEED * speedReductionFactor;
-    } else {
-        // compute angle to target waypoint
-        _compute_angle((const position_2d_t *)&ipc_shared_data.target_position, (const position_2d_t *)&_bootloader_vars.last_position, &angle_to_target);
-        error_angle = angle_to_target - _control_loop_vars.direction;
-        if (error_angle < -180) {
-            error_angle += 360;
-        } else if (error_angle > 180) {
-            error_angle -= 360;
-        }
-        if (error_angle > ROBOT_REDUCE_SPEED_ANGLE || error_angle < -ROBOT_REDUCE_SPEED_ANGLE) {
-            speedReductionFactor = ROBOT_REDUCE_SPEED_FACTOR;
-        }
-        angular_speed = (int16_t)(((float)error_angle / 180) * ROBOT_ANGULAR_SPEED_FACTOR);
-        left_speed    = (int16_t)(((ROBOT_MAX_SPEED * speedReductionFactor) - (angular_speed * ROBOT_ANGULAR_SIDE_FACTOR)));
-        right_speed   = (int16_t)(((ROBOT_MAX_SPEED * speedReductionFactor) + (angular_speed * ROBOT_ANGULAR_SIDE_FACTOR)));
-        if (left_speed > ROBOT_MAX_SPEED) {
-            left_speed = ROBOT_MAX_SPEED;
-        }
-        if (right_speed > ROBOT_MAX_SPEED) {
-            right_speed = ROBOT_MAX_SPEED;
-        }
-    }
-
-    db_motors_set_speed(left_speed, right_speed);
-}
-
 int main(void) {
 
     setup_watchdog1();
@@ -430,16 +315,6 @@ int main(void) {
     _bootloader_vars.base_addr = SWARMIT_BASE_ADDRESS;
     _bootloader_vars.ota_require_erase = true;
 
-    // Initialize current angle to invalid value to force a recomputation when reset is called
-    _control_loop_vars.direction = -1000;
-    _control_loop_vars.target_reached = false;
-    _control_loop_vars.initial_direction_compensated = false;
-    _control_loop_vars.final_direction_compensated = false;
-
-    // PWM, Motors and move library initialization
-    // Allows enable the regulator and relay switch (v3 only) pins
-    db_move_init();
-
     // Status LED
     db_gpio_init(&_status_led, DB_GPIO_OUT);
     // Periodic Timer and Lighthouse initialization
@@ -513,8 +388,8 @@ int main(void) {
         }
 
         // Process available lighthouse data
-        localization_process_data();
-        if (_bootloader_vars.position_update) {
+        bool data_available = localization_process_data();
+        if (_bootloader_vars.position_update && data_available) {
             position_2d_t position = { 0 };
             bool valid_position = localization_get_position(&position);
             if (valid_position) {
@@ -524,48 +399,8 @@ int main(void) {
                 mutex_unlock();
                 printf("Position (%u,%u)\n", position.x, position.y);
             } else {
-                puts("Invalid position");
+                printf("Invalid position (%u,%u)\n", position.x, position.y);
             }
-
-            if (ipc_shared_data.status != SWRMT_APPLICATION_RESETTING) {
-                continue;
-            }
-
-            int16_t new_direction = -1000;
-            mutex_lock();
-            _compute_angle(
-                (const position_2d_t *)&ipc_shared_data.current_position,
-                &_control_loop_vars.previous_position,
-                &new_direction
-            );
-            mutex_unlock();
-            if (new_direction != -1000) {
-                _control_loop_vars.direction = new_direction;
-            }
-            mutex_lock();
-            _control_loop_vars.previous_position.x = ipc_shared_data.current_position.x;
-            _control_loop_vars.previous_position.y = ipc_shared_data.current_position.y;
-            mutex_unlock();
-
-            if (!_control_loop_vars.initial_direction_compensated) {
-                _compensate_initial_direction();
-            }
-
-            if (!_control_loop_vars.target_reached) {
-                _update_control_loop();
-            }
-
-            if (_control_loop_vars.target_reached) {
-                _compensate_angle(_control_loop_vars.direction);
-                ipc_shared_data.status = SWRMT_APPLICATION_READY;
-                _control_loop_vars.direction = -1000;
-                _control_loop_vars.target_reached = false;
-                _control_loop_vars.initial_direction_compensated = false;
-                _control_loop_vars.final_direction_compensated = false;
-                _control_loop_vars.previous_position.x = 0;
-                _control_loop_vars.previous_position.y = 0;
-            }
-
             _bootloader_vars.position_update = false;
         }
     }
