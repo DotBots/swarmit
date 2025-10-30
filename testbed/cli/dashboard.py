@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 import asyncio
-import click
-import structlog
+import logging
 import tomllib
 import webbrowser
+
+import click
+import structlog
 import uvicorn
-import logging
+
 from testbed.cli.main import DEFAULTS
 from testbed.swarmit import __version__
 from testbed.swarmit.controller import ControllerSettings
