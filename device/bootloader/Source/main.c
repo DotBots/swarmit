@@ -280,6 +280,8 @@ int main(void) {
     battery_level_init();
     ipc_shared_data.battery_level = battery_level_read();
 
+    NVIC_ClearTargetState(SPIM4_IRQn);
+    NVIC_ClearTargetState(IPC_IRQn);
     localization_init();
 
     // Check reset reason and switch to user image if reset was not triggered by any wdt timeout
