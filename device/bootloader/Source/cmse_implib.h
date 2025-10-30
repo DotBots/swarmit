@@ -30,7 +30,6 @@ __attribute__((cmse_nonsecure_entry, aligned)) uint64_t swarmit_read_device_id(v
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_log_data(uint8_t *data, size_t length);
 
 // Lighthouse 2 functions exposed to user image
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_process_data(void);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_get_position(position_2d_t *position);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_handle_isr(void);
 

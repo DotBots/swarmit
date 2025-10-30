@@ -86,10 +86,6 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_
     NRF_IPC_S->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
 }
 
-__attribute__((cmse_nonsecure_entry)) void swarmit_localization_process_data(void) {
-    _localization_data_available = localization_process_data();
-}
-
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
     if (_localization_data_available) {
         position_2d_t new_position;
@@ -112,6 +108,7 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_localization_handle_isr(void)
         // Clear the Interrupt flag
         NRF_SPIM4_S->EVENTS_END = 0;
         db_lh2_handle_isr();
+        _localization_data_available = localization_process_data();
     }
 }
 
