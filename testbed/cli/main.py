@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-import logging
 import time
 import tomllib
 
 import click
 import serial
-import structlog
-from dotbot.serial_interface import SerialInterfaceException, get_default_port
+from dotbot_utils.serial_interface import (
+    SerialInterfaceException,
+    get_default_port,
+)
 from rich import print
 from rich.console import Console
 from rich.pretty import pprint
@@ -22,6 +23,7 @@ from testbed.swarmit.controller import (
     ResetLocation,
     print_transfer_status,
 )
+from testbed.swarmit.logger import setup_logging
 
 DEFAULTS = {
     "adapter": "edge",
@@ -134,13 +136,7 @@ def main(
         **{k: v for k, v in cli_args.items() if v not in (None, False)},
     }
 
-    if ctx.invoked_subcommand != "monitor":
-        # Disable logging if not monitoring
-        structlog.configure(
-            wrapper_class=structlog.make_filtering_bound_logger(
-                logging.CRITICAL
-            ),
-        )
+    setup_logging()
     ctx.ensure_object(dict)
     ctx.obj["settings"] = ControllerSettings(
         serial_port=final_config["serial_port"],

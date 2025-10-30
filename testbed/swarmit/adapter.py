@@ -4,7 +4,7 @@ import sys
 import time
 from abc import ABC, abstractmethod
 
-from dotbot.protocol import (
+from dotbot_utils.protocol import (
     Packet,
     Payload,
     ProtocolPayloadParserException,

@@ -4,7 +4,11 @@ import dataclasses
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 
-from dotbot.protocol import Payload, PayloadFieldMetadata, register_parser
+from dotbot_utils.protocol import (
+    Payload,
+    PayloadFieldMetadata,
+    register_parser,
+)
 from marilib.mari_protocol import DefaultPayloadType as MariDefaultPayloadType
 
 
