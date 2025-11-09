@@ -33,6 +33,8 @@ dependencies = [
     "structlog      >= 24.4.0",
     "tqdm           >= 4.66.5",
     "marilib-pkg    == 0.7.1",
+    "PyJWT          >= 2.9.0",
+    "SQLAlchemy     >= 2.0.25",
 ]
 description = "Run Your Own Robot Swarm Testbed."
 readme = "README.md"
@@ -52,6 +54,7 @@ classifiers = [
 
 [project.scripts]
 swarmit = "testbed.cli.main:main"
+swarmit-dashboard = "testbed.cli.dashboard:main"
 
 [tool.ruff]
 lint.select = ["E", "F"]
