@@ -63,7 +63,7 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     memcpy(_app_vars.req_buffer, packet, length);
     uint8_t *ptr = _app_vars.req_buffer;
     uint8_t packet_type = (uint8_t)*ptr++;
-    if ((packet_type >= SWRMT_REQUEST_STATUS) && (packet_type <= SWRMT_REQUEST_OTA_CHUNK)) {
+    if ((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) {
         _app_vars.req_received = true;
         return;
     }
@@ -155,7 +155,7 @@ int main(void) {
         if (_app_vars.send_status) {
             _app_vars.send_status = false;
             size_t length = 0;
-            _app_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_STATUS;
+            _app_vars.notification_buffer[length++] = SWRMT_MSG_STATUS;
             _app_vars.notification_buffer[length++] = ipc_shared_data.device_type;
             _app_vars.notification_buffer[length++] = ipc_shared_data.status;
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.battery_level, sizeof(uint16_t));
@@ -169,14 +169,14 @@ int main(void) {
             _app_vars.req_received = false;
             swrmt_request_t *req = (swrmt_request_t *)_app_vars.req_buffer;
             switch (req->type) {
-                case SWRMT_REQUEST_START:
+                case SWRMT_MSG_START:
                     if (ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;
                     }
                     puts("Start request received");
                     NRF_IPC_NS->TASKS_SEND[IPC_CHAN_APPLICATION_START] = 1;
                     break;
-                case SWRMT_REQUEST_STOP:
+                case SWRMT_MSG_STOP:
                     if ((ipc_shared_data.status != SWRMT_APPLICATION_RUNNING) && (ipc_shared_data.status != SWRMT_APPLICATION_RESETTING) && (ipc_shared_data.status != SWRMT_APPLICATION_PROGRAMMING)) {
                         break;
                     }
@@ -184,7 +184,7 @@ int main(void) {
                     ipc_shared_data.status = SWRMT_APPLICATION_STOPPING;
                     NRF_IPC_NS->TASKS_SEND[IPC_CHAN_APPLICATION_STOP] = 1;
                     break;
-                case SWRMT_REQUEST_RESET:
+                case SWRMT_MSG_RESET:
                     if (ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;
                     }
@@ -193,7 +193,7 @@ int main(void) {
                     ipc_shared_data.status = SWRMT_APPLICATION_RESETTING;
                     //NRF_IPC_NS->TASKS_SEND[IPC_CHAN_APPLICATION_RESET] = 1;
                     break;
-                case SWRMT_REQUEST_OTA_START:
+                case SWRMT_MSG_OTA_START:
                 {
                     if (ipc_shared_data.status != SWRMT_APPLICATION_READY && ipc_shared_data.status != SWRMT_APPLICATION_PROGRAMMING) {
                         break;
@@ -209,7 +209,7 @@ int main(void) {
                     printf("OTA Start request received (size: %u, chunks: %u)\n", ipc_shared_data.ota.image_size, ipc_shared_data.ota.chunk_count);
                     NRF_IPC_NS->TASKS_SEND[IPC_CHAN_OTA_START] = 1;
                 } break;
-                case SWRMT_REQUEST_OTA_CHUNK:
+                case SWRMT_MSG_OTA_CHUNK:
                 {
                     if (ipc_shared_data.status != SWRMT_APPLICATION_PROGRAMMING && ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;
@@ -303,7 +303,7 @@ int main(void) {
             _app_vars.ipc_log_received = false;
             // Notify log data
             size_t length = 0;
-            _app_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_LOG_EVENT;
+            _app_vars.notification_buffer[length++] = SWRMT_MSG_LOG_EVENT;
             uint32_t timestamp = mr_timer_hf_now(NETCORE_MAIN_TIMER);
             memcpy(_app_vars.notification_buffer + length, &timestamp, sizeof(uint32_t));
             length += sizeof(uint32_t);

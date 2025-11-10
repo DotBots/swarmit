@@ -143,7 +143,7 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     memcpy(_bootloader_vars.req_buffer, packet, length);
     uint8_t *ptr = _bootloader_vars.req_buffer;
     uint8_t packet_type = (uint8_t)*ptr++;
-    if ((packet_type >= SWRMT_REQUEST_STATUS) && (packet_type <= SWRMT_REQUEST_OTA_CHUNK)) {
+    if ((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) {
         _bootloader_vars.req_received = true;
         return;
     }
@@ -252,7 +252,7 @@ int main(void) {
         if (_bootloader_vars.send_status) {
             _bootloader_vars.send_status = false;
             size_t length = 0;
-            _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_STATUS;
+            _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_STATUS;
             _bootloader_vars.notification_buffer[length++] = _swarmit_vars.device_type;
             _bootloader_vars.notification_buffer[length++] = _swarmit_vars.status;
             memcpy(&_bootloader_vars.notification_buffer[length], (void *)&_swarmit_vars.battery_level, sizeof(uint16_t));
@@ -267,21 +267,21 @@ int main(void) {
             _bootloader_vars.req_received = false;
             swrmt_request_t *req = (swrmt_request_t *)_bootloader_vars.req_buffer;
             switch (req->type) {
-                case SWRMT_REQUEST_START:
+                case SWRMT_MSG_START:
                     if (_swarmit_vars.status != SWRMT_APPLICATION_READY) {
                         break;
                     }
                     puts("Start request received");
                     NVIC_SystemReset();
                     break;
-                case SWRMT_REQUEST_STOP:
+                case SWRMT_MSG_STOP:
                     if (_swarmit_vars.status != SWRMT_APPLICATION_RUNNING && _swarmit_vars.status != SWRMT_APPLICATION_PROGRAMMING) {
                         break;
                     }
                     puts("Stop request received");
                     setup_watchdog();
                     break;
-                case SWRMT_REQUEST_OTA_START:
+                case SWRMT_MSG_OTA_START:
                 {
                     if (_swarmit_vars.status != SWRMT_APPLICATION_READY && _swarmit_vars.status != SWRMT_APPLICATION_PROGRAMMING) {
                         break;
@@ -295,7 +295,7 @@ int main(void) {
                     printf("OTA Start request received (size: %u, chunks: %u)\n", _swarmit_vars.ota.image_size, _swarmit_vars.ota.chunk_count);
                     _bootloader_vars.ota_start_request = true;
                 } break;
-                case SWRMT_REQUEST_OTA_CHUNK:
+                case SWRMT_MSG_OTA_CHUNK:
                 {
                     if (_swarmit_vars.status != SWRMT_APPLICATION_PROGRAMMING && _swarmit_vars.status != SWRMT_APPLICATION_READY) {
                         break;
@@ -356,7 +356,7 @@ int main(void) {
             _bootloader_vars.log_received = false;
             // Notify log data
             size_t length = 0;
-            _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_LOG_EVENT;
+            _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_LOG_EVENT;
             uint32_t timestamp = mr_timer_hf_now(NETCORE_MAIN_TIMER);
             memcpy(_bootloader_vars.notification_buffer + length, &timestamp, sizeof(uint32_t));
             length += sizeof(uint32_t);
@@ -383,7 +383,7 @@ int main(void) {
 
             // Notify erase is done
             size_t length = 0;
-            _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_OTA_START_ACK;
+            _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_OTA_START_ACK;
             while (!mari_node_is_connected()) {}
             mari_node_tx_payload(_bootloader_vars.notification_buffer, length);
         }
@@ -401,7 +401,7 @@ int main(void) {
 
             // Notify chunk has been written
             size_t length = 0;
-            _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_OTA_CHUNK_ACK;
+            _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_OTA_CHUNK_ACK;
             memcpy(_bootloader_vars.notification_buffer + length, (void *)&_swarmit_vars.ota.chunk_index, sizeof(uint32_t));
             length += sizeof(uint32_t);
             _swarmit_vars.ota.last_chunk_acked = _swarmit_vars.ota.chunk_index;

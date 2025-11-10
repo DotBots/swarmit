@@ -28,21 +28,17 @@ typedef enum {
 } swrmt_application_status_t;
 
 typedef enum {
-    SWRMT_REQUEST_STATUS = 0x80,
-    SWRMT_REQUEST_START = 0x81,
-    SWRMT_REQUEST_STOP = 0x82,
-    SWRMT_REQUEST_RESET = 0x83,
-    SWRMT_REQUEST_OTA_START = 0x84,
-    SWRMT_REQUEST_OTA_CHUNK = 0x85,
-} swrmt_request_type_t;
-
-typedef enum {
-    SWRMT_NOTIFICATION_STATUS = 0x90,
-    SWRMT_NOTIFICATION_OTA_START_ACK = 0x93,
-    SWRMT_NOTIFICATION_OTA_CHUNK_ACK = 0x94,
-    SWRMT_NOTIFICATION_GPIO_EVENT = 0x95,
-    SWRMT_NOTIFICATION_LOG_EVENT = 0x96,
-} swrmt_notification_type_t;
+    SWRMT_MSG_STATUS = 0x80,
+    SWRMT_MSG_START = 0x81,
+    SWRMT_MSG_STOP = 0x82,
+    SWRMT_MSG_RESET = 0x83,
+    SWRMT_MSG_OTA_START = 0x84,
+    SWRMT_MSG_OTA_CHUNK = 0x85,
+    SWRMT_MSG_OTA_START_ACK = 0x86,
+    SWRMT_MSG_OTA_CHUNK_ACK = 0x87,
+    SWRMT_MSG_GPIO_EVENT = 0x88,
+    SWRMT_MSG_LOG_EVENT = 0x89,
+} swrmt_message_type_t;
 
 /// Protocol packet type
 typedef enum {
@@ -70,8 +66,8 @@ typedef struct __attribute__((packed)) {
 } protocol_header_t;
 
 typedef struct __attribute__((packed)) {
-    swrmt_request_type_t type;
-    uint8_t         data[255];
+    swrmt_message_type_t    type;
+    uint8_t                 data[255];
 } swrmt_request_t;
 
 typedef struct __attribute__((packed)) {
