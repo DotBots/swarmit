@@ -86,6 +86,12 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_
     NRF_IPC_S->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
 }
 
+__attribute__((cmse_nonsecure_entry)) void swarmit_get_battery_level(uint16_t *battery) {
+    mutex_lock();
+    *battery = ipc_shared_data.battery_level;
+    mutex_unlock();
+}
+
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
     mutex_lock();
     position->x = ipc_shared_data.current_position.x;
