@@ -24,11 +24,11 @@ from testbed.swarmit.logger import LOGGER
 from testbed.swarmit.protocol import (
     DeviceType,
     PayloadMessage,
-    PayloadOTAChunkRequest,
-    PayloadOTAStartRequest,
-    PayloadResetRequest,
-    PayloadStartRequest,
-    PayloadStopRequest,
+    PayloadOTAChunk,
+    PayloadOTAStart,
+    PayloadReset,
+    PayloadStart,
+    PayloadStop,
     StatusType,
     SwarmitPayloadType,
     register_parsers,
@@ -328,13 +328,10 @@ class Controller:
         # if self.settings.verbose:
         #     print()
         #     print(Frame(header, packet))
-        if packet.payload_type < SwarmitPayloadType.SWARMIT_REQUEST_STATUS:
+        if packet.payload_type < SwarmitPayloadType.SWARMIT_STATUS:
             return
         device_addr = f"{header.source:08X}"
-        if (
-            packet.payload_type
-            == SwarmitPayloadType.SWARMIT_NOTIFICATION_STATUS
-        ):
+        if packet.payload_type == SwarmitPayloadType.SWARMIT_STATUS:
             status = NodeStatus(
                 device=DeviceType(packet.payload.device),
                 status=StatusType(packet.payload.status),
@@ -343,17 +340,11 @@ class Controller:
                 pos_y=packet.payload.pos_y,
             )
             self.status_data.update({device_addr: status})
-        elif (
-            packet.payload_type
-            == SwarmitPayloadType.SWARMIT_NOTIFICATION_OTA_START_ACK
-        ):
+        elif packet.payload_type == SwarmitPayloadType.SWARMIT_OTA_START_ACK:
             if device_addr in self.start_ota_data.addrs:
                 return
             self.start_ota_data.addrs.append(device_addr)
-        elif (
-            packet.payload_type
-            == SwarmitPayloadType.SWARMIT_NOTIFICATION_OTA_CHUNK_ACK
-        ):
+        elif packet.payload_type == SwarmitPayloadType.SWARMIT_OTA_CHUNK_ACK:
             try:
                 acked = bool(
                     self.transfer_data[device_addr]
@@ -372,8 +363,8 @@ class Controller:
                     packet.payload.index
                 ].acked = 1
         elif packet.payload_type in [
-            SwarmitPayloadType.SWARMIT_NOTIFICATION_EVENT_GPIO,
-            SwarmitPayloadType.SWARMIT_NOTIFICATION_EVENT_LOG,
+            SwarmitPayloadType.SWARMIT_EVENT_GPIO,
+            SwarmitPayloadType.SWARMIT_EVENT_LOG,
         ]:
             if (
                 self.settings.devices
@@ -387,15 +378,9 @@ class Controller:
                 data_size=packet.payload.count,
                 data=packet.payload.data,
             )
-            if (
-                packet.payload_type
-                == SwarmitPayloadType.SWARMIT_NOTIFICATION_EVENT_GPIO
-            ):
+            if packet.payload_type == SwarmitPayloadType.SWARMIT_EVENT_GPIO:
                 logger.info("GPIO event")
-            elif (
-                packet.payload_type
-                == SwarmitPayloadType.SWARMIT_NOTIFICATION_EVENT_LOG
-            ):
+            elif packet.payload_type == SwarmitPayloadType.SWARMIT_EVENT_LOG:
                 logger.info("LOG event")
         elif packet.payload_type == SwarmitPayloadType.METRICS_PROBE:
             pass
@@ -426,7 +411,7 @@ class Controller:
         self._live_status(self.settings.devices, watch=watch)
 
     def _send_start(self, device_addr: str):
-        payload = PayloadStartRequest()
+        payload = PayloadStart()
         self.send_payload(int(device_addr, 16), payload)
 
     def start(self):
@@ -461,7 +446,7 @@ class Controller:
             for addr in stoppable_devices
         ):
             if not self.settings.devices:
-                self.send_payload(BROADCAST_ADDRESS, PayloadStopRequest())
+                self.send_payload(BROADCAST_ADDRESS, PayloadStop())
             else:
                 for device_addr in self.settings.devices:
                     if (
@@ -470,9 +455,7 @@ class Controller:
                         in [StatusType.Stopping, StatusType.Bootloader]
                     ):
                         continue
-                    self.send_payload(
-                        int(device_addr, 16), PayloadStopRequest()
-                    )
+                    self.send_payload(int(device_addr, 16), PayloadStop())
             attempts += 1
             time.sleep(COMMAND_ATTEMPT_DELAY)
         self._live_status(
@@ -480,7 +463,7 @@ class Controller:
         )
 
     def _send_reset(self, device_addr: int, location: ResetLocation):
-        payload = PayloadResetRequest(
+        payload = PayloadReset(
             pos_x=location.pos_x,
             pos_y=location.pos_y,
         )
@@ -532,7 +515,7 @@ class Controller:
             else:
                 return device_addr in self.start_ota_data.addrs
 
-        payload = PayloadOTAStartRequest(
+        payload = PayloadOTAStart(
             fw_length=len(firmware),
             fw_chunk_count=len(self.chunks),
         )
@@ -625,7 +608,7 @@ class Controller:
                     .acked
                 )
 
-        payload = PayloadOTAChunkRequest(
+        payload = PayloadOTAChunk(
             index=chunk.index,
             count=chunk.size,
             sha=chunk.sha,

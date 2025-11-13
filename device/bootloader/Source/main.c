@@ -348,7 +348,7 @@ int main(void) {
 
             // Notify erase is done
             size_t length = 0;
-            _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_OTA_START_ACK;
+            _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_OTA_START_ACK;
             mari_node_tx(_bootloader_vars.notification_buffer, length);
         }
 
@@ -365,7 +365,7 @@ int main(void) {
 
             // Notify chunk has been written
             size_t length = 0;
-            _bootloader_vars.notification_buffer[length++] = SWRMT_NOTIFICATION_OTA_CHUNK_ACK;
+            _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_OTA_CHUNK_ACK;
             memcpy(_bootloader_vars.notification_buffer + length, (void *)&ipc_shared_data.ota.chunk_index, sizeof(uint32_t));
             length += sizeof(uint32_t);
             ipc_shared_data.ota.last_chunk_acked = ipc_shared_data.ota.chunk_index;
