@@ -6,9 +6,8 @@ from binascii import hexlify
 from dataclasses import dataclass
 
 from cryptography.hazmat.primitives import hashes
-from dotbot.logger import LOGGER
-from dotbot.protocol import Packet, Payload
-from dotbot.serial_interface import get_default_port
+from dotbot_utils.protocol import Packet, Payload
+from dotbot_utils.serial_interface import get_default_port
 from rich import print
 from rich.console import Group
 from rich.live import Live
@@ -21,6 +20,7 @@ from testbed.swarmit.adapter import (
     MarilibCloudAdapter,
     MarilibEdgeAdapter,
 )
+from testbed.swarmit.logger import LOGGER
 from testbed.swarmit.protocol import (
     DeviceType,
     PayloadMessage,
@@ -228,7 +228,7 @@ class Controller:
     """Class used to control a swarm testbed."""
 
     def __init__(self, settings: ControllerSettings):
-        self.logger = LOGGER.bind(context=__name__)
+        self.logger = LOGGER.bind(__context=__name__)
         self.settings = settings
         self._interface: GatewayAdapterBase = None
         self.status_data: dict[str, NodeStatus] = {}
