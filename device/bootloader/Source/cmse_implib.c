@@ -22,9 +22,7 @@ extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_s
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
     NRF_WDT0_S->RR[0] = WDT_RR_RR_Reload << WDT_RR_RR_Pos;
-    mutex_lock();
     ipc_shared_data.battery_level = battery_level_read();
-    mutex_unlock();
     if (_localization_data_available) {
         position_2d_t position;
         if (!localization_get_position(&position)) {
@@ -84,6 +82,10 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_
     memcpy((void *)ipc_shared_data.log.data, data, length);
     mutex_unlock();
     NRF_IPC_S->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
+}
+
+__attribute__((cmse_nonsecure_entry)) void swarmit_get_battery_level(uint16_t *battery) {
+    *battery = ipc_shared_data.battery_level;
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {

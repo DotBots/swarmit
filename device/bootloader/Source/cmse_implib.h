@@ -28,6 +28,7 @@ __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_init_rng(void);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_read_rng(uint8_t *value);
 __attribute__((cmse_nonsecure_entry, aligned)) uint64_t swarmit_read_device_id(void);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_log_data(uint8_t *data, size_t length);
+__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_get_battery_level(uint16_t *battery);
 
 // Lighthouse 2 functions exposed to user image
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_get_position(position_2d_t *position);

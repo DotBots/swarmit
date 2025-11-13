@@ -383,9 +383,7 @@ int main(void) {
 
         if (_bootloader_vars.battery_update) {
             db_gpio_toggle(&_status_led);
-            mutex_lock();
             ipc_shared_data.battery_level = battery_level_read();
-            mutex_unlock();
             _bootloader_vars.battery_update = false;
         }
 
