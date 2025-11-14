@@ -1,9 +1,14 @@
+# Sample configuration file for Swarmit CLI
+# Example 1: adapter "cloud" with a local MQTT broker
 adapter = "cloud"
-# serial_port = "/dev/ACM0"
-baudrate = 1000000
-mqtt_host = "argus.paris.inria.fr"
-mqtt_port = 8883
-mqtt_use_tls = true
-# swarmit_network_id = "1200" # Equivalent to 0x1200
+mqtt_host = "localhost"
+mqtt_port = 1883
+mqtt_use_tls = false
+swarmit_network_id = "1200" # Equivalent to 0x1200
 devices = ""
 # verbose = false
+
+# Example 2: adapter "edge" directly connected to the gateway via serial port
+# adapter = "edge"
+# serial_port = "/dev/ttyACM0"
+# baudrate = 1000000
