@@ -10,6 +10,7 @@ from dotbot_utils.protocol import (
     register_parser,
 )
 from marilib.mari_protocol import DefaultPayloadType as MariDefaultPayloadType
+from marilib.mari_protocol import MetricsProbePayload
 
 
 class StatusType(Enum):
@@ -32,7 +33,7 @@ class DeviceType(Enum):
     nRF52840DK = 4
 
 
-class SwarmitPayloadType(IntEnum):
+class PayloadType(IntEnum):
     """Types of DotBot payload types."""
 
     # Requests
@@ -208,38 +209,16 @@ class PayloadMessage(Payload):
     message: bytes = dataclasses.field(default_factory=lambda: bytearray)
 
 
-@dataclass
-class MetricsProbePayload(Payload):
-    metadata: list[PayloadFieldMetadata] = dataclasses.field(
-        default_factory=lambda: [
-            PayloadFieldMetadata(name="type", length=1),
-        ]
-    )
-    type_: SwarmitPayloadType = SwarmitPayloadType.METRICS_PROBE
-
-
 def register_parsers():
     # Register all swarmit specific parsers at module level
-    register_parser(
-        SwarmitPayloadType.SWARMIT_STATUS,
-        PayloadStatus,
-    )
-    register_parser(SwarmitPayloadType.SWARMIT_START, PayloadStart)
-    register_parser(SwarmitPayloadType.SWARMIT_STOP, PayloadStop)
-    register_parser(SwarmitPayloadType.SWARMIT_RESET, PayloadReset)
-    register_parser(SwarmitPayloadType.SWARMIT_OTA_START, PayloadOTAStart)
-    register_parser(SwarmitPayloadType.SWARMIT_OTA_CHUNK, PayloadOTAChunk)
-    register_parser(
-        SwarmitPayloadType.SWARMIT_OTA_START_ACK,
-        PayloadOTAStartAck,
-    )
-    register_parser(
-        SwarmitPayloadType.SWARMIT_OTA_CHUNK_ACK,
-        PayloadOTAChunkAck,
-    )
-    register_parser(
-        SwarmitPayloadType.SWARMIT_EVENT_LOG,
-        PayloadEvent,
-    )
-    register_parser(SwarmitPayloadType.SWARMIT_MESSAGE, PayloadMessage)
-    register_parser(SwarmitPayloadType.METRICS_PROBE, MetricsProbePayload)
+    register_parser(PayloadType.SWARMIT_STATUS, PayloadStatus)
+    register_parser(PayloadType.SWARMIT_START, PayloadStart)
+    register_parser(PayloadType.SWARMIT_STOP, PayloadStop)
+    register_parser(PayloadType.SWARMIT_RESET, PayloadReset)
+    register_parser(PayloadType.SWARMIT_OTA_START, PayloadOTAStart)
+    register_parser(PayloadType.SWARMIT_OTA_CHUNK, PayloadOTAChunk)
+    register_parser(PayloadType.SWARMIT_OTA_START_ACK, PayloadOTAStartAck)
+    register_parser(PayloadType.SWARMIT_OTA_CHUNK_ACK, PayloadOTAChunkAck)
+    register_parser(PayloadType.SWARMIT_EVENT_LOG, PayloadEvent)
+    register_parser(PayloadType.SWARMIT_MESSAGE, PayloadMessage)
+    register_parser(PayloadType.METRICS_PROBE, MetricsProbePayload)
