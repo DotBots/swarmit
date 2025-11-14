@@ -352,7 +352,7 @@ class Controller:
                     .acked
                 )
             except (IndexError, KeyError):
-                self.logger.warning(
+                self.logger.debug(
                     "Chunk index out of range",
                     device_addr=device_addr,
                     chunk_index=packet.payload.index,
