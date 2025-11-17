@@ -102,9 +102,13 @@ Commands:
   stop     Stop the user application.
 ```
 
-## Web
+## Control Tower Dashboard
 
-To work with the web, you need to
+The Control Tower is a web-based platform (backend and frontend) that enables users to manage and monitor the testbed remotely. It provides an interface for reserving timeslots, inspecting the live status of all DotBots, and supervising experiments. The platform displays each device’s position and operational state, and offers mechanisms to flash firmware, start or stop experiments, and oversee ongoing activity across the testbed.
+
+
+### Initial Setup
+
 1. Generate a private and public key for the JWT
 ```bash
 # Generate Ed25519 private key
@@ -114,8 +118,12 @@ openssl genpkey -algorithm Ed25519 -out private.pem
 openssl pkey -in private.pem -pubout -out public.pem
 ```
 
-2. Build the frontend, I am using (node: v24.9.0 and npm v11.6.0)
+2. Build the frontend (tested with Node v24.9.0 and npm v11.6.0)
 ```bash
 cd testbed/frontend
 npm run build
 ```
+
+### Running the Dashboard
+
+After completing the setup, run: `swarmit-dashboard`

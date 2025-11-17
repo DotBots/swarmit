@@ -4,7 +4,7 @@ import CalendarPage from "./CalendarPage";
 import HomePage from "./HomePage";
 import LoginModal from "./Login";
 
-export const API_URL = import.meta.env.BACKEND_API_URL || "http://localhost:8883";
+export const API_URL = import.meta.env.BACKEND_API_URL || "http://localhost:8080";
 
 export interface Token {
   token: string;
