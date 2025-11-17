@@ -190,18 +190,18 @@ async def _serve_fast_api(settings: ControllerSettings):
         raise SystemExit()
 
 
-async def _open_webbrowser(mqtt_port: int):
+async def _open_webbrowser(http_port: int):
     """Wait until the server is ready before opening a web browser."""
     while 1:
         try:
-            _, writer = await asyncio.open_connection("127.0.0.1", mqtt_port)
+            _, writer = await asyncio.open_connection("127.0.0.1", http_port)
         except ConnectionRefusedError:
             await asyncio.sleep(0.1)
         else:
             writer.close()
             break
 
-    url = f"http://localhost:{mqtt_port}"
+    url = f"http://localhost:{http_port}"
     print(f"Opening webbrowser: {url}")
     webbrowser.open(url)
 
