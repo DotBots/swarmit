@@ -31,7 +31,7 @@ dependencies = [
     "rich           >= 14.0.0",
     "structlog      >= 24.4.0",
     "tqdm           >= 4.66.5",
-    "marilib-pkg    >= 0.7.1",
+    "marilib-pkg    >= 0.8.0",
 ]
 description = "Run Your Own Robot Swarm Testbed."
 readme = "README.md"
