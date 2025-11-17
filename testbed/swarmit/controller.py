@@ -1,5 +1,6 @@
 """Module containing the swarmit controller class."""
 
+import asyncio
 import dataclasses
 import time
 from binascii import hexlify
@@ -57,6 +58,7 @@ class NodeStatus:
     battery: int = 0
     pos_x: int = 0
     pos_y: int = 0
+    last_updated_at: float = 0
 
 
 @dataclass
@@ -254,6 +256,7 @@ class Controller:
                 verbose=self.settings.verbose,
             )
         self._interface.init(self.on_frame_received)
+        asyncio.create_task(self._cron_task())
 
     @property
     def known_devices(self) -> dict[str, StatusType]:
@@ -315,6 +318,22 @@ class Controller:
         """Return the interface."""
         return self._interface
 
+    async def _cron_task(self):
+        while True:
+            self.cleanup_inactive()
+            await asyncio.sleep(1)
+
+    def cleanup_inactive(self):
+        now = time.time()
+        timeout = 3
+        inactive = [
+            addr
+            for addr, status in self.status_data.items()
+            if now - status.last_updated_at > timeout
+        ]
+        for addr in inactive:
+            del self.status_data[addr]
+
     def terminate(self):
         """Terminate the controller."""
         self.interface.close()
@@ -332,12 +351,14 @@ class Controller:
             return
         device_addr = f"{header.source:08X}"
         if packet.payload_type == PayloadType.SWARMIT_STATUS:
+            now = time.time()
             status = NodeStatus(
                 device=DeviceType(packet.payload.device),
                 status=StatusType(packet.payload.status),
                 battery=packet.payload.battery,
                 pos_x=packet.payload.pos_x,
                 pos_y=packet.payload.pos_y,
+                last_updated_at=now,
             )
             self.status_data.update({device_addr: status})
         elif packet.payload_type == PayloadType.SWARMIT_OTA_START_ACK:
