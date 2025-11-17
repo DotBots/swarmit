@@ -1,7 +1,7 @@
 """Module containing the swarmit controller class."""
 
-import asyncio
 import dataclasses
+import threading
 import time
 from binascii import hexlify
 from dataclasses import dataclass
@@ -240,6 +240,10 @@ class Controller:
         self.start_ota_data: StartOtaData = StartOtaData()
         self.transfer_data: dict[str, TransferDataStatus] = {}
         self._known_devices: dict[str, StatusType] = {}
+        self._stop_event = threading.Event()
+        self._cleanup_thread = threading.Thread(
+            target=self._cleanup_loop, daemon=True
+        )
         register_parsers()
         if self.settings.adapter == "cloud":
             self._interface = MarilibCloudAdapter(
@@ -256,7 +260,7 @@ class Controller:
                 verbose=self.settings.verbose,
             )
         self._interface.init(self.on_frame_received)
-        asyncio.create_task(self._cron_task())
+        self._cleanup_thread.start()
 
     @property
     def known_devices(self) -> dict[str, StatusType]:
@@ -318,14 +322,14 @@ class Controller:
         """Return the interface."""
         return self._interface
 
-    async def _cron_task(self):
-        while True:
-            self.cleanup_inactive()
-            await asyncio.sleep(1)
-
-    def cleanup_inactive(self):
-        now = time.time()
+    def _cleanup_loop(self):
         timeout = 3
+        while not self._stop_event.is_set():
+            self.cleanup_inactive(timeout)
+            time.sleep(1)
+
+    def cleanup_inactive(self, timeout):
+        now = time.time()
         inactive = [
             addr
             for addr, status in self.status_data.items()
@@ -336,6 +340,8 @@ class Controller:
 
     def terminate(self):
         """Terminate the controller."""
+        self._stop_event.set()
+        self._cleanup_thread.join()
         self.interface.close()
 
     def send_payload(self, destination: int, payload: Payload):
