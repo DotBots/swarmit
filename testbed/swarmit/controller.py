@@ -578,7 +578,7 @@ class Controller:
         else:
             for addr in devices:
                 print(f"Sending start ota notification to {addr}...")
-                self._send_start_ota(addr, devices_to_flash, firmware)
+                self._send_start_ota(addr, devices, firmware)
                 time.sleep(0.2)
         return {
             "ota": self.start_ota_data,
