@@ -29,8 +29,8 @@ from testbed.swarmit.protocol import (
     PayloadReset,
     PayloadStart,
     PayloadStop,
+    PayloadType,
     StatusType,
-    SwarmitPayloadType,
     register_parsers,
 )
 
@@ -328,10 +328,10 @@ class Controller:
         # if self.settings.verbose:
         #     print()
         #     print(Frame(header, packet))
-        if packet.payload_type < SwarmitPayloadType.SWARMIT_STATUS:
+        if packet.payload_type < PayloadType.SWARMIT_STATUS:
             return
         device_addr = f"{header.source:08X}"
-        if packet.payload_type == SwarmitPayloadType.SWARMIT_STATUS:
+        if packet.payload_type == PayloadType.SWARMIT_STATUS:
             status = NodeStatus(
                 device=DeviceType(packet.payload.device),
                 status=StatusType(packet.payload.status),
@@ -340,11 +340,11 @@ class Controller:
                 pos_y=packet.payload.pos_y,
             )
             self.status_data.update({device_addr: status})
-        elif packet.payload_type == SwarmitPayloadType.SWARMIT_OTA_START_ACK:
+        elif packet.payload_type == PayloadType.SWARMIT_OTA_START_ACK:
             if device_addr in self.start_ota_data.addrs:
                 return
             self.start_ota_data.addrs.append(device_addr)
-        elif packet.payload_type == SwarmitPayloadType.SWARMIT_OTA_CHUNK_ACK:
+        elif packet.payload_type == PayloadType.SWARMIT_OTA_CHUNK_ACK:
             try:
                 acked = bool(
                     self.transfer_data[device_addr]
@@ -352,7 +352,7 @@ class Controller:
                     .acked
                 )
             except (IndexError, KeyError):
-                self.logger.warning(
+                self.logger.debug(
                     "Chunk index out of range",
                     device_addr=device_addr,
                     chunk_index=packet.payload.index,
@@ -363,8 +363,8 @@ class Controller:
                     packet.payload.index
                 ].acked = 1
         elif packet.payload_type in [
-            SwarmitPayloadType.SWARMIT_EVENT_GPIO,
-            SwarmitPayloadType.SWARMIT_EVENT_LOG,
+            PayloadType.SWARMIT_EVENT_GPIO,
+            PayloadType.SWARMIT_EVENT_LOG,
         ]:
             if (
                 self.settings.devices
@@ -373,16 +373,16 @@ class Controller:
                 return
             logger = self.logger.bind(
                 device_addr=device_addr,
-                notification=SwarmitPayloadType(packet.payload_type).name,
+                notification=PayloadType(packet.payload_type).name,
                 timestamp=packet.payload.timestamp,
                 data_size=packet.payload.count,
                 data=packet.payload.data,
             )
-            if packet.payload_type == SwarmitPayloadType.SWARMIT_EVENT_GPIO:
+            if packet.payload_type == PayloadType.SWARMIT_EVENT_GPIO:
                 logger.info("GPIO event")
-            elif packet.payload_type == SwarmitPayloadType.SWARMIT_EVENT_LOG:
+            elif packet.payload_type == PayloadType.SWARMIT_EVENT_LOG:
                 logger.info("LOG event")
-        elif packet.payload_type == SwarmitPayloadType.METRICS_PROBE:
+        elif packet.payload_type == PayloadType.METRICS_PROBE:
             pass
         else:
             self.logger.error(
