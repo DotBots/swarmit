@@ -53,7 +53,7 @@ classifiers = [
 
 [project.scripts]
 swarmit = "testbed.cli.main:main"
-swarmit-dashboard = "testbed.cli.dashboard:main"
+swarmit-dashboard = "testbed.dashboard.main:main"
 
 [tool.ruff]
 lint.select = ["E", "F"]

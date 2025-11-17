@@ -120,7 +120,7 @@ openssl pkey -in private.pem -pubout -out public.pem
 
 2. Build the frontend (tested with Node v24.9.0 and npm v11.6.0)
 ```bash
-cd testbed/frontend
+cd testbed/dashboard
 npm run build
 ```
 

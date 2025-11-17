@@ -272,14 +272,14 @@ def list_records(db: Session = Depends(get_db)):
 
 # Mount static files after all routes are defined
 def mount_frontend(api):
-    frontend_dir = os.path.join(
-        os.path.dirname(__file__), "..", "frontend", "dist"
+    dashboard_dir = os.path.join(
+        os.path.dirname(__file__), "..", "dashboard", "dist"
     )
-    if os.path.isdir(frontend_dir):
+    if os.path.isdir(dashboard_dir):
         api.mount(
             "/",
-            StaticFiles(directory=frontend_dir, html=True),
-            name="frontend",
+            StaticFiles(directory=dashboard_dir, html=True),
+            name="dashboard",
         )
     else:
-        print("Warning: frontend directory not found; skipping static mount")
+        print("Warning: dashboard directory not found; skipping static mount")

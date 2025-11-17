@@ -132,24 +132,37 @@ def main(
     )
 
 
+@click.option(
+    "--open-browser/--no-open-browser",
+    default=True,
+    help="Open the dashboard in a web browser automatically.",
+)
 @main.command()
 @click.pass_context
-def web(ctx):
-    asyncio.run(async_web(ctx.obj["settings"]))
+def web(ctx, open_browser):
+    asyncio.run(async_web(ctx.obj["settings"], open_browser))
 
 
-async def async_web(settings: ControllerSettings):
+async def async_web(settings: ControllerSettings, open_browser: bool):
     tasks = []
     try:
-        tasks = [
+        tasks.append(
             asyncio.create_task(
-                name="Web server", coro=_serve_fast_api(settings)
-            ),
-            asyncio.create_task(
-                name="Web browser", coro=_open_webbrowser(settings.mqtt_port)
-            ),
-        ]
+                name="Web server",
+                coro=_serve_fast_api(settings),
+            )
+        )
+
+        if open_browser:
+            tasks.append(
+                asyncio.create_task(
+                    name="Web browser",
+                    coro=_open_webbrowser(settings.mqtt_port),
+                )
+            )
+
         await asyncio.gather(*tasks)
+
     except Exception as exc:  # TODO: use the right exception here
         print(f"Error: {exc}")
     except SystemExit:
