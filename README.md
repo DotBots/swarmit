@@ -109,7 +109,12 @@ The Control Tower is a web-based platform (backend and frontend) that enables us
 
 ### Initial Setup
 
-1. Generate a private and public key for the JWT
+1. Download all requirements.
+```bash
+pip install swarmit[dashboard]
+```
+
+2. Generate a private and public key for the JWT
 ```bash
 # Generate Ed25519 private key
 openssl genpkey -algorithm Ed25519 -out private.pem
@@ -118,7 +123,7 @@ openssl genpkey -algorithm Ed25519 -out private.pem
 openssl pkey -in private.pem -pubout -out public.pem
 ```
 
-2. Build the frontend (tested with Node v24.9.0 and npm v11.6.0)
+3. Build the frontend (tested with Node v24.9.0 and npm v11.6.0)
 ```bash
 cd testbed/dashboard
 npm run build
@@ -126,4 +131,8 @@ npm run build
 
 ### Running the Dashboard
 
-After completing the setup, run: `swarmit-dashboard`
+After the initial setup (required only once), you can launch the dashboard with all configuration options using:
+```bash
+python3 -m testbed.dashboard.main --http-port 8080 --open-browser
+```
+Your dashboard CLI options may differ depending on your example or environment.
