@@ -1,6 +1,7 @@
 """Module containing the swarmit controller class."""
 
 import dataclasses
+import threading
 import time
 from binascii import hexlify
 from dataclasses import dataclass
@@ -38,6 +39,7 @@ CHUNK_SIZE = 128
 COMMAND_TIMEOUT = 6
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
+INACTIVE_TIMEOUT = 3  # s
 STATUS_TIMEOUT = 5
 OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 0.7
@@ -57,6 +59,7 @@ class NodeStatus:
     battery: int = 0
     pos_x: int = 0
     pos_y: int = 0
+    last_updated_at: float = 0
 
 
 @dataclass
@@ -238,6 +241,10 @@ class Controller:
         self.start_ota_data: StartOtaData = StartOtaData()
         self.transfer_data: dict[str, TransferDataStatus] = {}
         self._known_devices: dict[str, StatusType] = {}
+        self._stop_event = threading.Event()
+        self._cleanup_thread = threading.Thread(
+            target=self._cleanup_loop, daemon=True
+        )
         register_parsers()
         if self.settings.adapter == "cloud":
             self._interface = MarilibCloudAdapter(
@@ -254,6 +261,7 @@ class Controller:
                 verbose=self.settings.verbose,
             )
         self._interface.init(self.on_frame_received)
+        self._cleanup_thread.start()
 
     @property
     def known_devices(self) -> dict[str, StatusType]:
@@ -315,8 +323,25 @@ class Controller:
         """Return the interface."""
         return self._interface
 
+    def _cleanup_loop(self):
+        while not self._stop_event.is_set():
+            self.cleanup_inactive(INACTIVE_TIMEOUT)
+            time.sleep(1)
+
+    def cleanup_inactive(self, timeout):
+        now = time.time()
+        inactive = [
+            addr
+            for addr, status in self.status_data.items()
+            if now - status.last_updated_at > timeout
+        ]
+        for addr in inactive:
+            del self.status_data[addr]
+
     def terminate(self):
         """Terminate the controller."""
+        self._stop_event.set()
+        self._cleanup_thread.join()
         self.interface.close()
 
     def send_payload(self, destination: int, payload: Payload):
@@ -332,12 +357,14 @@ class Controller:
             return
         device_addr = f"{header.source:08X}"
         if packet.payload_type == PayloadType.SWARMIT_STATUS:
+            now = time.time()
             status = NodeStatus(
                 device=DeviceType(packet.payload.device),
                 status=StatusType(packet.payload.status),
                 battery=packet.payload.battery,
                 pos_x=packet.payload.pos_x,
                 pos_y=packet.payload.pos_y,
+                last_updated_at=now,
             )
             self.status_data.update({device_addr: status})
         elif packet.payload_type == PayloadType.SWARMIT_OTA_START_ACK:
