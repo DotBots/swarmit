@@ -77,8 +77,8 @@ from testbed.swarmit.webserver import api, init_api, mount_frontend
     help="Enable verbose mode.",
 )
 @click.option(
-    "--open-browser/--no-open-browser",
-    default=True,
+    "--open-browser",
+    is_flag=True,
     help="Open the dashboard in a web browser automatically.",
 )
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
