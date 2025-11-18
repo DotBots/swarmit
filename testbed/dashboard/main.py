@@ -14,7 +14,7 @@ from testbed.swarmit.controller import ControllerSettings
 from testbed.swarmit.webserver import api, init_api, mount_frontend
 
 
-@click.group(context_settings=dict(help_option_names=["-h", "--help"]))
+@click.command()
 @click.option(
     "-c",
     "--config-path",
@@ -76,10 +76,13 @@ from testbed.swarmit.webserver import api, init_api, mount_frontend
     is_flag=True,
     help="Enable verbose mode.",
 )
+@click.option(
+    "--open-browser/--no-open-browser",
+    default=True,
+    help="Open the dashboard in a web browser automatically.",
+)
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
-@click.pass_context
 def main(
-    ctx,
     config_path,
     port,
     baudrate,
@@ -90,6 +93,7 @@ def main(
     adapter,
     devices,
     verbose,
+    open_browser,
 ):
     config_data = load_toml_config(config_path)
     cli_args = {
@@ -111,15 +115,7 @@ def main(
         **{k: v for k, v in cli_args.items() if v not in (None, False)},
     }
 
-    if ctx.invoked_subcommand != "monitor":
-        # Disable logging if not monitoring
-        structlog.configure(
-            wrapper_class=structlog.make_filtering_bound_logger(
-                logging.CRITICAL
-            ),
-        )
-    ctx.ensure_object(dict)
-    ctx.obj["settings"] = ControllerSettings(
+    controller_settings = ControllerSettings(
         serial_port=final_config["serial_port"],
         serial_baudrate=final_config["baudrate"],
         mqtt_host=final_config["mqtt_host"],
@@ -131,17 +127,7 @@ def main(
         verbose=final_config["verbose"],
     )
 
-
-@click.option(
-    "--open-browser/--no-open-browser",
-    default=True,
-    help="Open the dashboard in a web browser automatically.",
-)
-@main.command()
-@click.pass_context
-def web(ctx, open_browser):
-    asyncio.run(async_web(ctx.obj["settings"], open_browser))
-
+    asyncio.run(async_web(controller_settings, open_browser))
 
 async def async_web(settings: ControllerSettings, open_browser: bool):
     tasks = []
