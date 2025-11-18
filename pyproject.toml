@@ -32,8 +32,6 @@ dependencies = [
     "structlog      >= 24.4.0",
     "tqdm           >= 4.66.5",
     "marilib-pkg    >= 0.8.0",
-    "PyJWT          >= 2.9.0",
-    "SQLAlchemy     >= 2.0.25",
 ]
 description = "Run Your Own Robot Swarm Testbed."
 readme = "README.md"
@@ -47,13 +45,18 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
 ]
 
+[project.optional-dependencies]
+dashboard = [
+    "PyJWT          >= 2.9.0",
+    "SQLAlchemy     >= 2.0.25",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/DotBots/swarmit"
 "Bug Tracker" = "https://github.com/DotBots/swarmit/issues"
 
 [project.scripts]
 swarmit = "testbed.cli.main:main"
-swarmit-dashboard = "testbed.dashboard.main:main"
 
 [tool.ruff]
 lint.select = ["E", "F"]
