@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 import asyncio
-import logging
 import tomllib
 import webbrowser
 
 import click
-import structlog
 import uvicorn
 
 from testbed.cli.main import DEFAULTS
@@ -16,7 +14,8 @@ from testbed.swarmit.webserver import api, init_api, mount_frontend
 DEFAULTS_DASHBOARD = {
     **DEFAULTS,
     "http_port": 8080,
-} 
+}
+
 
 @click.command()
 @click.option(
@@ -138,9 +137,14 @@ def main(
         verbose=final_config["verbose"],
     )
 
-    asyncio.run(async_web(controller_settings, final_config["http_port"], open_browser))
+    asyncio.run(
+        async_web(controller_settings, final_config["http_port"], open_browser)
+    )
 
-async def async_web(settings: ControllerSettings, http_port: int, open_browser: bool):
+
+async def async_web(
+    settings: ControllerSettings, http_port: int, open_browser: bool
+):
     tasks = []
     try:
         tasks.append(
