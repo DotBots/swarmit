@@ -39,6 +39,7 @@ CHUNK_SIZE = 128
 COMMAND_TIMEOUT = 6
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
+INACTIVE_TIMEOUT = 3 # s
 STATUS_TIMEOUT = 5
 OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 0.7
@@ -323,9 +324,8 @@ class Controller:
         return self._interface
 
     def _cleanup_loop(self):
-        timeout = 3
         while not self._stop_event.is_set():
-            self.cleanup_inactive(timeout)
+            self.cleanup_inactive(INACTIVE_TIMEOUT)
             time.sleep(1)
 
     def cleanup_inactive(self, timeout):
