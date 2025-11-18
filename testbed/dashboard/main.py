@@ -13,6 +13,10 @@ from testbed.swarmit import __version__
 from testbed.swarmit.controller import ControllerSettings
 from testbed.swarmit.webserver import api, init_api, mount_frontend
 
+DEFAULTS_DASHBOARD = {
+    **DEFAULTS,
+    "http_port": 8080,
+} 
 
 @click.command()
 @click.option(
@@ -25,25 +29,25 @@ from testbed.swarmit.webserver import api, init_api, mount_frontend
     "-p",
     "--port",
     type=str,
-    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS["serial_port"]}.",
+    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS_DASHBOARD["serial_port"]}.",
 )
 @click.option(
     "-b",
     "--baudrate",
     type=int,
-    help=f"Serial port baudrate. Default: {DEFAULTS["baudrate"]}.",
+    help=f"Serial port baudrate. Default: {DEFAULTS_DASHBOARD["baudrate"]}.",
 )
 @click.option(
     "-H",
     "--mqtt-host",
     type=str,
-    help=f"MQTT host. Default: {DEFAULTS["mqtt_host"]}.",
+    help=f"MQTT host. Default: {DEFAULTS_DASHBOARD["mqtt_host"]}.",
 )
 @click.option(
     "-P",
     "--mqtt-port",
     type=int,
-    help=f"MQTT port. Default: {DEFAULTS["mqtt_port"]}.",
+    help=f"MQTT port. Default: {DEFAULTS_DASHBOARD["mqtt_port"]}.",
 )
 @click.option(
     "-T",
@@ -55,13 +59,13 @@ from testbed.swarmit.webserver import api, init_api, mount_frontend
     "-n",
     "--network-id",
     type=str,
-    help=f"Marilib network ID to use. Default: 0x{DEFAULTS["swarmit_network_id"]}",
+    help=f"Marilib network ID to use. Default: 0x{DEFAULTS_DASHBOARD["swarmit_network_id"]}",
 )
 @click.option(
     "-a",
     "--adapter",
     type=click.Choice(["edge", "cloud"], case_sensitive=True),
-    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS["adapter"]}",
+    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS_DASHBOARD["adapter"]}",
 )
 @click.option(
     "-d",
@@ -81,11 +85,17 @@ from testbed.swarmit.webserver import api, init_api, mount_frontend
     is_flag=True,
     help="Open the dashboard in a web browser automatically.",
 )
+@click.option(
+    "--http-port",
+    type=int,
+    help=f"HTTP port. Default: {DEFAULTS_DASHBOARD["adapter"]}",
+)
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
 def main(
     config_path,
     port,
     baudrate,
+    http_port,
     mqtt_host,
     mqtt_port,
     mqtt_use_tls,
@@ -106,11 +116,12 @@ def main(
         "swarmit_network_id": network_id,
         "devices": devices,
         "verbose": verbose,
+        "http_port": http_port,
     }
 
     # Merge in order of priority: CLI > config > defaults
     final_config = {
-        **DEFAULTS,
+        **DEFAULTS_DASHBOARD,
         **{k: v for k, v in config_data.items() if v is not None},
         **{k: v for k, v in cli_args.items() if v not in (None, False)},
     }
@@ -127,15 +138,15 @@ def main(
         verbose=final_config["verbose"],
     )
 
-    asyncio.run(async_web(controller_settings, open_browser))
+    asyncio.run(async_web(controller_settings, final_config["http_port"], open_browser))
 
-async def async_web(settings: ControllerSettings, open_browser: bool):
+async def async_web(settings: ControllerSettings, http_port: int, open_browser: bool):
     tasks = []
     try:
         tasks.append(
             asyncio.create_task(
                 name="Web server",
-                coro=_serve_fast_api(settings),
+                coro=_serve_fast_api(settings, http_port),
             )
         )
 
@@ -143,7 +154,7 @@ async def async_web(settings: ControllerSettings, open_browser: bool):
             tasks.append(
                 asyncio.create_task(
                     name="Web browser",
-                    coro=_open_webbrowser(settings.mqtt_port),
+                    coro=_open_webbrowser(http_port),
                 )
             )
 
@@ -161,11 +172,11 @@ async def async_web(settings: ControllerSettings, open_browser: bool):
         print("Controller stopped")
 
 
-async def _serve_fast_api(settings: ControllerSettings):
+async def _serve_fast_api(settings: ControllerSettings, http_port: int):
     """Starts the web server application."""
     init_api(api, settings)
     mount_frontend(api)
-    config = uvicorn.Config(api, port=settings.mqtt_port, log_level="info")
+    config = uvicorn.Config(api, port=http_port, log_level="info")
     server = uvicorn.Server(config)
 
     try:
