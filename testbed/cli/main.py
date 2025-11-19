@@ -50,25 +50,25 @@ DEFAULTS = {
     "-p",
     "--port",
     type=str,
-    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS["serial_port"]}.",
+    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS['serial_port']}.",
 )
 @click.option(
     "-b",
     "--baudrate",
     type=int,
-    help=f"Serial port baudrate. Default: {DEFAULTS["baudrate"]}.",
+    help=f"Serial port baudrate. Default: {DEFAULTS['baudrate']}.",
 )
 @click.option(
     "-H",
     "--mqtt-host",
     type=str,
-    help=f"MQTT host. Default: {DEFAULTS["mqtt_host"]}.",
+    help=f"MQTT host. Default: {DEFAULTS['mqtt_host']}.",
 )
 @click.option(
     "-P",
     "--mqtt-port",
     type=int,
-    help=f"MQTT port. Default: {DEFAULTS["mqtt_port"]}.",
+    help=f"MQTT port. Default: {DEFAULTS['mqtt_port']}.",
 )
 @click.option(
     "-T",
@@ -80,13 +80,13 @@ DEFAULTS = {
     "-n",
     "--network-id",
     type=str,
-    help=f"Marilib network ID to use. Default: 0x{DEFAULTS["swarmit_network_id"]}",
+    help=f"Marilib network ID to use. Default: 0x{DEFAULTS['swarmit_network_id']}",
 )
 @click.option(
     "-a",
     "--adapter",
     type=click.Choice(["edge", "cloud"], case_sensitive=True),
-    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS["adapter"]}",
+    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS['adapter']}",
 )
 @click.option(
     "-d",
