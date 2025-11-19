@@ -21,11 +21,13 @@ from sqlalchemy.orm import Session
 from testbed.swarmit.controller import Controller, ControllerSettings
 from testbed.swarmit.model import JWTRecord, get_db
 
+
 def swarmit_version():
     try:
         return version("swarmit")
     except PackageNotFoundError:
         return "0.0.0"
+
 
 api = FastAPI(
     debug=0,
