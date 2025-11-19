@@ -180,7 +180,9 @@ async def _serve_fast_api(settings: ControllerSettings, http_port: int):
     """Starts the web server application."""
     init_api(api, settings)
     mount_frontend(api)
-    config = uvicorn.Config(api, host="0.0.0.0", port=http_port, log_level="info")
+    config = uvicorn.Config(
+        api, host="0.0.0.0", port=http_port, log_level="info"
+    )
     server = uvicorn.Server(config)
 
     try:
