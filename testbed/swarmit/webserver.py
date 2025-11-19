@@ -5,9 +5,9 @@ import datetime
 import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from importlib.metadata import PackageNotFoundError, version
 
 import jwt
-from dotbot import pydotbot_version
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,11 +21,17 @@ from sqlalchemy.orm import Session
 from testbed.swarmit.controller import Controller, ControllerSettings
 from testbed.swarmit.model import JWTRecord, get_db
 
+def swarmit_version():
+    try:
+        return version("swarmit")
+    except PackageNotFoundError:
+        return "0.0.0"
+
 api = FastAPI(
     debug=0,
     title="DotBot controller API",
     description="This is the DotBot controller API",
-    version=pydotbot_version(),
+    version=swarmit_version(),
     docs_url="/api",
     redoc_url=None,
 )
