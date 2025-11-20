@@ -107,7 +107,7 @@ Commands:
 The Control Tower is a web-based platform (backend and frontend) that enables users to manage and monitor the testbed remotely. It provides an interface for reserving timeslots, inspecting the live status of all DotBots, and supervising experiments. The platform displays each device’s position and operational state, and offers mechanisms to flash firmware, start or stop experiments, and oversee ongoing activity across the testbed.
 
 
-### Initial Setup
+### Setup
 
 1. Download all requirements.
 ```bash
@@ -123,17 +123,14 @@ openssl genpkey -algorithm Ed25519 -out private.pem
 openssl pkey -in private.pem -pubout -out public.pem
 ```
 
-3. Build the frontend (tested with Node v24.9.0 and npm v11.6.0)
-```bash
-cd testbed/dashboard/frontend
-npm install
-npm run build
-```
-
 ### Running the Dashboard
 
 After the initial setup (required only once), you can launch the dashboard with all configuration options using:
+
 ```bash
 python3 -m testbed.dashboard.main --http-port 8080 --open-browser
 ```
-Your dashboard CLI options may differ depending on your example or environment.
+
+Access the dashboard at [https://localhost:8080](https://localhost:8080)
+
+> **__NOTE:__** Your dashboard CLI options may differ depending on your example or environment.

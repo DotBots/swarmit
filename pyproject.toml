@@ -6,12 +6,18 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = [
+    "testbed/dashboard/frontend/*",
+    "testbed/cli/*.toml",
     "*.py"
 ]
 exclude = [
     "device/",
     "sample/",
+    "testbed/dashboard/frontend/node_modules",
 ]
+
+[tool.hatch.build.targets.sdist.hooks.custom]
+path = "utils/hooks/sdist.py"
 
 [tool.hatch.version]
 path = "testbed/swarmit/__init__.py"

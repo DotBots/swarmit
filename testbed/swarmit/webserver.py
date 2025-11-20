@@ -281,7 +281,7 @@ def list_records(db: Session = Depends(get_db)):
 # Mount static files after all routes are defined
 def mount_frontend(api):
     dashboard_dir = os.path.join(
-        os.path.dirname(__file__), "..", "dashboard", "frontend", "dist"
+        os.path.dirname(__file__), "..", "dashboard", "frontend", "build"
     )
     if os.path.isdir(dashboard_dir):
         api.mount(
