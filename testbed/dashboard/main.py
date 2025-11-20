@@ -28,25 +28,25 @@ DEFAULTS_DASHBOARD = {
     "-p",
     "--port",
     type=str,
-    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS_DASHBOARD["serial_port"]}.",
+    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS_DASHBOARD['serial_port']}.",
 )
 @click.option(
     "-b",
     "--baudrate",
     type=int,
-    help=f"Serial port baudrate. Default: {DEFAULTS_DASHBOARD["baudrate"]}.",
+    help=f"Serial port baudrate. Default: {DEFAULTS_DASHBOARD['baudrate']}.",
 )
 @click.option(
     "-H",
     "--mqtt-host",
     type=str,
-    help=f"MQTT host. Default: {DEFAULTS_DASHBOARD["mqtt_host"]}.",
+    help=f"MQTT host. Default: {DEFAULTS_DASHBOARD['mqtt_host']}.",
 )
 @click.option(
     "-P",
     "--mqtt-port",
     type=int,
-    help=f"MQTT port. Default: {DEFAULTS_DASHBOARD["mqtt_port"]}.",
+    help=f"MQTT port. Default: {DEFAULTS_DASHBOARD['mqtt_port']}.",
 )
 @click.option(
     "-T",
@@ -58,13 +58,13 @@ DEFAULTS_DASHBOARD = {
     "-n",
     "--network-id",
     type=str,
-    help=f"Marilib network ID to use. Default: 0x{DEFAULTS_DASHBOARD["swarmit_network_id"]}",
+    help=f"Marilib network ID to use. Default: 0x{DEFAULTS_DASHBOARD['swarmit_network_id']}",
 )
 @click.option(
     "-a",
     "--adapter",
     type=click.Choice(["edge", "cloud"], case_sensitive=True),
-    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS_DASHBOARD["adapter"]}",
+    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS_DASHBOARD['adapter']}",
 )
 @click.option(
     "-d",
@@ -87,7 +87,7 @@ DEFAULTS_DASHBOARD = {
 @click.option(
     "--http-port",
     type=int,
-    help=f"HTTP port. Default: {DEFAULTS_DASHBOARD["adapter"]}",
+    help=f"HTTP port. Default: {DEFAULTS_DASHBOARD['adapter']}",
 )
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
 def main(
