@@ -27,6 +27,7 @@ authors = [
 ]
 dependencies = [
     "click          >= 8.1.7",
+    "cryptography   >= 46.0.3",
     "pydotbot-utils >= 0.3.0",
     "rich           >= 14.0.0",
     "structlog      >= 24.4.0",
@@ -43,6 +44,14 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
+]
+
+[project.optional-dependencies]
+dashboard = [
+    "fastapi        >= 0.121.2",
+    "PyJWT          >= 2.9.0",
+    "SQLAlchemy     >= 2.0.25",
+    "uvicorn        >= 0.38.0",
 ]
 
 [project.urls]

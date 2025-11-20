@@ -441,18 +441,20 @@ class Controller:
         payload = PayloadStart()
         self.send_payload(int(device_addr, 16), payload)
 
-    def start(self):
+    def start(self, devices=None):
         """Start the application."""
+        if devices is None:
+            devices = self.settings.devices or []
         ready_devices = self.ready_devices
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
             self.status_data[addr].status == StatusType.Running
             for addr in ready_devices
         ):
-            if not self.settings.devices:
+            if not devices:
                 self._send_start(addr_to_hex(BROADCAST_ADDRESS))
             else:
-                for device_addr in self.settings.devices:
+                for device_addr in devices:
                     if device_addr not in ready_devices:
                         continue
                     self._send_start(device_addr)
@@ -462,8 +464,10 @@ class Controller:
             ready_devices, timeout=COMMAND_TIMEOUT, message="to start"
         )
 
-    def stop(self):
+    def stop(self, devices=None):
         """Stop the application."""
+        if devices is None:
+            devices = self.settings.devices or []
         stoppable_devices = self.running_devices + self.resetting_devices
 
         attempts = 0
@@ -475,7 +479,7 @@ class Controller:
             if not self.settings.devices:
                 self.send_payload(BROADCAST_ADDRESS, PayloadStop())
             else:
-                for device_addr in self.settings.devices:
+                for device_addr in devices:
                     if (
                         device_addr not in stoppable_devices
                         or self.status_data[device_addr].status
@@ -559,8 +563,10 @@ class Controller:
             time.sleep(0.001)
             send = time.time() - send_time > self.settings.ota_timeout
 
-    def start_ota(self, firmware) -> StartOtaData:
+    def start_ota(self, firmware, devices=None) -> StartOtaData:
         """Start the OTA process."""
+        if devices is None:
+            devices = self.settings.devices or []
         self.start_ota_data = StartOtaData()
         self.chunks = []
         digest = hashes.Hash(hashes.SHA256())
@@ -591,23 +597,21 @@ class Controller:
         self.start_ota_data.fw_hash = digest.finalize()
         self.start_ota_data.chunks = len(self.chunks)
         devices_to_flash = self.ready_devices
-        if not self.settings.devices:
+        if not devices:
             print("Broadcast start ota notification...")
             self._send_start_ota(
                 addr_to_hex(BROADCAST_ADDRESS), devices_to_flash, firmware
             )
         else:
-            for addr in devices_to_flash:
+            for addr in devices:
                 print(f"Sending start ota notification to {addr}...")
-                self._send_start_ota(addr, devices_to_flash, firmware)
+                self._send_start_ota(addr, devices, firmware)
                 time.sleep(0.2)
         return {
             "ota": self.start_ota_data,
             "acked": sorted(self.start_ota_data.addrs),
             "missed": sorted(
-                set(devices_to_flash).difference(
-                    set(self.start_ota_data.addrs)
-                )
+                set(devices).difference(set(self.start_ota_data.addrs))
             ),
         }
 

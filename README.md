@@ -101,3 +101,38 @@ Commands:
   status   Print current status of the robots.
   stop     Stop the user application.
 ```
+
+## Control Tower Dashboard
+
+The Control Tower is a web-based platform (backend and frontend) that enables users to manage and monitor the testbed remotely. It provides an interface for reserving timeslots, inspecting the live status of all DotBots, and supervising experiments. The platform displays each device’s position and operational state, and offers mechanisms to flash firmware, start or stop experiments, and oversee ongoing activity across the testbed.
+
+
+### Initial Setup
+
+1. Download all requirements.
+```bash
+pip install swarmit[dashboard]
+```
+
+2. Generate a private and public key for the JWT
+```bash
+# Generate Ed25519 private key
+openssl genpkey -algorithm Ed25519 -out private.pem
+
+# Extract the public key
+openssl pkey -in private.pem -pubout -out public.pem
+```
+
+3. Build the frontend (tested with Node v24.9.0 and npm v11.6.0)
+```bash
+cd testbed/dashboard
+npm run build
+```
+
+### Running the Dashboard
+
+After the initial setup (required only once), you can launch the dashboard with all configuration options using:
+```bash
+python3 -m testbed.dashboard.main --http-port 8080 --open-browser
+```
+Your dashboard CLI options may differ depending on your example or environment.
