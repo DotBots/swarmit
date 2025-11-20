@@ -91,11 +91,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: testbed/dashboard
+        working-directory: testbed/dashboard/frontend
 
       - name: TypeScript type check
         run: npm run typecheck
-        working-directory: testbed/dashboard
+        working-directory: testbed/dashboard/frontend
 
   release:
     runs-on: ubuntu-latest
