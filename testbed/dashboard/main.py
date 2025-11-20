@@ -13,7 +13,7 @@ from testbed.swarmit.webserver import api, init_api, mount_frontend
 
 DEFAULTS_DASHBOARD = {
     **DEFAULTS,
-    "http_port": 8080,
+    "http_port": 8001,
 }
 
 
