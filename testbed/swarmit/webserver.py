@@ -31,8 +31,8 @@ def swarmit_version():
 
 api = FastAPI(
     debug=0,
-    title="DotBot controller API",
-    description="This is the DotBot controller API",
+    title="SwarmIT Dashboard API",
+    description="This is the SwarmIT Dashboard API",
     version=swarmit_version(),
     docs_url="/api",
     redoc_url=None,
@@ -281,7 +281,7 @@ def list_records(db: Session = Depends(get_db)):
 # Mount static files after all routes are defined
 def mount_frontend(api):
     dashboard_dir = os.path.join(
-        os.path.dirname(__file__), "..", "dashboard", "dist"
+        os.path.dirname(__file__), "..", "dashboard", "frontend", "build"
     )
     if os.path.isdir(dashboard_dir):
         api.mount(
