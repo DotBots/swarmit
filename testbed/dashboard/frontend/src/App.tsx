@@ -4,7 +4,7 @@ import CalendarPage from "./CalendarPage";
 import HomePage from "./HomePage";
 import LoginModal from "./Login";
 
-export const API_URL = import.meta.env.BACKEND_API_URL || "";
+export const API_URL = `${window.location.origin}`;
 
 export interface Token {
   token: string;
