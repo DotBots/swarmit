@@ -116,6 +116,9 @@ pip install swarmit[dashboard]
 
 2. Generate a private and public key for the JWT
 ```bash
+# Create the data directory
+mkdir -p .data
+
 # Generate Ed25519 private key
 openssl genpkey -algorithm Ed25519 -out .data/private.pem
 
