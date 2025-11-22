@@ -6,10 +6,10 @@ import webbrowser
 import click
 import uvicorn
 
-from testbed.cli.main import DEFAULTS
-from testbed.swarmit import __version__
-from testbed.swarmit.controller import ControllerSettings
-from testbed.swarmit.webserver import api, init_api, mount_frontend
+from swarmit import __version__
+from swarmit.cli.main import DEFAULTS
+from swarmit.testbed.controller import ControllerSettings
+from swarmit.testbed.webserver import api, init_api, mount_frontend
 
 DEFAULTS_DASHBOARD = {
     **DEFAULTS,

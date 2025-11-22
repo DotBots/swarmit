@@ -131,7 +131,7 @@ openssl pkey -in .data/private.pem -pubout -out .data/public.pem
 After the initial setup (required only once), you can launch the dashboard with all configuration options using:
 
 ```bash
-python3 -m testbed.dashboard.main --http-port 8080 --open-browser
+python3 -m swarmit.dashboard.main --http-port 8080 --open-browser
 ```
 
 Access the dashboard at [https://localhost:8080](https://localhost:8080)

@@ -15,7 +15,7 @@ NPM_BUILD_CMD = "npm run build"
 
 def build_frontend(root):
     """Builds the ReactJS frontend."""
-    frontend_dir = os.path.join(root, "testbed", "dashboard", "frontend")
+    frontend_dir = os.path.join(root, "swarmit", "dashboard", "frontend")
     os.makedirs(os.path.join(frontend_dir, "dist"), exist_ok=True)
 
     if sys.platform != "win32":

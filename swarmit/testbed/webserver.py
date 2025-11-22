@@ -18,8 +18,8 @@ from sqlalchemy import asc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from testbed.swarmit.controller import Controller, ControllerSettings
-from testbed.swarmit.model import JWTRecord, get_db
+from swarmit.testbed.controller import Controller, ControllerSettings
+from swarmit.testbed.model import JWTRecord, get_db
 
 
 def swarmit_version():
