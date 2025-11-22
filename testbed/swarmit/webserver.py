@@ -48,12 +48,12 @@ api.add_middleware(
 
 # Load RSA keys
 def get_private_key() -> str:
-    with open("private.pem") as f:
+    with open(".data/private.pem") as f:
         return f.read()
 
 
 def get_public_key() -> str:
-    with open("public.pem") as f:
+    with open(".data/public.pem") as f:
         return f.read()
 
 
