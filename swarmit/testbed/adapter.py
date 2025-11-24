@@ -59,7 +59,9 @@ class MarilibEdgeAdapter(GatewayAdapterBase):
         self.verbose = verbose
         try:
             self.mari = MarilibEdge(
-                self.on_event, MarilibSerialAdapter(port, baudrate)
+                self.on_event,
+                MarilibSerialAdapter(port, baudrate),
+                metrics_probe_period=0,
             )
         except Exception as exc:
             print(f"[red]Error initializing MarilibEdge: {exc}[/]")
