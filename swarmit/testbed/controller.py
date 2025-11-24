@@ -32,7 +32,6 @@ from swarmit.testbed.protocol import (
     PayloadStop,
     PayloadType,
     StatusType,
-    register_parsers,
 )
 
 CHUNK_SIZE = 128
@@ -245,7 +244,6 @@ class Controller:
         self._cleanup_thread = threading.Thread(
             target=self._cleanup_loop, daemon=True
         )
-        register_parsers()
         if self.settings.adapter == "cloud":
             self._interface = MarilibCloudAdapter(
                 self.settings.mqtt_host,
