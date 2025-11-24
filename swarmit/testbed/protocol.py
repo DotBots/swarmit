@@ -209,16 +209,15 @@ class PayloadMessage(Payload):
     message: bytes = dataclasses.field(default_factory=lambda: bytearray)
 
 
-def register_parsers():
-    # Register all swarmit specific parsers at module level
-    register_parser(PayloadType.SWARMIT_STATUS, PayloadStatus)
-    register_parser(PayloadType.SWARMIT_START, PayloadStart)
-    register_parser(PayloadType.SWARMIT_STOP, PayloadStop)
-    register_parser(PayloadType.SWARMIT_RESET, PayloadReset)
-    register_parser(PayloadType.SWARMIT_OTA_START, PayloadOTAStart)
-    register_parser(PayloadType.SWARMIT_OTA_CHUNK, PayloadOTAChunk)
-    register_parser(PayloadType.SWARMIT_OTA_START_ACK, PayloadOTAStartAck)
-    register_parser(PayloadType.SWARMIT_OTA_CHUNK_ACK, PayloadOTAChunkAck)
-    register_parser(PayloadType.SWARMIT_EVENT_LOG, PayloadEvent)
-    register_parser(PayloadType.SWARMIT_MESSAGE, PayloadMessage)
-    register_parser(PayloadType.METRICS_PROBE, MetricsProbePayload)
+# Register all swarmit specific parsers at module level
+register_parser(PayloadType.SWARMIT_STATUS, PayloadStatus)
+register_parser(PayloadType.SWARMIT_START, PayloadStart)
+register_parser(PayloadType.SWARMIT_STOP, PayloadStop)
+register_parser(PayloadType.SWARMIT_RESET, PayloadReset)
+register_parser(PayloadType.SWARMIT_OTA_START, PayloadOTAStart)
+register_parser(PayloadType.SWARMIT_OTA_CHUNK, PayloadOTAChunk)
+register_parser(PayloadType.SWARMIT_OTA_START_ACK, PayloadOTAStartAck)
+register_parser(PayloadType.SWARMIT_OTA_CHUNK_ACK, PayloadOTAChunkAck)
+register_parser(PayloadType.SWARMIT_EVENT_LOG, PayloadEvent)
+register_parser(PayloadType.SWARMIT_MESSAGE, PayloadMessage)
+register_parser(PayloadType.METRICS_PROBE, MetricsProbePayload)

@@ -69,6 +69,31 @@ dashboard = [
 [project.scripts]
 swarmit = "swarmit.cli.main:main"
 
+[tool.hatch.envs.default]
+dependencies = [
+  "codecov",
+  "pytest",
+  "pytest-asyncio",
+  "pytest-cov",
+]
+features = [
+  "dashboard",
+]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:swarmit}"
+
+[tool.pytest.ini_options]
+addopts = """
+-vv -s
+--color=yes
+--doctest-modules
+--cov=swarmit --cov-report=term --cov-report=term-missing --cov-report=xml
+"""
+testpaths = [
+    "swarmit",
+]
+
 [tool.ruff]
 lint.select = ["E", "F"]
 line-length = 88
