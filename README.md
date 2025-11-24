@@ -116,11 +116,14 @@ pip install swarmit[dashboard]
 
 2. Generate a private and public key for the JWT
 ```bash
+# Create the data directory
+mkdir -p .data
+
 # Generate Ed25519 private key
-openssl genpkey -algorithm Ed25519 -out private.pem
+openssl genpkey -algorithm Ed25519 -out .data/private.pem
 
 # Extract the public key
-openssl pkey -in private.pem -pubout -out public.pem
+openssl pkey -in .data/private.pem -pubout -out .data/public.pem
 ```
 
 ### Running the Dashboard
@@ -128,7 +131,7 @@ openssl pkey -in private.pem -pubout -out public.pem
 After the initial setup (required only once), you can launch the dashboard with all configuration options using:
 
 ```bash
-python3 -m testbed.dashboard.main --http-port 8080 --open-browser
+python3 -m swarmit.dashboard.main --http-port 8080 --open-browser
 ```
 
 Access the dashboard at [https://localhost:8080](https://localhost:8080)

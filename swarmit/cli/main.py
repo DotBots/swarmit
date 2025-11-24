@@ -13,8 +13,8 @@ from rich import print
 from rich.console import Console
 from rich.pretty import pprint
 
-from testbed.swarmit import __version__
-from testbed.swarmit.controller import (
+from swarmit import __version__
+from swarmit.testbed.controller import (
     CHUNK_SIZE,
     OTA_ACK_TIMEOUT_DEFAULT,
     OTA_MAX_RETRIES_DEFAULT,
@@ -23,7 +23,7 @@ from testbed.swarmit.controller import (
     ResetLocation,
     print_transfer_status,
 )
-from testbed.swarmit.logger import setup_logging
+from swarmit.testbed.logger import setup_logging
 
 DEFAULTS = {
     "adapter": "edge",

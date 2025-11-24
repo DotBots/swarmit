@@ -16,13 +16,13 @@ from rich.table import Table
 from rich.text import Text
 from tqdm import tqdm
 
-from testbed.swarmit.adapter import (
+from swarmit.testbed.adapter import (
     GatewayAdapterBase,
     MarilibCloudAdapter,
     MarilibEdgeAdapter,
 )
-from testbed.swarmit.logger import LOGGER
-from testbed.swarmit.protocol import (
+from swarmit.testbed.logger import LOGGER
+from swarmit.testbed.protocol import (
     DeviceType,
     PayloadMessage,
     PayloadOTAChunk,

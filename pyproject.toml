@@ -6,21 +6,23 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = [
-    "testbed/dashboard/frontend/*",
-    "testbed/cli/*.toml",
+    "swarmit/dashboard/frontend/*",
+    "swarmit/cli/*.toml",
     "*.py"
 ]
 exclude = [
     "device/",
     "sample/",
-    "testbed/dashboard/frontend/node_modules",
+    "swarmit/dashboard/frontend/node_modules",
+    "dotbot-libs/",
+    "utils/"
 ]
 
 [tool.hatch.build.targets.sdist.hooks.custom]
 path = "utils/hooks/sdist.py"
 
 [tool.hatch.version]
-path = "testbed/swarmit/__init__.py"
+path = "swarmit/__init__.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -65,7 +67,7 @@ dashboard = [
 "Bug Tracker" = "https://github.com/DotBots/swarmit/issues"
 
 [project.scripts]
-swarmit = "testbed.cli.main:main"
+swarmit = "swarmit.cli.main:main"
 
 [tool.ruff]
 lint.select = ["E", "F"]
