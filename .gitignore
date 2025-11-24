@@ -26,3 +26,7 @@ dist/
 
 # Allow cmse-implib archive
 !sample/cmse_implib.a
+
+# coverage
+coverage.xml
+.coverage
