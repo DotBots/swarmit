@@ -561,7 +561,7 @@ class Controller:
             time.sleep(0.001)
             send = time.time() - send_time > self.settings.ota_timeout
 
-    def start_ota(self, firmware, devices=None) -> StartOtaData:
+    def start_ota(self, firmware, devices=None) -> dict:
         """Start the OTA process."""
         if devices is None:
             devices = self.settings.devices or []

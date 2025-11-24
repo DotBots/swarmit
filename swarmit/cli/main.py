@@ -4,9 +4,7 @@ import time
 import tomllib
 
 import click
-import serial
 from dotbot_utils.serial_interface import (
-    SerialInterfaceException,
     get_default_port,
 )
 from rich import print
@@ -155,15 +153,7 @@ def main(
 @click.pass_context
 def start(ctx):
     """Start the user application."""
-    try:
-        controller = Controller(ctx.obj["settings"])
-    except (
-        SerialInterfaceException,
-        serial.serialutil.SerialException,
-    ) as exc:
-        console = Console()
-        console.print(f"[bold red]Error:[/] {exc}")
-        return
+    controller = Controller(ctx.obj["settings"])
     if controller.ready_devices:
         controller.start()
     else:
@@ -175,15 +165,7 @@ def start(ctx):
 @click.pass_context
 def stop(ctx):
     """Stop the user application."""
-    try:
-        controller = Controller(ctx.obj["settings"])
-    except (
-        SerialInterfaceException,
-        serial.serialutil.SerialException,
-    ) as exc:
-        console = Console()
-        console.print(f"[bold red]Error:[/] {exc}")
-        return
+    controller = Controller(ctx.obj["settings"])
     if controller.running_devices or controller.resetting_devices:
         controller.stop()
     else:
@@ -202,17 +184,9 @@ def reset(ctx, locations):
 
     Locations are provided as '<device_addr>:<x>,<y>-<device_addr>:<x>,<y>|...'
     """
-    try:
-        controller = Controller(ctx.obj["settings"])
-    except (
-        SerialInterfaceException,
-        serial.serialutil.SerialException,
-    ) as exc:
-        console = Console()
-        console.print(f"[bold red]Error:[/] {exc}")
-        return
-
+    controller = Controller(ctx.obj["settings"])
     devices = controller.settings.devices
+    print(devices)
     if not devices:
         print("No devices selected.")
         return
@@ -269,7 +243,8 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
     console = Console()
     if firmware is None:
         console.print("[bold red]Error:[/] Missing firmware file. Exiting.")
-        ctx.exit()
+        raise click.Abort()
+
     ctx.obj["settings"].ota_timeout = ota_timeout
     ctx.obj["settings"].ota_max_retries = ota_max_retries
     fw = bytearray(firmware.read())
@@ -277,7 +252,8 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
     if not controller.ready_devices:
         console.print("[bold red]Error:[/] No ready device found. Exiting.")
         controller.terminate()
-        return
+        raise click.Abort()
+
     print(
         f"Devices to flash ([bold white]{len(controller.ready_devices)}):[/]"
     )
@@ -299,6 +275,7 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
         controller.stop()
         controller.terminate()
         raise click.Abort()
+
     print()
     print(f"Image size: [bold cyan]{len(fw)}B[/]")
     print(
@@ -323,6 +300,7 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
     if start is True:
         time.sleep(1)
         controller.start()
+
     controller.terminate()
 
 
@@ -332,14 +310,6 @@ def monitor(ctx):
     """Monitor running applications."""
     try:
         controller = Controller(ctx.obj["settings"])
-    except (
-        SerialInterfaceException,
-        serial.serialutil.SerialException,
-    ) as exc:
-        console = Console()
-        console.print(f"[bold red]Error:[/] {exc}")
-        return {}
-    try:
         controller.monitor()
     except KeyboardInterrupt:
         print("Stopping monitor.")
@@ -357,6 +327,7 @@ def monitor(ctx):
 @click.pass_context
 def status(ctx, watch):
     """Print current status of the robots."""
+    print("Fetching status...")
     controller = Controller(ctx.obj["settings"])
     controller.status(watch)
     controller.terminate()
@@ -380,4 +351,4 @@ def load_toml_config(path):
 
 
 if __name__ == "__main__":
-    main(obj={})
+    main(obj={})  # pragma: no cover
