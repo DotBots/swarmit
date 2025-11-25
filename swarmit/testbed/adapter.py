@@ -82,7 +82,7 @@ class MarilibEdgeAdapter(GatewayAdapterBase):
             print(self.mari.nodes)
 
     def close(self):
-        pass
+        self.mari.serial_interface.close()
 
     def send_payload(self, destination: int, payload: Payload):
         self.mari.send_frame(
