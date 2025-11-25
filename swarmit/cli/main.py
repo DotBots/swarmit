@@ -188,7 +188,8 @@ def reset(ctx, locations):
     devices = controller.settings.devices
     print(devices)
     if not devices:
-        print("No devices selected.")
+        print("No device selected.")
+        controller.terminate()
         return
     locations = {
         int(location.split(":")[0], 16): ResetLocation(
@@ -199,9 +200,11 @@ def reset(ctx, locations):
     }
     if sorted(devices) and sorted(locations.keys()) != sorted(devices):
         print("Selected devices and reset locations do not match.")
+        controller.terminate()
         return
     if not controller.ready_devices:
         print("No device to reset.")
+        controller.terminate()
         return
     controller.reset(locations)
     controller.terminate()
