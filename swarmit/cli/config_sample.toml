@@ -4,7 +4,7 @@ adapter = "cloud"
 mqtt_host = "localhost"
 mqtt_port = 1883
 mqtt_use_tls = false
-swarmit_network_id = "12aa" # Equivalent to 0x1200
+swarmit_network_id = "1200"  # Equivalent to 0x1200
 devices = ""
 # verbose = false
 
