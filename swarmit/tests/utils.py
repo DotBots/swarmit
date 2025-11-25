@@ -25,7 +25,7 @@ class SwarmitNode(threading.Thread):
         status: StatusType = StatusType.Bootloader,
         device_type: DeviceType = DeviceType.Unknown,
         battery: int = 2500,
-        update_interval: float = 1.0,
+        update_interval: float = 0.1,
     ):
         self.adapter = adapter
         self.address = address
@@ -40,20 +40,18 @@ class SwarmitNode(threading.Thread):
 
     def run(self):
         while not self._stop_event.is_set():
-            if not self.enabled:
-                time.sleep(0.1)
-                continue
-            self.send_packet(
-                Packet().from_payload(
-                    PayloadStatus(
-                        device=self.device_type.value,
-                        status=self.status.value,
-                        battery=self.battery,
-                        pos_x=0.5 * 1e6,
-                        pos_y=0.5 * 1e6,
-                    ),
+            if self.enabled:
+                self.send_packet(
+                    Packet().from_payload(
+                        PayloadStatus(
+                            device=self.device_type.value,
+                            status=self.status.value,
+                            battery=self.battery,
+                            pos_x=0.5 * 1e6,
+                            pos_y=0.5 * 1e6,
+                        ),
+                    )
                 )
-            )
             time.sleep(self.update_interval)
 
     def stop(self):
@@ -110,7 +108,6 @@ class SwarmitTestAdapter:
         self.handle_data_received(
             EdgeEvent.to_bytes(EdgeEvent.NODE_JOINED) + frame.to_bytes()
         )
-        time.sleep(0.1)
 
     def init(self, on_data_received: callable):
         """Initialize the interface."""

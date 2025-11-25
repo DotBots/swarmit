@@ -55,8 +55,15 @@ class MarilibEdgeAdapter(GatewayAdapterBase):
                 return
             self.on_frame_received(event_data.header, packet)
 
-    def __init__(self, port: str, baudrate: int, verbose: bool = False):
+    def __init__(
+        self,
+        port: str,
+        baudrate: int,
+        verbose: bool = False,
+        busy_wait_timeout: float = 3,
+    ):
         self.verbose = verbose
+        self.busy_wait_timeout = busy_wait_timeout
         try:
             self.mari = MarilibEdge(
                 self.on_event,
@@ -67,17 +74,17 @@ class MarilibEdgeAdapter(GatewayAdapterBase):
             print(f"[red]Error initializing MarilibEdge: {exc}[/]")
             sys.exit(1)
 
-    def _busy_wait(self, timeout: int):
+    def _busy_wait(self):
         """Wait for the condition to be met."""
-        while timeout > 0:
+        while self.busy_wait_timeout > 0:
             self.mari.update()
-            timeout -= 0.1
+            self.busy_wait_timeout -= 0.1
             time.sleep(0.1)
 
     def init(self, on_frame_received: callable):
         self.on_frame_received = on_frame_received
         if self.verbose:
-            self._busy_wait(3)
+            self._busy_wait()
             print("[yellow]Mari nodes available:[/]")
             print(self.mari.nodes)
 
@@ -119,8 +126,10 @@ class MarilibCloudAdapter(GatewayAdapterBase):
         use_tls: bool,
         network_id: int,
         verbose: bool = False,
+        busy_wait_timeout: float = 3,
     ):
         self.verbose = verbose
+        self.busy_wait_timeout = busy_wait_timeout
         try:
             self.mari = MarilibCloud(
                 self.on_event,
@@ -131,17 +140,17 @@ class MarilibCloudAdapter(GatewayAdapterBase):
             print(f"[red]Error initializing MarilibCloud: {exc}[/]")
             sys.exit(1)
 
-    def _busy_wait(self, timeout):
+    def _busy_wait(self):
         """Wait for the condition to be met."""
-        while timeout > 0:
+        while self.busy_wait_timeout > 0:
             self.mari.update()
-            timeout -= 0.1
+            self.busy_wait_timeout -= 0.1
             time.sleep(0.1)
 
     def init(self, on_frame_received: callable):
         self.on_frame_received = on_frame_received
         if self.verbose:
-            self._busy_wait(3)
+            self._busy_wait()
             print("[yellow]Mari nodes available:[/]")
             print(self.mari.nodes)
 

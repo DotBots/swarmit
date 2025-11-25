@@ -12,7 +12,9 @@ from swarmit.testbed.protocol import PayloadStatus
 @patch("swarmit.testbed.adapter.MarilibSerialAdapter")
 @patch("swarmit.testbed.adapter.MarilibEdge.send_frame")
 def test_marilib_edge_adapter(send_frame_mock, _, capsys):
-    adapter = MarilibEdgeAdapter(port="p", baudrate=1, verbose=True)
+    adapter = MarilibEdgeAdapter(
+        port="p", baudrate=1, verbose=True, busy_wait_timeout=0.1
+    )
     packets = []
 
     def on_frame_received(_, f):
@@ -59,7 +61,9 @@ def test_marilib_edge_adapter(send_frame_mock, _, capsys):
 def test_marilib_edge_adapter_init_failed(serial_adapter_mock, capsys):
     serial_adapter_mock.side_effect = Exception("init failed")
     with patch("sys.exit") as exit_mock:
-        MarilibEdgeAdapter(port="p", baudrate=1, verbose=True)
+        MarilibEdgeAdapter(
+            port="p", baudrate=1, verbose=True, busy_wait_timeout=0.1
+        )
 
     exit_mock.assert_called_with(1)
     out, _ = capsys.readouterr()
@@ -70,7 +74,12 @@ def test_marilib_edge_adapter_init_failed(serial_adapter_mock, capsys):
 @patch("swarmit.testbed.adapter.MarilibCloud.send_frame")
 def test_marilib_cloud_adapter(send_frame_mock, _, capsys):
     adapter = MarilibCloudAdapter(
-        host="h", port=1, use_tls=False, network_id=2, verbose=True
+        host="h",
+        port=1,
+        use_tls=False,
+        network_id=2,
+        verbose=True,
+        busy_wait_timeout=0.1,
     )
 
     packets = []
@@ -120,7 +129,12 @@ def test_marilib_cloud_adapter_init_failed(mqtt_adapter_mock, capsys):
     mqtt_adapter_mock.side_effect = Exception("init failed")
     with patch("sys.exit") as exit_mock:
         MarilibCloudAdapter(
-            host="h", port=1, use_tls=False, network_id=2, verbose=True
+            host="h",
+            port=1,
+            use_tls=False,
+            network_id=2,
+            verbose=True,
+            busy_wait_timeout=0.1,
         )
 
     exit_mock.assert_called_with(1)

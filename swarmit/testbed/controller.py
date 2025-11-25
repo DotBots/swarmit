@@ -223,6 +223,7 @@ class ControllerSettings:
     devices: list[str] = dataclasses.field(default_factory=lambda: [])
     ota_max_retries: int = OTA_MAX_RETRIES_DEFAULT
     ota_timeout: float = OTA_ACK_TIMEOUT_DEFAULT
+    adapter_wait_timeout: float = 3
     verbose: bool = False
 
 
@@ -251,12 +252,14 @@ class Controller:
                 self.settings.mqtt_use_tls,
                 self.settings.network_id,
                 verbose=self.settings.verbose,
+                busy_wait_timeout=self.settings.adapter_wait_timeout,
             )
         else:
             self._interface = MarilibEdgeAdapter(
                 self.settings.serial_port,
                 self.settings.serial_baudrate,
                 verbose=self.settings.verbose,
+                busy_wait_timeout=self.settings.adapter_wait_timeout,
             )
         self._interface.init(self.on_frame_received)
         self._cleanup_thread.start()
