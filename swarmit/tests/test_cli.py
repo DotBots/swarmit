@@ -4,7 +4,7 @@ from unittest.mock import PropertyMock, patch
 import pytest
 from click.testing import CliRunner
 
-from swarmit.cli.main import load_toml_config, main
+from swarmit.cli.main import main
 from swarmit.testbed.controller import (
     ControllerSettings,
     StartOtaData,
@@ -361,16 +361,3 @@ def test_message(controller_mock):
     assert result.exit_code == 0
     controller.send_message.assert_called_with(msg)
     controller.terminate.assert_called_once()
-
-
-def test_load_toml_config(tmp_path):
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text(TEST_CONFIG_TOML)
-    cfg = load_toml_config(str(cfg_path))
-    assert cfg["adapter"] == "edge"
-    assert cfg["serial_port"] == "/dev/ttyACM0"
-    assert cfg["baudrate"] == 1000000
-    assert cfg["devices"] == ""
-
-    cfg = load_toml_config("")
-    assert cfg == {}

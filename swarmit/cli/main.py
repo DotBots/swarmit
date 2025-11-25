@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import time
-import tomllib
 
 import click
 from dotbot_utils.serial_interface import (
@@ -21,6 +20,7 @@ from swarmit.testbed.controller import (
     ResetLocation,
     print_transfer_status,
 )
+from swarmit.testbed.helpers import load_toml_config
 from swarmit.testbed.logger import setup_logging
 
 DEFAULTS = {
@@ -344,13 +344,6 @@ def message(ctx, message):
     controller = Controller(ctx.obj["settings"])
     controller.send_message(message)
     controller.terminate()
-
-
-def load_toml_config(path):
-    if not path:
-        return {}
-    with open(path, "rb") as f:
-        return tomllib.load(f)
 
 
 if __name__ == "__main__":
