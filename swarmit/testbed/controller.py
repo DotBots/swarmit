@@ -414,9 +414,7 @@ class Controller:
                 "Unknown payload type", payload_type=packet.payload_type
             )
 
-    def _live_status(
-        self, devices=[], timeout=STATUS_TIMEOUT, message="found", watch=False
-    ):
+    def _live_status(self, timeout, devices=[], message="found", watch=False):
         """Request the live status of the testbed."""
         with Live(
             generate_status(self.status_data, devices, status_message=message),
@@ -431,15 +429,15 @@ class Controller:
                 timeout -= 0.01
                 time.sleep(0.01)
 
-    def status(self, watch=False):
+    def status(self, timeout=STATUS_TIMEOUT, watch=False):
         """Request the status of the testbed."""
-        self._live_status(self.settings.devices, watch=watch)
+        self._live_status(timeout, devices=self.settings.devices, watch=watch)
 
     def _send_start(self, device_addr: str):
         payload = PayloadStart()
         self.send_payload(int(device_addr, 16), payload)
 
-    def start(self, devices=None):
+    def start(self, devices=None, timeout=COMMAND_TIMEOUT):
         """Start the application."""
         if devices is None:
             devices = self.settings.devices or []
@@ -458,11 +456,9 @@ class Controller:
                     self._send_start(device_addr)
             attempts += 1
             time.sleep(COMMAND_ATTEMPT_DELAY)
-        self._live_status(
-            ready_devices, timeout=COMMAND_TIMEOUT, message="to start"
-        )
+        self._live_status(timeout, devices=ready_devices, message="to start")
 
-    def stop(self, devices=None):
+    def stop(self, devices=None, timeout=COMMAND_TIMEOUT):
         """Stop the application."""
         if devices is None:
             devices = self.settings.devices or []
@@ -488,7 +484,7 @@ class Controller:
             attempts += 1
             time.sleep(COMMAND_ATTEMPT_DELAY)
         self._live_status(
-            stoppable_devices, timeout=COMMAND_TIMEOUT, message="to stop"
+            timeout, devices=stoppable_devices, message="to stop"
         )
 
     def _send_reset(self, device_addr: int, location: ResetLocation):
