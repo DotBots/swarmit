@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import asyncio
-import tomllib
 import webbrowser
 
 import click
@@ -9,6 +8,7 @@ import uvicorn
 from swarmit import __version__
 from swarmit.cli.main import DEFAULTS
 from swarmit.testbed.controller import ControllerSettings
+from swarmit.testbed.helpers import load_toml_config
 from swarmit.testbed.webserver import api, init_api, mount_frontend
 
 DEFAULTS_DASHBOARD = {
@@ -207,13 +207,6 @@ async def _open_webbrowser(http_port: int):
     url = f"http://localhost:{http_port}"
     print(f"Opening webbrowser: {url}")
     webbrowser.open(url)
-
-
-def load_toml_config(path):
-    if not path:
-        return {}
-    with open(path, "rb") as f:
-        return tomllib.load(f)
 
 
 if __name__ == "__main__":
