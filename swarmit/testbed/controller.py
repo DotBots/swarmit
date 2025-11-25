@@ -40,6 +40,7 @@ COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
 INACTIVE_TIMEOUT = 3  # s
 STATUS_TIMEOUT = 5
+MONITOR_TIMEOUT = 60  # s
 OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 0.7
 SERIAL_PORT_DEFAULT = get_default_port()
@@ -390,10 +391,7 @@ class Controller:
                 self.transfer_data[device_addr].chunks[
                     packet.payload.index
                 ].acked = 1
-        elif packet.payload_type in [
-            PayloadType.SWARMIT_EVENT_GPIO,
-            PayloadType.SWARMIT_EVENT_LOG,
-        ]:
+        elif packet.payload_type == PayloadType.SWARMIT_EVENT_LOG:
             if (
                 self.settings.devices
                 and device_addr not in self.settings.devices
@@ -406,16 +404,7 @@ class Controller:
                 data_size=packet.payload.count,
                 data=packet.payload.data,
             )
-            if packet.payload_type == PayloadType.SWARMIT_EVENT_GPIO:
-                logger.info("GPIO event")
-            elif packet.payload_type == PayloadType.SWARMIT_EVENT_LOG:
-                logger.info("LOG event")
-        elif packet.payload_type == PayloadType.METRICS_PROBE:
-            pass
-        else:
-            self.logger.error(
-                "Unknown payload type", payload_type=packet.payload_type
-            )
+            logger.info("LOG event")
 
     def _live_status(self, timeout, devices=[], message="found", watch=False):
         """Request the live status of the testbed."""
@@ -508,11 +497,14 @@ class Controller:
             )
             self._send_reset(int(device_addr, 16), locations[device_addr])
 
-    def monitor(self):
+    def monitor(
+        self, timeout: float = MONITOR_TIMEOUT, run_forever: bool = True
+    ):
         """Monitor the testbed."""
         self.logger.info("Monitoring testbed")
-        while True:
+        while timeout > 0 or run_forever:
             time.sleep(0.01)
+            timeout -= 0.01
 
     def _send_message(self, device_addr: int, message: str):
         payload = PayloadMessage(

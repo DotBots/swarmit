@@ -2,8 +2,6 @@ import logging
 import time
 from unittest.mock import patch
 
-import pytest
-
 from swarmit.testbed.controller import (
     Controller,
     ControllerSettings,
@@ -143,11 +141,23 @@ def test_controller_monitor(caplog):
     setup_logging()
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
 
-    with patch("time.sleep", side_effect=KeyboardInterrupt):
-        with pytest.raises(KeyboardInterrupt):
-            controller.monitor()
-    controller.terminate()
+    controller.monitor(run_forever=False, timeout=0.1)
     assert "Monitoring testbed" in caplog.text
+
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(address=addr, adapter=test_adapter)
+        for addr in [0x01, 0x02]
+    ]
+    for node in nodes:
+        test_adapter.add_node(node)
+        node.start_log_event_task()
+
+    controller.monitor(run_forever=False, timeout=0.1)
+    assert "Monitoring testbed" in caplog.text
+    for node in nodes:
+        assert f"Node {node.address:08X} log event" in caplog.text
+    controller.terminate()
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)

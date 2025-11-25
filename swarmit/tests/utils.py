@@ -10,10 +10,41 @@ from marilib.protocol import PacketType
 
 from swarmit.testbed.protocol import (
     DeviceType,
+    PayloadEvent,
     PayloadStatus,
     PayloadType,
     StatusType,
 )
+
+
+class LogEventTask(threading.Thread):
+
+    def __init__(
+        self, node: SwarmitNode, message, event_interval: float = 0.5
+    ):
+        self.node = node
+        self.message = message
+        self.event_interval = event_interval
+        self._stop_event = threading.Event()
+        super().__init__(daemon=True)
+
+    def run(self):
+        time.sleep(0.05)  # allow some time for initialization
+        while not self._stop_event.is_set():
+            self.node.send_packet(
+                Packet().from_payload(
+                    PayloadEvent(
+                        timestamp=int(time.time()),
+                        count=len(self.message),
+                        data=self.message.encode(),
+                    ),
+                )
+            )
+            time.sleep(self.event_interval)
+
+    def stop(self):
+        self._stop_event.set()
+        self.join()
 
 
 class SwarmitNode(threading.Thread):
@@ -37,6 +68,10 @@ class SwarmitNode(threading.Thread):
         super().__init__(daemon=True)
         self.enabled = True
         self.start()
+        self.log_event_task = LogEventTask(
+            self,
+            message=f"Node {self.address:08X} log event",
+        )
 
     def run(self):
         while not self._stop_event.is_set():
@@ -55,8 +90,13 @@ class SwarmitNode(threading.Thread):
             time.sleep(self.update_interval)
 
     def stop(self):
+        if self.log_event_task.is_alive():
+            self.log_event_task.stop()
         self._stop_event.set()
         self.join()
+
+    def start_log_event_task(self):
+        self.log_event_task.start()
 
     def handle_frame(self, frame: Frame):
         if (
