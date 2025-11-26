@@ -365,9 +365,10 @@ class Controller:
                 last_updated_at=now,
             )
             self.status_data.update({device_addr: status})
-        elif packet.payload_type == PayloadType.SWARMIT_OTA_START_ACK:
-            if device_addr in self.start_ota_data.addrs:
-                return
+        elif (
+            packet.payload_type == PayloadType.SWARMIT_OTA_START_ACK
+            and device_addr not in self.start_ota_data.addrs
+        ):
             self.start_ota_data.addrs.append(device_addr)
         elif packet.payload_type == PayloadType.SWARMIT_OTA_CHUNK_ACK:
             try:

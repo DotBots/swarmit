@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import threading
 import time
 
@@ -11,10 +12,25 @@ from marilib.protocol import PacketType
 from swarmit.testbed.protocol import (
     DeviceType,
     PayloadEvent,
+    PayloadOTAChunkAck,
+    PayloadOTAStartAck,
     PayloadStatus,
     PayloadType,
     StatusType,
 )
+
+
+@dataclasses.dataclass
+class ChunkAckStrategy:
+    """Strategy for acknowledging OTA chunks."""
+
+    ack_miss_index: int | None = None  # Index of chunk to skip acknowledgment
+    ack_miss_retries: int = (
+        0  # Number of retries before acknowledging the missed chunk
+    )
+    ack_out_of_range_index: int | None = (
+        None  # Index of chunk to send invalid acknowledgment
+    )
 
 
 class LogEventTask(threading.Thread):
@@ -57,6 +73,8 @@ class SwarmitNode(threading.Thread):
         device_type: DeviceType = DeviceType.Unknown,
         battery: int = 2500,
         update_interval: float = 0.1,
+        ack_strategy: ChunkAckStrategy = ChunkAckStrategy(),
+        ota_should_fail: bool = False,
     ):
         self.adapter = adapter
         self.address = address
@@ -64,9 +82,15 @@ class SwarmitNode(threading.Thread):
         self.status = status
         self.battery = battery
         self.update_interval = update_interval
+        self.ack_strategy = ack_strategy
+        self.ota_should_fail = ota_should_fail
         self._stop_event = threading.Event()
         super().__init__(daemon=True)
         self.enabled = True
+        self.total_chunks = 0
+        self.last_chunk_acked = -1
+        self.ota_bytes_received = 0
+        self.ota_expected_bytes_received = 0
         self.start()
         self.log_event_task = LogEventTask(
             self,
@@ -116,6 +140,40 @@ class SwarmitNode(threading.Thread):
             print(
                 f"Node {self.address:08X} received message: {packet.payload.message.decode()}"
             )
+        elif payload_type == PayloadType.SWARMIT_OTA_START:
+            self.status = StatusType.Programming
+            self.total_chunks = packet.payload.fw_chunk_count
+            self.ota_expected_bytes_received = packet.payload.fw_length
+            self.send_packet(Packet().from_payload(PayloadOTAStartAck()))
+        elif payload_type == PayloadType.SWARMIT_OTA_CHUNK:
+            # ack miss simulation
+            if self.ack_strategy.ack_miss_index == packet.payload.index:
+                if self.ack_strategy.ack_miss_retries > 0:
+                    self.ack_strategy.ack_miss_retries -= 1
+                    return
+
+            # only log index if not already acknowledged
+            if self.last_chunk_acked != packet.payload.index:
+                self.last_chunk_acked = packet.payload.index
+                self.ota_bytes_received += packet.payload.count
+
+            index_to_ack = packet.payload.index
+            if (
+                self.ack_strategy.ack_out_of_range_index
+                == packet.payload.index
+            ):
+                index_to_ack = self.total_chunks + 1
+            self.send_packet(
+                Packet().from_payload(PayloadOTAChunkAck(index=index_to_ack))
+            )
+            if (
+                index_to_ack == self.total_chunks - 1
+                and not self.ota_should_fail
+            ):
+                assert (
+                    self.ota_bytes_received == self.ota_expected_bytes_received
+                )
+                self.status = StatusType.Bootloader
 
     def send_packet(self, packet: Packet):
         self.adapter.handle_data_received(
