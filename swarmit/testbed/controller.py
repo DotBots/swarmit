@@ -458,7 +458,7 @@ class Controller:
             in [StatusType.Stopping, StatusType.Bootloader]
             for addr in stoppable_devices
         ):
-            if not self.settings.devices:
+            if not devices:
                 self.send_payload(BROADCAST_ADDRESS, PayloadStop())
             else:
                 for device_addr in devices:
