@@ -209,6 +209,38 @@ def test_controller_reset():
     )
 
 
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_reset_not_ready():
+    controller = Controller(
+        ControllerSettings(
+            devices=["00000001", "00000002"], adapter_wait_timeout=0.1
+        )
+    )
+    test_adapter = controller.interface.mari.serial_interface
+    node1 = SwarmitNode(address=0x01, adapter=test_adapter)
+    node2 = SwarmitNode(
+        address=0x02, status=StatusType.Running, adapter=test_adapter
+    )
+    nodes = [node1, node2]
+
+    for node in nodes:
+        test_adapter.add_node(node)
+    locations = {
+        "00000001": ResetLocation(pos_x=1000000, pos_y=2000000),
+        "00000002": ResetLocation(pos_x=2000000, pos_y=1000000),
+    }
+    controller.reset(locations=locations)
+    time.sleep(0.1)
+    assert node1.status == StatusType.Resetting
+    assert node2.status == StatusType.Running
+
+    controller.stop(timeout=0.1)
+    time.sleep(0.1)
+    assert node1.status == StatusType.Bootloader
+    assert node2.status == StatusType.Bootloader
+
+
 @patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
 def test_controller_monitor(caplog):
     caplog.set_level(logging.INFO)
