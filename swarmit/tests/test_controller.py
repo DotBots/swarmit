@@ -3,13 +3,18 @@ import time
 from unittest.mock import patch
 
 from swarmit.testbed.controller import (
+    Chunk,
     Controller,
     ControllerSettings,
     ResetLocation,
 )
 from swarmit.testbed.logger import setup_logging
 from swarmit.testbed.protocol import StatusType
-from swarmit.tests.utils import SwarmitNode, SwarmitTestAdapter
+from swarmit.tests.utils import (
+    ChunkAckStrategy,
+    SwarmitNode,
+    SwarmitTestAdapter,
+)
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
@@ -334,3 +339,169 @@ def test_controller_send_message_broadcast(capsys):
     out, _ = capsys.readouterr()
     for node in ["00000001", "00000002"]:
         assert f"Node {node} received message: Hello robot!" in out
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_ota_broadcast():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(address=addr, adapter=test_adapter)
+        for addr in [0x01, 0x02]
+    ]
+    for node in nodes:
+        test_adapter.add_node(node)
+
+    firmware = b"\x00" * 2**16
+
+    ota_data = controller.start_ota(firmware)
+    assert ota_data["acked"] == [f"{node.address:08X}" for node in nodes]
+    assert ota_data["missed"] == []
+
+    for node in nodes:
+        assert node.status == StatusType.Programming
+
+    result = controller.transfer(firmware, ota_data["acked"])
+    time.sleep(0.15)
+    assert all([transfer.success for transfer in result.values()]) is True
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_ota_broadcast_verbose(capsys):
+    controller = Controller(
+        ControllerSettings(adapter_wait_timeout=0.1, verbose=True)
+    )
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(address=addr, adapter=test_adapter)
+        for addr in [0x01, 0x02]
+    ]
+    for node in nodes:
+        test_adapter.add_node(node)
+
+    firmware = b"\x00" * 2**16
+
+    ota_data = controller.start_ota(firmware)
+    assert ota_data["acked"] == [f"{node.address:08X}" for node in nodes]
+    assert ota_data["missed"] == []
+
+    for node in nodes:
+        assert node.status == StatusType.Programming
+
+    result = controller.transfer(firmware, ota_data["acked"])
+    time.sleep(0.15)
+    assert all([transfer.success for transfer in result.values()]) is True
+    assert "Transfer completed" in capsys.readouterr().out
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_ota_unicast():
+    controller = Controller(
+        ControllerSettings(devices=["00000001"], adapter_wait_timeout=0.1)
+    )
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(address=addr, adapter=test_adapter)
+        for addr in [0x01, 0x02]
+    ]
+    for node in nodes:
+        test_adapter.add_node(node)
+
+    firmware = b"\x00" * 2**16 + b"\x01" * 1234
+
+    ota_data = controller.start_ota(firmware)
+    assert ota_data["acked"] == ["00000001"]
+    assert ota_data["missed"] == []
+
+    assert nodes[0].status == StatusType.Programming
+    assert nodes[1].status == StatusType.Bootloader
+
+    result = controller.transfer(firmware, ota_data["acked"])
+    time.sleep(0.15)
+    assert all([transfer.success for transfer in result.values()]) is True
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_ota_with_retries(capsys):
+    controller = Controller(
+        ControllerSettings(
+            adapter_wait_timeout=0.1, ota_max_retries=3, verbose=True
+        )
+    )
+    test_adapter = controller.interface.mari.serial_interface
+    node1 = SwarmitNode(
+        address=0x01,
+        ack_strategy=ChunkAckStrategy(ack_miss_index=5, ack_miss_retries=2),
+        adapter=test_adapter,
+    )
+    node2 = SwarmitNode(
+        address=0x02,
+        ack_strategy=ChunkAckStrategy(ack_miss_index=5, ack_miss_retries=4),
+        ota_should_fail=True,
+        adapter=test_adapter,
+    )
+    nodes = [node1, node2]
+    for node in nodes:
+        test_adapter.add_node(node)
+
+    firmware = b"\x00" * 2**16
+
+    ota_data = controller.start_ota(firmware)
+    assert ota_data["acked"] == [f"{node.address:08X}" for node in nodes]
+    assert ota_data["missed"] == []
+
+    for node in nodes:
+        assert node.status == StatusType.Programming
+
+    result = controller.transfer(firmware, ota_data["acked"])
+    assert "Transfer completed with 3 retries" in capsys.readouterr().out
+    time.sleep(0.15)
+    assert result["00000001"].success is True
+    assert result["00000002"].success is False
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_ota_index_out_range(capsys):
+    controller = Controller(
+        ControllerSettings(
+            adapter_wait_timeout=0.1, ota_max_retries=3, verbose=True
+        )
+    )
+    test_adapter = controller.interface.mari.serial_interface
+    node = SwarmitNode(
+        address=0x01,
+        ack_strategy=ChunkAckStrategy(ack_out_of_range_index=50),
+        ota_should_fail=True,
+        adapter=test_adapter,
+    )
+    test_adapter.add_node(node)
+
+    firmware = b"\x00" * 2**16
+
+    ota_data = controller.start_ota(firmware)
+    assert ota_data["acked"] == [f"{node.address:08X}"]
+    assert ota_data["missed"] == []
+    assert node.status == StatusType.Programming
+
+    result = controller.transfer(firmware, ota_data["acked"])
+    assert "Transfer completed with 3 retries" in capsys.readouterr().out
+    time.sleep(0.15)
+    assert result["00000001"].success is False
+
+
+def test_controller_chunk_repr():
+    chunk = Chunk(index=42, size=128, acked=True, retries=2)
+    assert (
+        repr(chunk)
+        == "{'index': 42, 'size': 128, 'acked': True, 'retries': 2}"
+    )
