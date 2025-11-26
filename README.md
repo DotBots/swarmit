@@ -1,4 +1,9 @@
- # SwarmIT
+[![CI][ci-badge]][ci-link]
+[![Coverage][codecov-badge]][codecov-link]
+[![PyPI version][pypi-badge]][pypi-link]
+[![License][license-badge]][license-link]
+
+# SwarmIT
 
 SwarmIT provides a embedded C port for nRF53 as well as Python based services to
 easily build and deploy a robotic swarm infrastructure testbed.
@@ -137,3 +142,16 @@ python3 -m swarmit.dashboard.main --http-port 8080 --open-browser
 Access the dashboard at [https://localhost:8080](https://localhost:8080)
 
 > **__NOTE:__** Your dashboard CLI options may differ depending on your example or environment.
+
+
+[ci-badge]: https://github.com/DotBots/swarmit/workflows/CI/badge.svg
+[ci-link]: https://github.com/DotBots/swarmit/actions?query=workflow%3ACI+branch%3Amain
+
+[codecov-badge]: https://codecov.io/gh/DotBots/swarmit/branch/main/graph/badge.svg
+[codecov-link]: https://codecov.io/gh/DotBots/swarmit
+
+[pypi-badge]: https://badge.fury.io/py/swarmit.svg
+[pypi-link]: https://badge.fury.io/py/swarmit
+
+[license-badge]: https://img.shields.io/pypi/l/swarmit
+[license-link]: https://github.com/DotBots/swarmit/blob/main/LICENSE
