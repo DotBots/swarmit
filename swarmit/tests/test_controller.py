@@ -294,7 +294,9 @@ def test_controller_monitor_single_device(caplog):
 @patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
 def test_controller_send_message_unicast(capsys):
     controller = Controller(
-        ControllerSettings(devices=["00000001"], adapter_wait_timeout=0.1)
+        ControllerSettings(
+            devices=["00000001", "00000003"], adapter_wait_timeout=0.1
+        )
     )
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
@@ -303,14 +305,15 @@ def test_controller_send_message_unicast(capsys):
         )
         for addr in [0x01, 0x02]
     ]
+    node3 = SwarmitNode(address=0x03, adapter=test_adapter)
+    nodes.append(node3)
     for node in nodes:
         test_adapter.add_node(node)
 
     controller.send_message("Hello robot!")
-    assert (
-        "Node 00000001 received message: Hello robot!"
-        in capsys.readouterr().out
-    )
+    out, _ = capsys.readouterr()
+    assert "Node 00000001 received message: Hello robot!" in out
+    assert "Node 00000003 received message: Hello robot!" not in out
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
