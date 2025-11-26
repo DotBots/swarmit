@@ -200,11 +200,9 @@ def print_transfer_status(
             )
 
 
-def wait_for_done(timeout, condition_func):
+def wait_for_done(timeout):
     """Wait for the condition to be met."""
     while timeout > 0:
-        if condition_func():
-            return True
         timeout -= 0.01
         time.sleep(0.01)
     return False
@@ -269,7 +267,7 @@ class Controller:
     def known_devices(self) -> dict[str, StatusType]:
         """Return the known devices."""
         if not self._known_devices:
-            wait_for_done(COMMAND_TIMEOUT, lambda: False)
+            wait_for_done(COMMAND_TIMEOUT)
             self._known_devices = self.status_data
         return self._known_devices
 
