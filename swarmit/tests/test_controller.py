@@ -57,7 +57,7 @@ def test_controller_basic():
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
 @patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
 @patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
-def test_controller_start_stop():
+def test_controller_start_broadcast():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
@@ -71,11 +71,85 @@ def test_controller_start_stop():
     time.sleep(0.1)
     assert all([node.status == StatusType.Running for node in nodes]) is True
 
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_start_unicast():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(address=addr, adapter=test_adapter)
+        for addr in [0x01, 0x02]
+    ]
+    node3 = SwarmitNode(
+        address=0x03, status=StatusType.Running, adapter=test_adapter
+    )
+    nodes.append(node3)
+
+    for node in nodes:
+        test_adapter.add_node(node)
+
+    assert sorted(controller.known_devices.keys()) == [
+        f"{node.address:08X}" for node in nodes
+    ]
+
+    controller.start(devices=["00000001"], timeout=0.1)
+    time.sleep(0.1)
+    assert nodes[0].status == StatusType.Running
+    assert nodes[1].status == StatusType.Bootloader
+    assert nodes[2].status == StatusType.Running
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_stop_broadcast():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(
+            address=addr, status=StatusType.Running, adapter=test_adapter
+        )
+        for addr in [0x01, 0x02]
+    ]
+    for node in nodes:
+        test_adapter.add_node(node)
+
     controller.stop(timeout=0.1)
     time.sleep(0.1)
     assert (
         all([node.status == StatusType.Bootloader for node in nodes]) is True
     )
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_stop_unicast():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(
+            address=addr, status=StatusType.Running, adapter=test_adapter
+        )
+        for addr in [0x01, 0x02]
+    ]
+    node3 = SwarmitNode(address=0x03, adapter=test_adapter)
+    nodes.append(node3)
+
+    for node in nodes:
+        test_adapter.add_node(node)
+
+    assert sorted(controller.known_devices.keys()) == [
+        f"{node.address:08X}" for node in nodes
+    ]
+
+    controller.stop(devices=["00000001"], timeout=0.1)
+    time.sleep(0.1)
+    assert nodes[0].status == StatusType.Bootloader
+    assert nodes[1].status == StatusType.Running
+    assert nodes[2].status == StatusType.Bootloader
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
