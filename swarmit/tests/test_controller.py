@@ -94,7 +94,7 @@ def test_controller_start_unicast():
         f"{node.address:08X}" for node in nodes
     ]
 
-    controller.start(devices=["00000001"], timeout=0.1)
+    controller.start(devices=["00000001", "00000003"], timeout=0.1)
     time.sleep(0.1)
     assert nodes[0].status == StatusType.Running
     assert nodes[1].status == StatusType.Bootloader
@@ -145,7 +145,7 @@ def test_controller_stop_unicast():
         f"{node.address:08X}" for node in nodes
     ]
 
-    controller.stop(devices=["00000001"], timeout=0.1)
+    controller.stop(devices=["00000001", "00000003"], timeout=0.1)
     time.sleep(0.1)
     assert nodes[0].status == StatusType.Bootloader
     assert nodes[1].status == StatusType.Running
@@ -231,6 +231,30 @@ def test_controller_monitor(caplog):
     assert "Monitoring testbed" in caplog.text
     for node in nodes:
         assert f"Node {node.address:08X} log event" in caplog.text
+    controller.terminate()
+
+
+@patch("swarmit.testbed.adapter.MarilibSerialAdapter", SwarmitTestAdapter)
+def test_controller_monitor_single_device(caplog):
+    caplog.set_level(logging.INFO)
+    setup_logging()
+    controller = Controller(
+        ControllerSettings(devices=["00000001"], adapter_wait_timeout=0.1)
+    )
+
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(address=addr, adapter=test_adapter)
+        for addr in [0x01, 0x02]
+    ]
+    for node in nodes:
+        test_adapter.add_node(node)
+        node.start_log_event_task()
+
+    controller.monitor(run_forever=False, timeout=0.1)
+    assert "Monitoring testbed" in caplog.text
+    assert "Node 00000001 log event" in caplog.text
+    assert "Node 00000002 log event" not in caplog.text
     controller.terminate()
 
 
