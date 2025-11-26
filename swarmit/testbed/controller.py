@@ -560,7 +560,11 @@ class Controller:
         )
         for chunk_idx in range(chunks_count):
             if chunk_idx == chunks_count - 1:
-                chunk_size = len(firmware) % CHUNK_SIZE
+                chunk_size = (
+                    len(firmware) % CHUNK_SIZE
+                    if len(firmware) % CHUNK_SIZE
+                    else CHUNK_SIZE
+                )
             else:
                 chunk_size = CHUNK_SIZE
             data = firmware[
