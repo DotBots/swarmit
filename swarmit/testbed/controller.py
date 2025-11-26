@@ -353,8 +353,6 @@ class Controller:
         # if self.settings.verbose:
         #     print()
         #     print(Frame(header, packet))
-        if packet.payload_type < PayloadType.SWARMIT_STATUS:
-            return
         device_addr = f"{header.source:08X}"
         if packet.payload_type == PayloadType.SWARMIT_STATUS:
             now = time.time()
