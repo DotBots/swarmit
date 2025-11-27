@@ -236,7 +236,7 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
     return {"data": token}
 
 
-@api.get("/public_key", response_class=None)
+@api.get("/public_key")
 def public_key():
     """Expose the public key (frontend can use this to verify JWT signatures)."""
     try:
