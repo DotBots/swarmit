@@ -462,10 +462,12 @@ def test_controller_ota_with_retries(capsys):
         assert node.status == StatusType.Programming
 
     result = controller.transfer(firmware, ota_data["acked"])
-    assert "Transfer completed with 3 retries" in capsys.readouterr().out
-    time.sleep(0.3)
+    assert "Transfer completed with" in capsys.readouterr().out
     assert result["00000001"].success is True
     assert result["00000002"].success is False
+    # retries are equal for both nodes (broadcast)
+    assert sum(chunk.retries for chunk in result["00000001"].chunks) == 3
+    assert sum(chunk.retries for chunk in result["00000002"].chunks) == 3
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
@@ -494,9 +496,9 @@ def test_controller_ota_index_out_range(capsys):
     assert node.status == StatusType.Programming
 
     result = controller.transfer(firmware, ota_data["acked"])
-    assert "Transfer completed with 3 retries" in capsys.readouterr().out
-    time.sleep(0.3)
+    assert "Transfer completed with" in capsys.readouterr().out
     assert result["00000001"].success is False
+    assert sum(chunk.retries for chunk in result["00000001"].chunks) == 3
 
 
 def test_controller_chunk_repr():
