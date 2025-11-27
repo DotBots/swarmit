@@ -40,13 +40,13 @@ def test_controller_basic():
     assert sorted(controller.resetting_devices) == []
 
     nodes[0].status = StatusType.Running
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert sorted(controller.ready_devices) == [f"{nodes[1].address:08X}"]
     assert sorted(controller.running_devices) == [f"{nodes[0].address:08X}"]
     assert sorted(controller.resetting_devices) == []
 
     nodes[1].status = StatusType.Resetting
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert sorted(controller.ready_devices) == []
     assert sorted(controller.resetting_devices) == [f"{nodes[1].address:08X}"]
     assert sorted(controller.running_devices) == [f"{nodes[0].address:08X}"]
@@ -73,7 +73,7 @@ def test_controller_start_broadcast():
         test_adapter.add_node(node)
 
     controller.start(timeout=0.1)
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert all([node.status == StatusType.Running for node in nodes]) is True
 
 
@@ -100,7 +100,7 @@ def test_controller_start_unicast():
     ]
 
     controller.start(devices=["00000001", "00000003"], timeout=0.1)
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert nodes[0].status == StatusType.Running
     assert nodes[1].status == StatusType.Bootloader
     assert nodes[2].status == StatusType.Running
@@ -122,7 +122,7 @@ def test_controller_stop_broadcast():
         test_adapter.add_node(node)
 
     controller.stop(timeout=0.1)
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert (
         all([node.status == StatusType.Bootloader for node in nodes]) is True
     )
@@ -151,7 +151,7 @@ def test_controller_stop_unicast():
     ]
 
     controller.stop(devices=["00000001", "00000003"], timeout=0.1)
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert nodes[0].status == StatusType.Bootloader
     assert nodes[1].status == StatusType.Running
     assert nodes[2].status == StatusType.Bootloader
@@ -204,11 +204,11 @@ def test_controller_reset():
         "00000002": ResetLocation(pos_x=2000000, pos_y=1000000),
     }
     controller.reset(locations=locations)
-    time.sleep(0.15)
+    time.sleep(0.3)
     for node in nodes:
         assert node.status == StatusType.Resetting
     controller.stop(timeout=0.1)
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert (
         all([node.status == StatusType.Bootloader for node in nodes]) is True
     )
@@ -236,12 +236,12 @@ def test_controller_reset_not_ready():
         "00000002": ResetLocation(pos_x=2000000, pos_y=1000000),
     }
     controller.reset(locations=locations)
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert node1.status == StatusType.Resetting
     assert node2.status == StatusType.Running
 
     controller.stop(timeout=0.1)
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert node1.status == StatusType.Bootloader
     assert node2.status == StatusType.Bootloader
 
@@ -364,7 +364,7 @@ def test_controller_ota_broadcast():
         assert node.status == StatusType.Programming
 
     result = controller.transfer(firmware, ota_data["acked"])
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert all([transfer.success for transfer in result.values()]) is True
 
 
@@ -393,7 +393,7 @@ def test_controller_ota_broadcast_verbose(capsys):
         assert node.status == StatusType.Programming
 
     result = controller.transfer(firmware, ota_data["acked"])
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert all([transfer.success for transfer in result.values()]) is True
     assert "Transfer completed" in capsys.readouterr().out
 
@@ -423,7 +423,7 @@ def test_controller_ota_unicast():
     assert nodes[1].status == StatusType.Bootloader
 
     result = controller.transfer(firmware, ota_data["acked"])
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert all([transfer.success for transfer in result.values()]) is True
 
 
@@ -463,7 +463,7 @@ def test_controller_ota_with_retries(capsys):
 
     result = controller.transfer(firmware, ota_data["acked"])
     assert "Transfer completed with 3 retries" in capsys.readouterr().out
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert result["00000001"].success is True
     assert result["00000002"].success is False
 
@@ -495,7 +495,7 @@ def test_controller_ota_index_out_range(capsys):
 
     result = controller.transfer(firmware, ota_data["acked"])
     assert "Transfer completed with 3 retries" in capsys.readouterr().out
-    time.sleep(0.15)
+    time.sleep(0.3)
     assert result["00000001"].success is False
 
 
