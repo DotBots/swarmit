@@ -5,7 +5,6 @@ import datetime
 import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from importlib.metadata import PackageNotFoundError, version
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -18,22 +17,16 @@ from sqlalchemy import asc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from swarmit import __version__
 from swarmit.testbed.controller import Controller, ControllerSettings
 from swarmit.testbed.model import JWTRecord, get_db
-
-
-def swarmit_version():
-    try:
-        return version("swarmit")
-    except PackageNotFoundError:
-        return "0.0.0"
 
 
 api = FastAPI(
     debug=0,
     title="SwarmIT Dashboard API",
     description="This is the SwarmIT Dashboard API",
-    version=swarmit_version(),
+    version=__version__,
     docs_url="/api",
     redoc_url=None,
 )
