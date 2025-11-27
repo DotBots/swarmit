@@ -39,7 +39,7 @@ api.add_middleware(
 )
 
 
-# Load RSA keys
+# Load Ed25519 keys
 def get_private_key() -> str:
     with open(".data/private.pem") as f:
         return f.read()
