@@ -192,12 +192,14 @@ async def status(request: Request):
     return JSONResponse(content={"response": response})
 
 
-@api.get("/settings")
+class SettingsResponse(BaseModel):
+    network_id: int
+
+
+@api.get("/settings", response_model=SettingsResponse)
 async def settings(request: Request):
     controller: Controller = request.app.state.controller
-    return JSONResponse(
-        content={"response": {"network_id": controller.settings.network_id}}
-    )
+    return SettingsResponse(network_id=controller.settings.network_id)
 
 
 @api.post("/start")
@@ -280,7 +282,10 @@ def public_key():
 class JWTRecordOut(BaseModel):
     date_start: datetime.datetime
     date_end: datetime.datetime
-    model_config = {"arbitrary_types_allowed": True}
+
+    model_config = {
+        "from_attributes": True  # Enable Pydantic conversion from ORM objects
+    }
 
 
 @api.get("/records", response_model=list[JWTRecordOut])
