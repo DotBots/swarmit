@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status as fastapi_status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -59,7 +59,7 @@ def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
         public_key = get_public_key()
     except FileNotFoundError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="public.pem not found; public key unavailable",
         )
     try:
@@ -69,11 +69,13 @@ def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+            status_code=fastapi_status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
         )
     except jwt.InvalidTokenError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            status_code=fastapi_status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
         )
 
 
@@ -217,7 +219,7 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
         private_key = get_private_key()
     except FileNotFoundError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="private.pem not found; private key unavailable",
         )
     token = jwt.encode(payload, private_key, algorithm=ALGORITHM)
@@ -241,7 +243,7 @@ def public_key():
         public_key = get_public_key()
     except FileNotFoundError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="public.pem not found; public key unavailable",
         )
 
