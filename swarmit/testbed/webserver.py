@@ -1,5 +1,6 @@
 """Module for the web server application."""
 
+import asyncio
 import base64
 import datetime
 import os
@@ -15,6 +16,7 @@ from fastapi import (
     Request,
 )
 from fastapi import status as fastapi_status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -43,6 +45,9 @@ api.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global lock to prevent concurrent controller access
+controller_lock = asyncio.Lock()
 
 
 # Load Ed25519 keys
@@ -126,7 +131,10 @@ class FlashRequest(BaseModel):
 async def flash_firmware(payload: FlashRequest, request: Request):
     controller: Controller = request.app.state.controller
 
-    if not controller.ready_devices:
+    async with controller_lock:
+        ready_devices = await run_in_threadpool(controller.ready_devices)
+
+    if ready_devices:
         raise HTTPException(
             status_code=400, detail="no ready devices to flash"
         )
@@ -141,22 +149,28 @@ async def flash_firmware(payload: FlashRequest, request: Request):
 
     # Normalize devices
     devices = payload.devices
-    if isinstance(devices, str):
-        devices = [devices]
 
-    if devices is None:
-        start_data = controller.start_ota(fw)
-    else:
-        start_data = controller.start_ota(fw, devices)
+    async with controller_lock:
 
-    if start_data["missed"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{len(start_data['missed'])} acknowledgments are missing "
-            f"({', '.join(sorted(set(start_data['missed'])))})",
+        if isinstance(devices, str):
+            devices = [devices]
+
+        start_data = (
+            await run_in_threadpool(controller.start_ota, fw, devices)
+            if devices
+            else await run_in_threadpool(controller.start_ota, fw)
         )
 
-    data = controller.transfer(fw, start_data["acked"])
+        if start_data["missed"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{len(start_data['missed'])} acknowledgments are missing "
+                f"({', '.join(sorted(set(start_data['missed'])))})",
+            )
+
+        data = await run_in_threadpool(
+            controller.transfer, fw, start_data["acked"]
+        )
 
     if all(device.success for device in data.values()) is False:
         raise HTTPException(status_code=400, detail="transfer failed")
@@ -191,7 +205,8 @@ async def start(
     request: Request, payload: DeviceList, _token_payload=Depends(verify_jwt)
 ):
     controller: Controller = request.app.state.controller
-    controller.start(payload.devices)
+    async with controller_lock:
+        await run_in_threadpool(controller.start, devices=payload.devices)
 
     return JSONResponse(content={"response": "done"})
 
@@ -199,7 +214,8 @@ async def start(
 @api.post("/stop", dependencies=[Depends(verify_jwt)])
 async def stop(request: Request, payload: DeviceList):
     controller: Controller = request.app.state.controller
-    controller.stop(payload.devices)
+    async with controller_lock:
+        await run_in_threadpool(controller.stop, devices=payload.devices)
 
     return JSONResponse(content={"response": "done"})
 
