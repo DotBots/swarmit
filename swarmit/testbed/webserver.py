@@ -1,39 +1,40 @@
 """Module for the web server application."""
 
+import asyncio
 import base64
 import datetime
 import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from importlib.metadata import PackageNotFoundError, version
+from typing import List, Optional, Union
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+)
+from fastapi import status as fastapi_status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import asc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from swarmit import __version__
 from swarmit.testbed.controller import Controller, ControllerSettings
 from swarmit.testbed.model import JWTRecord, get_db
-
-
-def swarmit_version():
-    try:
-        return version("swarmit")
-    except PackageNotFoundError:
-        return "0.0.0"
-
 
 api = FastAPI(
     debug=0,
     title="SwarmIT Dashboard API",
     description="This is the SwarmIT Dashboard API",
-    version=swarmit_version(),
+    version=__version__,
     docs_url="/api",
     redoc_url=None,
 )
@@ -45,8 +46,11 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
+# Global lock to prevent concurrent controller access
+controller_lock = asyncio.Lock()
 
-# Load RSA keys
+
+# Load Ed25519 keys
 def get_private_key() -> str:
     with open(".data/private.pem") as f:
         return f.read()
@@ -66,7 +70,7 @@ def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
         public_key = get_public_key()
     except FileNotFoundError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="public.pem not found; public key unavailable",
         )
     try:
@@ -76,11 +80,13 @@ def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+            status_code=fastapi_status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
         )
     except jwt.InvalidTokenError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            status_code=fastapi_status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
         )
 
 
@@ -99,15 +105,36 @@ def init_api(api: FastAPI, settings: ControllerSettings):
     api.router.lifespan_context = lifespan
 
 
-class FirmwareUpload(BaseModel):
+class DeviceList(BaseModel):
+    devices: Optional[Union[str, List[str]]] = None
+
+    @field_validator("devices")
+    def normalize_devices(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            # ensure list of strings
+            if not all(isinstance(item, str) for item in v):
+                raise ValueError("devices must be a list of strings")
+            return v
+        raise ValueError("devices must be a string or list of strings")
+
+
+class FlashRequest(BaseModel):
     firmware_b64: str
+    devices: Optional[Union[str, List[str]]] = None
 
 
 @api.post("/flash", dependencies=[Depends(verify_jwt)])
-async def flash_firmware(request: Request, payload: FirmwareUpload):
+async def flash_firmware(payload: FlashRequest, request: Request):
     controller: Controller = request.app.state.controller
 
-    if not controller.ready_devices:
+    async with controller_lock:
+        ready_devices = await run_in_threadpool(controller.ready_devices)
+
+    if ready_devices:
         raise HTTPException(
             status_code=400, detail="no ready devices to flash"
         )
@@ -115,28 +142,35 @@ async def flash_firmware(request: Request, payload: FirmwareUpload):
     try:
         fw_bytes = base64.b64decode(payload.firmware_b64)
         fw = bytearray(fw_bytes)
-    except Exception:
+    except Exception as e:
         raise HTTPException(
-            status_code=400, detail="invalid firmware encoding: {str(e)}"
+            status_code=400, detail=f"invalid firmware encoding: {e}"
         )
 
-    body = await request.json()
-    devices = body.get("devices")
+    # Normalize devices
+    devices = payload.devices
 
-    if devices is None:
-        start_data = controller.start_ota(fw)
-    else:
+    async with controller_lock:
+
         if isinstance(devices, str):
             devices = [devices]
-        start_data = controller.start_ota(fw, devices)
 
-    if start_data["missed"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}).",
+        start_data = (
+            await run_in_threadpool(controller.start_ota, fw, devices)
+            if devices
+            else await run_in_threadpool(controller.start_ota, fw)
         )
 
-    data = controller.transfer(fw, start_data["acked"])
+        if start_data["missed"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{len(start_data['missed'])} acknowledgments are missing "
+                f"({', '.join(sorted(set(start_data['missed'])))})",
+            )
+
+        data = await run_in_threadpool(
+            controller.transfer, fw, start_data["acked"]
+        )
 
     if all(device.success for device in data.values()) is False:
         raise HTTPException(status_code=400, detail="transfer failed")
@@ -167,33 +201,21 @@ async def settings(request: Request):
 
 
 @api.post("/start")
-async def start(request: Request, _token_payload=Depends(verify_jwt)):
+async def start(
+    request: Request, payload: DeviceList, _token_payload=Depends(verify_jwt)
+):
     controller: Controller = request.app.state.controller
-    body = await request.json()
-
-    devices = body.get("devices")
-    if devices is None:
-        controller.start()
-    else:
-        if isinstance(devices, str):
-            devices = [devices]
-        controller.start(devices)
+    async with controller_lock:
+        await run_in_threadpool(controller.start, devices=payload.devices)
 
     return JSONResponse(content={"response": "done"})
 
 
 @api.post("/stop", dependencies=[Depends(verify_jwt)])
-async def stop(request: Request):
+async def stop(request: Request, payload: DeviceList):
     controller: Controller = request.app.state.controller
-    body = await request.json()
-
-    devices = body.get("devices")
-    if devices is None:
-        controller.stop()
-    else:
-        if isinstance(devices, str):
-            devices = [devices]
-        controller.stop(devices)
+    async with controller_lock:
+        await run_in_threadpool(controller.stop, devices=payload.devices)
 
     return JSONResponse(content={"response": "done"})
 
@@ -224,7 +246,7 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
         private_key = get_private_key()
     except FileNotFoundError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="private.pem not found; private key unavailable",
         )
     token = jwt.encode(payload, private_key, algorithm=ALGORITHM)
@@ -241,14 +263,14 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
     return {"data": token}
 
 
-@api.get("/public_key", response_class=None)
+@api.get("/public_key")
 def public_key():
     """Expose the public key (frontend can use this to verify JWT signatures)."""
     try:
         public_key = get_public_key()
     except FileNotFoundError:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="public.pem not found; public key unavailable",
         )
 
