@@ -5,14 +5,21 @@ import datetime
 import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from typing import List, Optional, Union
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Request, status as fastapi_status
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+)
+from fastapi import status as fastapi_status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import asc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,7 +27,6 @@ from sqlalchemy.orm import Session
 from swarmit import __version__
 from swarmit.testbed.controller import Controller, ControllerSettings
 from swarmit.testbed.model import JWTRecord, get_db
-
 
 api = FastAPI(
     debug=0,
@@ -94,12 +100,30 @@ def init_api(api: FastAPI, settings: ControllerSettings):
     api.router.lifespan_context = lifespan
 
 
-class FirmwareUpload(BaseModel):
+class DeviceList(BaseModel):
+    devices: Optional[Union[str, List[str]]] = None
+
+    @field_validator("devices")
+    def normalize_devices(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            # ensure list of strings
+            if not all(isinstance(item, str) for item in v):
+                raise ValueError("devices must be a list of strings")
+            return v
+        raise ValueError("devices must be a string or list of strings")
+
+
+class FlashRequest(BaseModel):
     firmware_b64: str
+    devices: Optional[Union[str, List[str]]] = None
 
 
 @api.post("/flash", dependencies=[Depends(verify_jwt)])
-async def flash_firmware(request: Request, payload: FirmwareUpload):
+async def flash_firmware(payload: FlashRequest, request: Request):
     controller: Controller = request.app.state.controller
 
     if not controller.ready_devices:
@@ -110,25 +134,26 @@ async def flash_firmware(request: Request, payload: FirmwareUpload):
     try:
         fw_bytes = base64.b64decode(payload.firmware_b64)
         fw = bytearray(fw_bytes)
-    except Exception:
+    except Exception as e:
         raise HTTPException(
-            status_code=400, detail="invalid firmware encoding: {str(e)}"
+            status_code=400, detail=f"invalid firmware encoding: {e}"
         )
 
-    body = await request.json()
-    devices = body.get("devices")
+    # Normalize devices
+    devices = payload.devices
+    if isinstance(devices, str):
+        devices = [devices]
 
     if devices is None:
         start_data = controller.start_ota(fw)
     else:
-        if isinstance(devices, str):
-            devices = [devices]
         start_data = controller.start_ota(fw, devices)
 
     if start_data["missed"]:
         raise HTTPException(
             status_code=400,
-            detail=f"{len(start_data['missed'])} acknowledgments are missing ({', '.join(sorted(set(start_data['missed'])))}).",
+            detail=f"{len(start_data['missed'])} acknowledgments are missing "
+            f"({', '.join(sorted(set(start_data['missed'])))})",
         )
 
     data = controller.transfer(fw, start_data["acked"])
@@ -162,33 +187,19 @@ async def settings(request: Request):
 
 
 @api.post("/start")
-async def start(request: Request, _token_payload=Depends(verify_jwt)):
+async def start(
+    request: Request, payload: DeviceList, _token_payload=Depends(verify_jwt)
+):
     controller: Controller = request.app.state.controller
-    body = await request.json()
-
-    devices = body.get("devices")
-    if devices is None:
-        controller.start()
-    else:
-        if isinstance(devices, str):
-            devices = [devices]
-        controller.start(devices)
+    controller.start(payload.devices)
 
     return JSONResponse(content={"response": "done"})
 
 
 @api.post("/stop", dependencies=[Depends(verify_jwt)])
-async def stop(request: Request):
+async def stop(request: Request, payload: DeviceList):
     controller: Controller = request.app.state.controller
-    body = await request.json()
-
-    devices = body.get("devices")
-    if devices is None:
-        controller.stop()
-    else:
-        if isinstance(devices, str):
-            devices = [devices]
-        controller.stop(devices)
+    controller.stop(payload.devices)
 
     return JSONResponse(content={"response": "done"})
 
