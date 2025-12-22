@@ -28,7 +28,27 @@ from sqlalchemy.orm import Session
 
 from swarmit import __version__
 from swarmit.testbed.controller import Controller, ControllerSettings
-from swarmit.testbed.model import JWTRecord, get_db
+from swarmit.testbed.model import (
+    Base,
+    JWTRecord,
+    create_db_engine,
+    create_prevent_overlap_trigger,
+    create_session_factory,
+)
+from swarmit.testbed.protocol import StatusType
+
+DATA_DIR = "./.data"
+API_DB_URL = f"sqlite:///{DATA_DIR}/database.db"
+
+
+def get_db():
+    global SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 api = FastAPI(
     debug=0,
@@ -52,12 +72,12 @@ controller_lock = asyncio.Lock()
 
 # Load Ed25519 keys
 def get_private_key() -> str:
-    with open(".data/private.pem") as f:
+    with open(f"{DATA_DIR}/private.pem") as f:
         return f.read()
 
 
 def get_public_key() -> str:
-    with open(".data/public.pem") as f:
+    with open(f"{DATA_DIR}/public.pem") as f:
         return f.read()
 
 
@@ -91,18 +111,34 @@ def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 
 def init_api(api: FastAPI, settings: ControllerSettings):
+    controller = Controller(settings)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        global SessionLocal
+        # Create engine + session factory
+        engine = create_db_engine(API_DB_URL)
+        SessionLocal = create_session_factory(engine)
+
+        # Initialize DB schema
+        Base.metadata.create_all(bind=engine)
+
+        # Create triggers
+        with engine.connect() as conn:
+            create_prevent_overlap_trigger(conn)
+
         # Run on startup
-        controller: Controller = Controller(settings)
         app.state.controller = controller
 
         yield
 
         # Run on shutdown
         controller.terminate()
+        engine.dispose()
 
     api.router.lifespan_context = lifespan
+
+    return controller
 
 
 class DeviceList(BaseModel):
@@ -131,14 +167,6 @@ class FlashRequest(BaseModel):
 async def flash_firmware(payload: FlashRequest, request: Request):
     controller: Controller = request.app.state.controller
 
-    async with controller_lock:
-        ready_devices = await run_in_threadpool(controller.ready_devices)
-
-    if ready_devices:
-        raise HTTPException(
-            status_code=400, detail="no ready devices to flash"
-        )
-
     try:
         fw_bytes = base64.b64decode(payload.firmware_b64)
         fw = bytearray(fw_bytes)
@@ -149,11 +177,15 @@ async def flash_firmware(payload: FlashRequest, request: Request):
 
     # Normalize devices
     devices = payload.devices
+    if all(
+        controller.status_data[device].status != StatusType.Bootloader
+        for device in devices
+    ):
+        raise HTTPException(
+            status_code=400, detail="no ready devices to flash"
+        )
 
     async with controller_lock:
-
-        if isinstance(devices, str):
-            devices = [devices]
 
         start_data = (
             await run_in_threadpool(controller.start_ota, fw, devices)
@@ -192,12 +224,14 @@ async def status(request: Request):
     return JSONResponse(content={"response": response})
 
 
-@api.get("/settings")
+class SettingsResponse(BaseModel):
+    network_id: int
+
+
+@api.get("/settings", response_model=SettingsResponse)
 async def settings(request: Request):
     controller: Controller = request.app.state.controller
-    return JSONResponse(
-        content={"response": {"network_id": controller.settings.network_id}}
-    )
+    return SettingsResponse(network_id=controller.settings.network_id)
 
 
 @api.post("/start")
@@ -280,7 +314,10 @@ def public_key():
 class JWTRecordOut(BaseModel):
     date_start: datetime.datetime
     date_end: datetime.datetime
-    model_config = {"arbitrary_types_allowed": True}
+
+    model_config = {
+        "from_attributes": True  # Enable Pydantic conversion from ORM objects
+    }
 
 
 @api.get("/records", response_model=list[JWTRecordOut])

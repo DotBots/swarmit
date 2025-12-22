@@ -9,7 +9,6 @@ from swarmit.testbed.model import (
     Base,
     JWTRecord,
     create_prevent_overlap_trigger,
-    get_db,
 )
 
 
@@ -34,22 +33,6 @@ def db_session():
     finally:
         session.close()
         engine.dispose()
-
-
-def test_get_db_closes_session():
-    """Ensure get_db() yields a session and closes it afterward."""
-    gen = get_db()  # get the generator
-    db = next(gen)  # this should yield a live session
-
-    # session should be open here
-    assert db.is_active
-
-    # finalize generator to trigger finally: db.close()
-    with pytest.raises(StopIteration):
-        next(gen)
-
-    # After generator is consumed, the session should be closed
-    assert db.is_active is False or db.close is not None
 
 
 def test_aware_datetime_assigns_utc_on_bind():
