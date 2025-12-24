@@ -144,8 +144,8 @@ def init_api(api: FastAPI, settings: ControllerSettings):
 class DeviceList(BaseModel):
     devices: Optional[Union[str, List[str]]] = None
 
-    @field_validator("devices")
-    def normalize_devices(cls, v):
+    @field_validator("devices", mode="before")
+    def validate_devices(cls, v):
         if v is None:
             return None
         if isinstance(v, str):
