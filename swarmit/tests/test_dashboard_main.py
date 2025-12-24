@@ -1,6 +1,7 @@
 """Test module for the main function."""
 
 import asyncio
+import sys
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -64,6 +65,7 @@ def open_browser_mock(monkeypatch):
     monkeypatch.setattr("webbrowser.open", time.sleep(0.3))
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Serial port is different")
 def test_dashboard_main_help(controller_mock, open_browser_mock):
     runner = CliRunner()
     result = runner.invoke(main, ["--help"])
