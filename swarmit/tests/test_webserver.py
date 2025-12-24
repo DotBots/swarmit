@@ -142,14 +142,27 @@ def test_start_token_invalid(client, monkeypatch):
     assert res.json()["detail"] == "Invalid token"
 
 
+def test_start_devices_none(client, capsys):
+    res = client.post(
+        "/start",
+        json={"devices": None},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 200
+    assert "2 devices to start" in capsys.readouterr().out
+
+
 def test_start_devices_not_string(client):
     res = client.post(
         "/start",
-        json={"devices": 123},
+        json={"devices": 12345},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 422
-    assert res.json()["detail"][0]['msg'] == "Input should be a valid string"
+    assert (
+        res.json()["detail"][0]['msg']
+        == "Value error, devices must be a string or list of strings"
+    )
 
 
 def test_start_devices_not_list_of_strings(client):
@@ -159,7 +172,10 @@ def test_start_devices_not_list_of_strings(client):
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 422
-    assert res.json()["detail"][0]['msg'] == "Input should be a valid string"
+    assert (
+        res.json()["detail"][0]['msg']
+        == "Value error, devices must be a list of strings"
+    )
 
 
 def test_stop_endpoint(client):
