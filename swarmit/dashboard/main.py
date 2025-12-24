@@ -147,6 +147,7 @@ async def async_web(
 ):
     tasks = []
     try:
+
         tasks.append(
             asyncio.create_task(
                 name="Web server",
@@ -167,7 +168,7 @@ async def async_web(
     except Exception as exc:  # TODO: use the right exception here
         print(f"Error: {exc}")
     except SystemExit:
-        pass
+        print("Exiting...")
     finally:
         print("Stopping controller")
         for task in tasks:
@@ -189,13 +190,16 @@ async def _serve_fast_api(settings: ControllerSettings, http_port: int):
         await server.serve()
     except asyncio.exceptions.CancelledError:
         print("Web server cancelled")
+    except Exception as e:
+        print(f"Web server error: {e}")
+        raise
     else:
         raise SystemExit()
 
 
 async def _open_webbrowser(http_port: int):
     """Wait until the server is ready before opening a web browser."""
-    while 1:
+    while True:
         try:
             _, writer = await asyncio.open_connection("127.0.0.1", http_port)
         except ConnectionRefusedError:
@@ -210,4 +214,4 @@ async def _open_webbrowser(http_port: int):
 
 
 if __name__ == "__main__":
-    main(obj={})
+    main(obj={})  # pragma: no cover
