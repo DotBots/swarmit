@@ -349,3 +349,9 @@ def test_public_key_not_found(client, monkeypatch):
     res = client.get("/public_key")
     assert res.status_code == 500
     assert "public.pem not found" in res.json()["detail"]
+
+
+def test_frontend_not_exists(client, capsys, monkeypatch):
+    monkeypatch.setattr("os.path.isdir", lambda path: False)
+    mount_frontend(client.app)
+    assert "Warning: dashboard directory not found" in capsys.readouterr().out
