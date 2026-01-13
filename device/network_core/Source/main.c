@@ -27,9 +27,16 @@
 
 #define NETCORE_MAIN_TIMER                  (0)
 
+#define SWARMIT_NET_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
+#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524D) // "SWRM"
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
-#define SWARMIT_MARI_NET_ID                 (0x12AA)
+#define SWARMIT_DEFAULT_NET_ID              (0x12AA)
+
+typedef struct {
+    uint32_t magic;      // to detect if config is valid
+    uint32_t net_id;     // Mari network ID
+} swarmit_config_t;
 
 //=========================== variables =========================================
 
@@ -46,6 +53,7 @@ typedef struct {
     uint8_t     expected_hash[SWRMT_OTA_SHA256_LENGTH];
     uint8_t     computed_hash[SWRMT_OTA_SHA256_LENGTH];
     uint64_t    device_id;
+    uint16_t    mari_net_id;
     int32_t     last_chunk_acked;
     uint32_t    metrics_rx_counter;
     uint32_t    metrics_tx_counter;
@@ -114,6 +122,16 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
     }
 }
 
+static uint16_t _net_id(void) {
+    const swarmit_config_t *cfg = (const swarmit_config_t *)SWARMIT_NET_CONFIG_START_ADDRESS;
+
+    if (cfg->magic != SWARMIT_CONFIG_MAGIC_VALUE) {
+        // No network config found, use default network ID
+        return SWARMIT_DEFAULT_NET_ID;
+    }
+    return (uint16_t)(cfg->net_id & 0xFFFFu);
+}
+
 uint64_t _deviceid(void) {
     return ((uint64_t)NRF_FICR_NS->INFO.DEVICEID[1]) << 32 | (uint64_t)NRF_FICR_NS->INFO.DEVICEID[0];
 }
@@ -127,6 +145,7 @@ static void _send_status(void) {
 int main(void) {
 
     _app_vars.device_id = _deviceid();
+    _app_vars.mari_net_id = _net_id();
 
     NRF_IPC_NS->INTENSET                             = (1 << IPC_CHAN_REQ) | (1 << IPC_CHAN_LOG_EVENT);
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_RADIO_RX]          = 1 << IPC_CHAN_RADIO_RX;
@@ -261,7 +280,7 @@ int main(void) {
             switch (_app_vars.ipc_req) {
                 // Mira node functions
                 case IPC_MARI_INIT_REQ:
-                    mari_init(MARI_NODE, SWARMIT_MARI_NET_ID, &schedule_tiny, &mari_event_callback);
+                    mari_init(MARI_NODE, _app_vars.mari_net_id, &schedule_tiny, &mari_event_callback);
                     break;
                 case IPC_MARI_NODE_TX_REQ:
                     while (!mari_node_is_connected()) {}
