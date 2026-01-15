@@ -340,30 +340,30 @@ def cmd_read_config() -> None:
     click.echo(f"[INFO] readback device_id: {readback_device_id}")
 
 
-@cli.command("flash-bringup", help="Flash J-Link OB or DAPLink programmer (skeleton).")
-@click.option("--programmer", "-p", type=click.Choice(VALID_PROGRAMMERS), required=True)
+@cli.command("flash-bringup", help="Flash J-Link OB or DAPLink programmer firmware (skeleton).")
+@click.option("--programmer-firmware", "-p", type=click.Choice(VALID_PROGRAMMERS), required=True)
 @click.option(
     "--files-dir",
     "-d",
     type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
     required=True,
 )
-def cmd_flash_bringup(programmer: str, files_dir: Path) -> None:
+def cmd_flash_bringup(programmer_firmware: str, files_dir: Path) -> None:
     files_dir = files_dir.expanduser().resolve()
     if not files_dir.exists():
         raise click.ClickException(f"files-dir does not exist: {files_dir}")
 
     required = {
-        "jlink": ["JLink-ob.bin", "stm32f103xb_bl.hex"],
-        "daplink": ["stm32f103xb_bl.hex", "stm32f103xb_if.hex"],
-    }[programmer]
+        "jlink": ["JLink-ob.bin", "stm32f103xb_bl.hex", "Geehy.APM32F1xx_DFP.1.1.0.pack"],
+        "daplink": ["stm32f103xb_bl.hex", "stm32f103xb_if.hex", "Geehy.APM32F1xx_DFP.1.1.0.pack"],
+    }[programmer_firmware]
 
     missing = [name for name in required if not (files_dir / name).exists()]
     if missing:
         missing_list = ", ".join(missing)
         raise click.ClickException(f"Missing required files in {files_dir}: {missing_list}")
 
-    click.echo(f"[INFO] programmer: {programmer}")
+    click.echo(f"[INFO] programmer: {programmer_firmware}")
     click.echo(f"[INFO] files-dir: {files_dir}")
     click.echo("[TODO] flash programmer firmware using J-Link / pyOCD flow")
 
