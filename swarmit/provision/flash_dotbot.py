@@ -20,15 +20,26 @@ DEFAULT_SWD_SPEED_KHZ = 4000
 
 def run(cmd, timeout=None, cwd=None):
     print(f"[CMD] {' '.join(cmd)}")
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout, cwd=cwd)
+    proc = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=timeout,
+        cwd=cwd,
+    )
     print(proc.stdout)
     return proc.returncode, proc.stdout
 
 
 def run_capture(cmd):
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    proc = subprocess.run(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
     if proc.returncode != 0:
-        raise RuntimeError(proc.stdout.strip() or f"Command failed: {' '.join(cmd)}")
+        raise RuntimeError(
+            proc.stdout.strip() or f"Command failed: {' '.join(cmd)}"
+        )
     return proc.stdout
 
 
@@ -38,7 +49,7 @@ def which_tool(exe_name, user_supplied=None, candidates=None):
     p = shutil.which(exe_name)
     if p:
         return p
-    for c in (candidates or []):
+    for c in candidates or []:
         if Path(c).exists():
             return c
     return exe_name
@@ -69,7 +80,9 @@ def jlink_flash_hex(jlink_exe, device, image_hex, timeout=TIMEOUT_JLINK_SEC):
         tf.write(make_jlink_script(device, speed_khz, str(image_hex)))
         script_path = tf.name
     try:
-        rc, out = run([jlink_exe, "-CommanderScript", script_path], timeout=timeout)
+        rc, out = run(
+            [jlink_exe, "-CommanderScript", script_path], timeout=timeout
+        )
     finally:
         try:
             os.unlink(script_path)
@@ -98,7 +111,9 @@ def pyocd_flash_hex(jlink_bin, device, pack_path: str):
     rc, out = run(args, timeout=120)
 
 
-def do_daplink(bl_hex: Path, apm_device: str, jlinktool: str | None, pack_path: str):
+def do_daplink(
+    bl_hex: Path, apm_device: str, jlinktool: str | None, pack_path: str
+):
     """Flash STM32 bootloader (DAPLink) using external J-Link."""
     jlink_tool = which_tool(
         "JLink.exe",
@@ -126,12 +141,23 @@ def do_daplink_if(if_hex: Path, apm_device: str, pack_path: str):
     print("[OK] DAPLink interface programmed.")
 
 
-def do_jlink(jlink_bin: Path, bl_hex: Path, apm_device: str, jlinktool: str | None, pack_path: str):
+def do_jlink(
+    jlink_bin: Path,
+    bl_hex: Path,
+    apm_device: str,
+    jlinktool: str | None,
+    pack_path: str,
+):
     """Flash STM32 bootloader, then J-Link OB image (overwrites BL)."""
     if not jlink_bin.exists():
         raise FileNotFoundError(f"J-Link OB image not found: {jlink_bin}")
 
-    do_daplink(bl_hex=bl_hex, apm_device=apm_device, jlinktool=jlinktool, pack_path=pack_path)
+    do_daplink(
+        bl_hex=bl_hex,
+        apm_device=apm_device,
+        jlinktool=jlinktool,
+        pack_path=pack_path,
+    )
 
     print("[INFO] Waiting 5 seconds for STM32 bootloader to enumerate...")
     time.sleep(5)
@@ -143,42 +169,82 @@ def do_jlink(jlink_bin: Path, bl_hex: Path, apm_device: str, jlinktool: str | No
 
 # ---------- Flash nRF5340 with nrfjprog ----------
 def pick_last_jlink_snr(nrfjprog_opt=None):
-    nrfjprog = which_tool("nrfjprog.exe", nrfjprog_opt, candidates=[
-        # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
-        "/usr/local/bin/nrfjprog",
-    ])
+    nrfjprog = which_tool(
+        "nrfjprog.exe",
+        nrfjprog_opt,
+        candidates=[
+            # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
+            "/usr/local/bin/nrfjprog",
+        ],
+    )
 
     rc2, out2 = run([nrfjprog, "--ids"], timeout=10)
-    ids = [l.strip() for l in out2.splitlines() if l.strip().isdigit()] if rc2 == 0 else []
+    ids = (
+        [l.strip() for l in out2.splitlines() if l.strip().isdigit()]
+        if rc2 == 0
+        else []
+    )
     print(f"[DEBUG] Found J-Link IDs: {ids}")
     if ids:
         return ids[-1]
-    raise RuntimeError("Unable to auto-select J-Link; provide --snr explicitly.")
+    raise RuntimeError(
+        "Unable to auto-select J-Link; provide --snr explicitly."
+    )
 
-def pick_matching_jlink_snr(sn_starting_digits: str, nrfjprog_opt: str | None = None):
-    nrfjprog = which_tool("nrfjprog.exe", nrfjprog_opt, candidates=[
-        # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
-        "/usr/local/bin/nrfjprog",
-    ])
+
+def pick_matching_jlink_snr(
+    sn_starting_digits: str, nrfjprog_opt: str | None = None
+):
+    nrfjprog = which_tool(
+        "nrfjprog.exe",
+        nrfjprog_opt,
+        candidates=[
+            # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
+            "/usr/local/bin/nrfjprog",
+        ],
+    )
     rc2, out2 = run([nrfjprog, "--ids"], timeout=10)
-    ids = [l.strip() for l in out2.splitlines() if l.strip().isdigit() and l.strip().startswith(sn_starting_digits)] if rc2 == 0 else []
+    ids = (
+        [
+            l.strip()
+            for l in out2.splitlines()
+            if l.strip().isdigit() and l.strip().startswith(sn_starting_digits)
+        ]
+        if rc2 == 0
+        else []
+    )
     print(f"[DEBUG] Found J-Link IDs: {ids}")
     if not ids:
-        raise RuntimeError(f"No J-Link found with serial number starting with {sn_starting_digits}")
+        raise RuntimeError(
+            f"No J-Link found with serial number starting with {sn_starting_digits}"
+        )
     return ids[0]
+
 
 def nrfjprog_recover(nrfjprog, snr=None):
     args = [nrfjprog, "-f", "NRF53"]
     if snr:
         args += ["-s", str(snr)]
     print(f"[INFO] Recovering both cores of nRF5340 (SNR={snr})...")
-    rc, out = run(args + ["--recover", "--coprocessor", "CP_APPLICATION"], timeout=120)
-    rc, out = run(args + ["--recover", "--coprocessor", "CP_NETWORK"], timeout=120)
+    rc, out = run(
+        args + ["--recover", "--coprocessor", "CP_APPLICATION"], timeout=120
+    )
+    rc, out = run(
+        args + ["--recover", "--coprocessor", "CP_NETWORK"], timeout=120
+    )
     print(f"[INFO] Erasing both cores of nRF5340 (SNR={snr})...")
     rc, out = run(args + ["-e"], timeout=120)
 
 
-def nrfjprog_program(nrfjprog, hex_path, network=False, verify=True, reset=True, chiperase=True, snr=None):
+def nrfjprog_program(
+    nrfjprog,
+    hex_path,
+    network=False,
+    verify=True,
+    reset=True,
+    chiperase=True,
+    snr=None,
+):
     args = [nrfjprog, "-f", "NRF53"]
     if snr:
         args += ["-s", str(snr)]
@@ -249,7 +315,9 @@ def read_net_id(snr: str | None = None) -> str:
     return f"{words[0][-4:]}"
 
 
-def flash_nrf_both_cores(app_hex: Path, net_hex: Path, nrfjprog_opt: str | None, snr_opt: str | None):
+def flash_nrf_both_cores(
+    app_hex: Path, net_hex: Path, nrfjprog_opt: str | None, snr_opt: str | None
+):
     """Flash nRF5340 application and network cores with full recover + chiperase."""
     if not app_hex.exists():
         raise FileNotFoundError(f"App hex not found: {app_hex}")
@@ -271,11 +339,27 @@ def flash_nrf_both_cores(app_hex: Path, net_hex: Path, nrfjprog_opt: str | None,
     nrfjprog_recover(nrfjprog, snr=snr)
 
     print("== Flashing nRF5340 application core with nrfjprog ==")
-    nrfjprog_program(nrfjprog, app_hex, network=False, verify=True, reset=True, chiperase=True, snr=snr)
+    nrfjprog_program(
+        nrfjprog,
+        app_hex,
+        network=False,
+        verify=True,
+        reset=True,
+        chiperase=True,
+        snr=snr,
+    )
     print("[OK] Application core programmed.")
 
     print("== Flashing nRF5340 network core with nrfjprog ==")
-    nrfjprog_program(nrfjprog, net_hex, network=True, verify=True, reset=True, chiperase=True, snr=snr)
+    nrfjprog_program(
+        nrfjprog,
+        net_hex,
+        network=True,
+        verify=True,
+        reset=True,
+        chiperase=True,
+        snr=snr,
+    )
     print("[OK] Network core programmed.")
 
 
@@ -347,16 +431,37 @@ def nrfjprog_reset_core(nrfjprog, snr=None, core="CP_APPLICATION"):
 
 
 # ---------- CLI (click) ----------
-@click.group(help="Flash helpers for APM32F103 (J-Link / DAPLink) and nRF5340.")
+@click.group(
+    help="Flash helpers for APM32F103 (J-Link / DAPLink) and nRF5340."
+)
 def cli():
     pass
 
 
 @cli.command("jlink")
-@click.option("--jlink", "jlink_bin", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to JLink OB bin (e.g. JLink-ob.bin).")
-@click.option("--bl", "bl_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).")
-@click.option("--apm-device", default="APM32F103CB", show_default=True, help="J-Link device name for APM MCU.")
-@click.option("--jlinktool", default=None, help="Path to JLinkExe if not on PATH.")
+@click.option(
+    "--jlink",
+    "jlink_bin",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to JLink OB bin (e.g. JLink-ob.bin).",
+)
+@click.option(
+    "--bl",
+    "bl_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).",
+)
+@click.option(
+    "--apm-device",
+    default="APM32F103CB",
+    show_default=True,
+    help="J-Link device name for APM MCU.",
+)
+@click.option(
+    "--jlinktool", default=None, help="Path to JLinkExe if not on PATH."
+)
 def cmd_jlink(jlink_bin, bl_hex, apm_device, jlinktool):
     """
     Flash STM32 bootloader, then J-Link OB image.
@@ -367,51 +472,142 @@ def cmd_jlink(jlink_bin, bl_hex, apm_device, jlinktool):
     """
     jlink_path = Path(jlink_bin).expanduser().resolve()
     bl_path = Path(bl_hex).expanduser().resolve()
-    do_jlink(jlink_path, bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
+    do_jlink(
+        jlink_path,
+        bl_path,
+        apm_device,
+        jlinktool,
+        pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack",
+    )
 
 
 @cli.command("daplink")
-@click.option("--bl", "bl_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).")
-@click.option("--if", "if_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Optional path to DAPLink interface hex (e.g. stm32f103xb_if.hex).")
-@click.option("--apm-device", default="APM32F103CB", show_default=True, help="J-Link device name for APM MCU.")
-@click.option("--jlinktool", default=None, help="Path to JLinkExe if not on PATH.")
+@click.option(
+    "--bl",
+    "bl_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).",
+)
+@click.option(
+    "--if",
+    "if_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Optional path to DAPLink interface hex (e.g. stm32f103xb_if.hex).",
+)
+@click.option(
+    "--apm-device",
+    default="APM32F103CB",
+    show_default=True,
+    help="J-Link device name for APM MCU.",
+)
+@click.option(
+    "--jlinktool", default=None, help="Path to JLinkExe if not on PATH."
+)
 def cmd_daplink(bl_hex, if_hex, apm_device, jlinktool):
     """
     Flash the STM32 bootloader (DAPLink), optionally followed by the DAPLink interface.
     """
     bl_path = Path(bl_hex).expanduser().resolve()
-    do_daplink(bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
+    do_daplink(
+        bl_path,
+        apm_device,
+        jlinktool,
+        pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack",
+    )
 
     if_path = Path(if_hex).expanduser().resolve()
     # Small delay to let the target settle if needed
     time.sleep(1.0)
-    do_daplink_if(if_path, apm_device, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
+    do_daplink_if(
+        if_path, apm_device, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack"
+    )
 
 
 @cli.command("nrf")
-@click.option("--net", "net_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to nRF5340 network core hex.")
-@click.option("--app", "app_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to nRF5340 application core hex.")
-@click.option("--nrfjprog", default=None, help="Path to nrfjprog if not on PATH.")
-@click.option("--snr", default=None, help="J-Link serial number to use (auto-detect if omitted).")
+@click.option(
+    "--net",
+    "net_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to nRF5340 network core hex.",
+)
+@click.option(
+    "--app",
+    "app_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to nRF5340 application core hex.",
+)
+@click.option(
+    "--nrfjprog", default=None, help="Path to nrfjprog if not on PATH."
+)
+@click.option(
+    "--snr",
+    default=None,
+    help="J-Link serial number to use (auto-detect if omitted).",
+)
 def cmd_nrf(net_hex, app_hex, nrfjprog, snr):
     """
     Flash both nRF5340 cores (application + network).
     """
     app_path = Path(app_hex).expanduser().resolve()
     net_path = Path(net_hex).expanduser().resolve()
-    flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
+    flash_nrf_both_cores(
+        app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr
+    )
 
 
 @cli.command("jlink-nrf")
-@click.option("--jlink", "jlink_bin", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to JLink OB bin (e.g. JLink-ob.bin).")
-@click.option("--bl", "bl_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).")
-@click.option("--net", "net_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to nRF5340 network core hex.")
-@click.option("--app", "app_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to nRF5340 application core hex.")
-@click.option("--apm-device", default="APM32F103CB", show_default=True, help="J-Link device name for APM MCU.")
-@click.option("--jlinktool", default=None, help="Path to JLinkExe if not on PATH.")
-@click.option("--nrfjprog", default=None, help="Path to nrfjprog if not on PATH.")
-@click.option("--snr", default=None, help="J-Link serial number to use (auto-detect if omitted).")
-def cmd_jlink_nrf(jlink_bin, bl_hex, net_hex, app_hex, apm_device, jlinktool, nrfjprog, snr):
+@click.option(
+    "--jlink",
+    "jlink_bin",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to JLink OB bin (e.g. JLink-ob.bin).",
+)
+@click.option(
+    "--bl",
+    "bl_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).",
+)
+@click.option(
+    "--net",
+    "net_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to nRF5340 network core hex.",
+)
+@click.option(
+    "--app",
+    "app_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to nRF5340 application core hex.",
+)
+@click.option(
+    "--apm-device",
+    default="APM32F103CB",
+    show_default=True,
+    help="J-Link device name for APM MCU.",
+)
+@click.option(
+    "--jlinktool", default=None, help="Path to JLinkExe if not on PATH."
+)
+@click.option(
+    "--nrfjprog", default=None, help="Path to nrfjprog if not on PATH."
+)
+@click.option(
+    "--snr",
+    default=None,
+    help="J-Link serial number to use (auto-detect if omitted).",
+)
+def cmd_jlink_nrf(
+    jlink_bin, bl_hex, net_hex, app_hex, apm_device, jlinktool, nrfjprog, snr
+):
     """
     Flash J-Link OB (via STM32 bootloader), then flash both nRF5340 cores.
     """
@@ -420,20 +616,67 @@ def cmd_jlink_nrf(jlink_bin, bl_hex, net_hex, app_hex, apm_device, jlinktool, nr
     app_path = Path(app_hex).expanduser().resolve()
     net_path = Path(net_hex).expanduser().resolve()
 
-    do_jlink(jlink_path, bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
-    flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
+    do_jlink(
+        jlink_path,
+        bl_path,
+        apm_device,
+        jlinktool,
+        pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack",
+    )
+    flash_nrf_both_cores(
+        app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr
+    )
 
 
 @cli.command("daplink-nrf")
-@click.option("--bl", "bl_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).")
-@click.option("--if", "if_hex", required=False, type=click.Path(exists=True, dir_okay=False), help="Optional path to DAPLink interface hex (e.g. stm32f103xb_if.hex).")
-@click.option("--net", "net_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to nRF5340 network core hex.")
-@click.option("--app", "app_hex", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to nRF5340 application core hex.")
-@click.option("--apm-device", default="APM32F103CB", show_default=True, help="J-Link device name for APM MCU.")
-@click.option("--jlinktool", default=None, help="Path to JLinkExe if not on PATH.")
-@click.option("--nrfjprog", default=None, help="Path to nrfjprog if not on PATH.")
-@click.option("--snr", default=None, help="J-Link serial number to use (auto-detect if omitted).")
-def cmd_daplink_nrf(bl_hex, if_hex, net_hex, app_hex, apm_device, jlinktool, nrfjprog, snr):
+@click.option(
+    "--bl",
+    "bl_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to STM32 bootloader hex (e.g. stm32f103xb_bl.hex).",
+)
+@click.option(
+    "--if",
+    "if_hex",
+    required=False,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Optional path to DAPLink interface hex (e.g. stm32f103xb_if.hex).",
+)
+@click.option(
+    "--net",
+    "net_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to nRF5340 network core hex.",
+)
+@click.option(
+    "--app",
+    "app_hex",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to nRF5340 application core hex.",
+)
+@click.option(
+    "--apm-device",
+    default="APM32F103CB",
+    show_default=True,
+    help="J-Link device name for APM MCU.",
+)
+@click.option(
+    "--jlinktool", default=None, help="Path to JLinkExe if not on PATH."
+)
+@click.option(
+    "--nrfjprog", default=None, help="Path to nrfjprog if not on PATH."
+)
+@click.option(
+    "--snr",
+    default=None,
+    help="J-Link serial number to use (auto-detect if omitted).",
+)
+def cmd_daplink_nrf(
+    bl_hex, if_hex, net_hex, app_hex, apm_device, jlinktool, nrfjprog, snr
+):
     """
     Flash STM32 bootloader (DAPLink), then flash both nRF5340 cores.
     """
@@ -442,13 +685,22 @@ def cmd_daplink_nrf(bl_hex, if_hex, net_hex, app_hex, apm_device, jlinktool, nrf
     app_path = Path(app_hex).expanduser().resolve()
     net_path = Path(net_hex).expanduser().resolve()
 
-    do_daplink(bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
+    do_daplink(
+        bl_path,
+        apm_device,
+        jlinktool,
+        pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack",
+    )
 
     # Small delay to let the target settle if needed
     time.sleep(1.0)
-    do_daplink_if(if_path, apm_device, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
+    do_daplink_if(
+        if_path, apm_device, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack"
+    )
 
-    flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
+    flash_nrf_both_cores(
+        app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr
+    )
 
 
 def main():
