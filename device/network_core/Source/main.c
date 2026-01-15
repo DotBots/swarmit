@@ -33,11 +33,6 @@
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0x12AA)
 
-typedef struct {
-    uint32_t magic;      // to detect if config is valid
-    uint32_t net_id;     // Mari network ID
-} swarmit_config_t;
-
 //=========================== variables =========================================
 
 typedef struct {
@@ -59,6 +54,11 @@ typedef struct {
     uint32_t    metrics_tx_counter;
     bool        metrics_received;
 } swrmt_app_data_t;
+
+typedef struct {
+    uint32_t magic;      // to detect if config is valid
+    uint32_t net_id;     // Mari network ID
+} swarmit_config_t;
 
 static swrmt_app_data_t _app_vars = { 0 };
 extern schedule_t schedule_minuscule, schedule_tiny, schedule_small, schedule_huge, schedule_only_beacons, schedule_only_beacons_optimized_scan;
