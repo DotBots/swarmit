@@ -155,7 +155,7 @@ def nrfjprog_recover(nrfjprog, snr=None):
     rc, out = run(args + ["-e"], timeout=120)
 
 
-def nrfjprog_program(nrfjprog, hex_path, network=False, verify=True, reset=True, snr=None):
+def nrfjprog_program(nrfjprog, hex_path, network=False, verify=True, reset=True, chiperase=True, snr=None):
     args = [nrfjprog, "-f", "NRF53"]
     if snr:
         args += ["-s", str(snr)]
@@ -166,6 +166,7 @@ def nrfjprog_program(nrfjprog, hex_path, network=False, verify=True, reset=True,
     args += ["--program", str(hex_path)]
     if verify:
         args += ["--verify"]
+    if chiperase:
         args += ["--chiperase"]
     if reset:
         args += ["--reset"]
@@ -174,8 +175,8 @@ def nrfjprog_program(nrfjprog, hex_path, network=False, verify=True, reset=True,
         raise RuntimeError("nrfjprog programming failed; see log above.")
 
 
-def do_nrf(app_hex: Path, net_hex: Path, nrfjprog_opt: str | None, snr_opt: str | None):
-    """Flash nRF5340 application and network cores."""
+def flash_nrf_both_cores(app_hex: Path, net_hex: Path, nrfjprog_opt: str | None, snr_opt: str | None):
+    """Flash nRF5340 application and network cores with full recover + chiperase."""
     if not app_hex.exists():
         raise FileNotFoundError(f"App hex not found: {app_hex}")
     if not net_hex.exists():
@@ -196,12 +197,66 @@ def do_nrf(app_hex: Path, net_hex: Path, nrfjprog_opt: str | None, snr_opt: str 
     nrfjprog_recover(nrfjprog, snr=snr)
 
     print("== Flashing nRF5340 application core with nrfjprog ==")
-    nrfjprog_program(nrfjprog, app_hex, network=False, verify=True, reset=True, snr=snr)
+    nrfjprog_program(nrfjprog, app_hex, network=False, verify=True, reset=True, chiperase=True, snr=snr)
     print("[OK] Application core programmed.")
 
     print("== Flashing nRF5340 network core with nrfjprog ==")
-    nrfjprog_program(nrfjprog, net_hex, network=True, verify=True, reset=True, snr=snr)
+    nrfjprog_program(nrfjprog, net_hex, network=True, verify=True, reset=True, chiperase=True, snr=snr)
     print("[OK] Network core programmed.")
+
+
+def flash_nrf_one_core(
+    app_hex: Path | None = None,
+    net_hex: Path | None = None,
+    nrfjprog_opt: str | None = None,
+    snr_opt: str | None = None,
+):
+    """Flash only one core; no recover and no chiperase."""
+    if app_hex is None and net_hex is None:
+        raise FileNotFoundError("Provide app_hex or net_hex.")
+    if app_hex is not None and net_hex is not None:
+        raise FileNotFoundError("Provide only one of app_hex or net_hex.")
+    if app_hex is not None and not app_hex.exists():
+        raise FileNotFoundError(f"App hex not found: {app_hex}")
+    if net_hex is not None and not net_hex.exists():
+        raise FileNotFoundError(f"Net hex not found: {net_hex}")
+
+    nrfjprog = which_tool(
+        "nrfjprog.exe",
+        nrfjprog_opt,
+        candidates=[
+            # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
+            "/usr/local/bin/nrfjprog",
+        ],
+    )
+
+    snr = snr_opt or pick_last_jlink_snr(nrfjprog)
+    print(f"[INFO] Using J-Link with serial number: {snr}")
+
+    if app_hex is not None:
+        print("== Flashing nRF5340 application core with nrfjprog ==")
+        nrfjprog_program(
+            nrfjprog,
+            app_hex,
+            network=False,
+            verify=True,
+            reset=True,
+            chiperase=False,
+            snr=snr,
+        )
+        print("[OK] Application core programmed.")
+    else:
+        print("== Flashing nRF5340 network core with nrfjprog ==")
+        nrfjprog_program(
+            nrfjprog,
+            net_hex,
+            network=True,
+            verify=True,
+            reset=True,
+            chiperase=False,
+            snr=snr,
+        )
+        print("[OK] Network core programmed.")
 
 
 # ---------- CLI (click) ----------
@@ -257,7 +312,7 @@ def cmd_nrf(net_hex, app_hex, nrfjprog, snr):
     """
     app_path = Path(app_hex).expanduser().resolve()
     net_path = Path(net_hex).expanduser().resolve()
-    do_nrf(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
+    flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
 
 
 @cli.command("jlink-nrf")
@@ -279,7 +334,7 @@ def cmd_jlink_nrf(jlink_bin, bl_hex, net_hex, app_hex, apm_device, jlinktool, nr
     net_path = Path(net_hex).expanduser().resolve()
 
     do_jlink(jlink_path, bl_path, apm_device, jlinktool)
-    do_nrf(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
+    flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
 
 
 @cli.command("daplink-nrf")
@@ -306,7 +361,7 @@ def cmd_daplink_nrf(bl_hex, if_hex, net_hex, app_hex, apm_device, jlinktool, nrf
     time.sleep(1.0)
     do_daplink_if(if_path, apm_device)
 
-    do_nrf(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
+    flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
 
 
 def main():

@@ -12,9 +12,9 @@ from typing import Dict, Optional, Tuple
 import click
 
 try:
-    from .flash_dotbot import do_nrf
+    from .flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core
 except ImportError:  # allow running as a script
-    from flash_dotbot import do_nrf
+    from flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core
 
 try:
     from intelhex import IntelHex
@@ -224,8 +224,8 @@ def cmd_flash(
         click.echo(f"[OK  ] wrote config hex: {config_hex}")
     else:
         click.echo(f"[INFO] using existing config hex: {config_hex}")
-    do_nrf(app_hex, net_hex, nrfjprog_opt=None, snr_opt=None)
-    click.echo("[TODO] flash config hex")
+    flash_nrf_both_cores(app_hex, net_hex, nrfjprog_opt=None, snr_opt=None)
+    flash_nrf_one_core(net_hex=config_hex, nrfjprog_opt=None, snr_opt=None)
     click.echo("[TODO] read back config + device ID and print summary")
 
 
