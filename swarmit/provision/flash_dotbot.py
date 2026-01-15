@@ -142,13 +142,18 @@ def do_jlink(jlink_bin: Path, bl_hex: Path, apm_device: str, jlinktool: str | No
 
 
 # ---------- Flash nRF5340 with nrfjprog ----------
-def pick_last_jlink_snr(nrfjprog):
+def pick_last_jlink_snr(nrfjprog_opt=None):
+    nrfjprog = which_tool("nrfjprog.exe", nrfjprog_opt, candidates=[
+        # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
+        "/usr/local/bin/nrfjprog",
+    ])
+
     rc2, out2 = run([nrfjprog, "--ids"], timeout=10)
     ids = [l.strip() for l in out2.splitlines() if l.strip().isdigit()] if rc2 == 0 else []
     print(f"[DEBUG] Found J-Link IDs: {ids}")
     if ids:
         return ids[-1]
-    raise RuntimeError("Unable to auto-select non-EDU J-Link; provide --snr explicitly.")
+    raise RuntimeError("Unable to auto-select J-Link; provide --snr explicitly.")
 
 
 def nrfjprog_recover(nrfjprog, snr=None):

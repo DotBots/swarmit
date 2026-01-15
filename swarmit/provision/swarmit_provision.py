@@ -12,9 +12,9 @@ from typing import Dict, Optional, Tuple
 import click
 
 try:
-    from .flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, read_device_id, read_net_id
+    from .flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, pick_last_jlink_snr, read_device_id, read_net_id
 except ImportError:  # allow running as a script
-    from flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, read_device_id, read_net_id
+    from flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, pick_last_jlink_snr, read_device_id, read_net_id
 
 try:
     from intelhex import IntelHex
@@ -31,6 +31,8 @@ VALID_DEVICES = ("dotbot-v3", "gateway")
 VALID_PROGRAMMERS = ("jlink", "daplink")
 CONFIG_ADDR = 0x0103F800
 CONFIG_MAGIC = 0x5753524D
+# it seems to always start with 77
+DOTBOT_V3_SERIAL_PATTERN = r"77[0-9A-F]{7}"
 
 DEVICE_ASSETS: Dict[str, Dict[str, str]] = {
     "dotbot-v3": {
@@ -181,6 +183,22 @@ def cmd_flash(
     config_path: Optional[Path],
     bin_dir: Path,
 ) -> None:
+    assets = DEVICE_ASSETS[device]
+
+    snr = pick_last_jlink_snr()
+    if snr is None:
+        raise click.ClickException("Unable to auto-select J-Link; provide --snr explicitly.")
+    click.echo(f"[INFO] using J-Link with serial number: {snr}")
+
+    if device == "dotbot-v3" and not snr.startswith("77"):
+        click.secho(f"[WARN] Serial number {snr} seems to not be a DotBot, but you are trying to flash a {device} firmware to it.", fg="yellow")
+        if not click.confirm("Do you want to continue?", default=True):
+            raise click.ClickException("Aborting.")
+    elif device == "gateway" and snr.startswith("77"):
+        click.secho(f"[WARN] Serial number {snr} seems to be a DotBot, but you are trying to flash a {device} firmware to it.", fg="yellow")
+        if not click.confirm("Do you want to continue?", default=True):
+            raise click.ClickException("Aborting.")
+
     config = {}
     if config_path:
         config = load_config(config_path)
@@ -199,7 +217,6 @@ def cmd_flash(
     fw_root = resolve_fw_root(bin_dir, fw_version)
     if not fw_root.exists():
         raise click.ClickException(f"Firmware root not found: {fw_root}")
-    assets = DEVICE_ASSETS[device]
 
     app_hex = fw_root / assets["app"]
     net_hex = fw_root / assets["net"]
