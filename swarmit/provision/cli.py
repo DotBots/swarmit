@@ -11,7 +11,7 @@ from pathlib import Path
 import click
 
 try:
-    from .flash_dotbot import (
+    from .nrf_flash import (
         do_daplink,
         do_daplink_if,
         do_jlink,
@@ -23,7 +23,7 @@ try:
         read_net_id,
     )
 except ImportError:  # allow running as a script
-    from flash_dotbot import (
+    from nrf_flash import (
         do_daplink,
         do_daplink_if,
         do_jlink,
