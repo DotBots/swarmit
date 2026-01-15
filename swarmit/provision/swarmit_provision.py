@@ -31,6 +31,7 @@ VALID_DEVICES = ("dotbot-v3", "gateway")
 VALID_PROGRAMMERS = ("jlink", "daplink")
 CONFIG_ADDR = 0x0103F800
 CONFIG_MAGIC = 0x5753524D
+CONFIG_MANIFEST_NAME = "config-manifest.json"
 # it seems to always start with 77
 DOTBOT_V3_SERIAL_PATTERN = r"77[0-9A-F]{7}"
 
@@ -102,6 +103,50 @@ def create_config_hex(dest: Path, net_id_value: int) -> None:
     ih.tofile(str(dest), "hex")
 
 
+def load_config_manifest(path: Path) -> Optional[dict]:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception as exc:  # noqa: BLE001 - surface parse errors
+        raise click.ClickException(f"Failed to parse config manifest {path}: {exc}") from exc
+
+
+def write_config_manifest(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def build_manifest_payload(
+    config_hex: Path,
+    device: str,
+    fw_version: str,
+    net_id_hex: str,
+) -> dict:
+    created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return {
+        "config_hex": config_hex.name,
+        "device": device,
+        "fw_version": fw_version,
+        "network_id": net_id_hex,
+        "config_addr": f"0x{CONFIG_ADDR:08X}",
+        "magic": f"0x{CONFIG_MAGIC:08X}",
+        "created_at": created_at,
+    }
+
+
+def manifest_matches(payload: dict, device: str, fw_version: str, net_id_hex: str) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return (
+        payload.get("device") == device
+        and payload.get("fw_version") == fw_version
+        and payload.get("network_id") == net_id_hex
+        and payload.get("config_addr") == f"0x{CONFIG_ADDR:08X}"
+        and payload.get("magic") == f"0x{CONFIG_MAGIC:08X}"
+        and isinstance(payload.get("config_hex"), str)
+    )
+
+
 @click.group(help="Swarmit provisioning tool (skeleton).")
 def cli() -> None:
     pass
@@ -167,8 +212,8 @@ def cmd_fetch(fw_version: str, local_root: Optional[Path], bin_dir: Path) -> Non
 @cli.command("flash", help="Flash firmware + config using versioned bin layout (skeleton).")
 @click.option("--device", "-d", type=click.Choice(VALID_DEVICES), required=True)
 @click.option("--fw-version", "-f", help="Firmware version tag or 'local'.")
-@click.option("--network-id", "-n", help="16-bit hex network ID, e.g. 0100.")
 @click.option("--config", "config_path", type=click.Path(path_type=Path, dir_okay=False))
+@click.option("--network-id", "-n", help="16-bit hex network ID, e.g. 0100.")
 @click.option(
     "--bin-dir",
     default=DEFAULT_BIN_DIR,
@@ -179,8 +224,8 @@ def cmd_fetch(fw_version: str, local_root: Optional[Path], bin_dir: Path) -> Non
 def cmd_flash(
     device: str,
     fw_version: Optional[str],
-    network_id: Optional[str],
     config_path: Optional[Path],
+    network_id: Optional[str],
     bin_dir: Path,
 ) -> None:
     assets = DEVICE_ASSETS[device]
@@ -220,10 +265,20 @@ def cmd_flash(
 
     app_hex = fw_root / assets["app"]
     net_hex = fw_root / assets["net"]
-    config_hex = find_existing_config_hex(fw_root)
-    if config_hex is not None:
-        click.secho(f"[NOTE] using existing config hex: {config_hex}", fg="yellow")
-    else:
+    manifest_path = fw_root / CONFIG_MANIFEST_NAME
+    manifest = load_config_manifest(manifest_path)
+    config_hex = None
+    if manifest:
+        click.echo(f"[INFO] loaded manifest {manifest_path}: {json.dumps(manifest, indent=2)}")
+        if manifest_matches(manifest, device, fw_version, net_id_hex):
+            candidate = fw_root / manifest["config_hex"]
+            if candidate.exists():
+                config_hex = candidate
+                click.secho(f"[NOTE] using config hex from manifest: {config_hex}", fg="yellow")
+        else:
+            click.secho(f"[INFO] manifest does not match, will create new config hex", fg="yellow")
+
+    if config_hex is None:
         config_hex = make_config_hex_path(fw_root, device, fw_version, net_id_hex)
         click.secho(f"[INFO] created new config hex: {config_hex}", fg="green")
 
@@ -242,6 +297,10 @@ def cmd_flash(
     if not config_hex.exists():
         create_config_hex(config_hex, net_id_val)
         click.echo(f"[OK  ] wrote config hex: {config_hex}")
+        manifest_payload = build_manifest_payload(config_hex, device, fw_version, net_id_hex)
+        write_config_manifest(manifest_path, manifest_payload)
+        click.echo(f"[OK  ] wrote config manifest: {manifest_path}")
+        click.echo(f"[INFO] manifest: {json.dumps(manifest_payload, indent=2)}")
     else:
         click.echo(f"[INFO] using existing config hex: {config_hex}")
     flash_nrf_both_cores(app_hex, net_hex, nrfjprog_opt=None, snr_opt=None)
