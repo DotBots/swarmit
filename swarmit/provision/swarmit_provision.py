@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -93,12 +94,40 @@ def cmd_fetch(fw_version: str, local_root: Optional[Path], bin_dir: Path) -> Non
         click.echo("[WARN] --local-root ignored when --fw-version is not 'local'.", err=True)
 
     out_dir = resolve_fw_root(bin_dir, fw_version)
+    out_dir.mkdir(parents=True, exist_ok=True)
     click.echo(f"[INFO] target dir: {out_dir}")
-    click.echo("[TODO] fetch assets for dotbot-v3 + gateway")
+
     if fw_version == "local":
-        click.echo(f"[TODO] populate {out_dir} with symlinks from {local_root}")
-    else:
-        click.echo(f"[TODO] download assets from GitHub releases for {fw_version}")
+        local_root = local_root.expanduser().resolve()
+        mapping = {
+            "bootloader-dotbot-v3.hex": local_root
+            / "device/bootloader/Output/dotbot-v3/Debug/Exe/bootloader-dotbot-v3.hex",
+            "netcore-nrf5340-net.hex": local_root
+            / "device/network_core/Output/nrf5340-net/Debug/Exe/netcore-nrf5340-net.hex",
+            "03app_gateway_app-nrf5340-app.hex": local_root
+            / "mari/app/03app_gateway_app/Output/nrf5340-app/Debug/Exe/03app_gateway_app-nrf5340-app.hex",
+            "03app_gateway_net-nrf5340-net.hex": local_root
+            / "mari/app/03app_gateway_net/Output/nrf5340-net/Debug/Exe/03app_gateway_net-nrf5340-net.hex",
+        }
+
+        missing = [name for name, src in mapping.items() if not src.exists()]
+        if missing:
+            missing_list = ", ".join(missing)
+            raise click.ClickException(f"Missing local build artifacts: {missing_list}")
+
+        for name, src in mapping.items():
+            dest = out_dir / name
+            if dest.exists() or dest.is_symlink():
+                dest.unlink()
+            try:
+                os.symlink(src, dest)
+                click.echo(f"[LINK] {dest} -> {src}")
+            except OSError:
+                shutil.copy2(src, dest)
+                click.echo(f"[COPY] {dest} <- {src}")
+        return
+
+    click.echo("[TODO] download assets from GitHub releases for remote versions")
 
 
 @cli.command("flash", help="Flash firmware + config using versioned bin layout (skeleton).")

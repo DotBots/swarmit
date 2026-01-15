@@ -30,3 +30,6 @@ dist/
 # coverage
 coverage.xml
 .coverage
+
+# folder with binaries
+bin
