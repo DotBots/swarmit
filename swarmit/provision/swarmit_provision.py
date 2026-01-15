@@ -4,12 +4,17 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 import sys
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import click
 
+try:
+    from intelhex import IntelHex
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    IntelHex = None
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - fallback for older Pythons
@@ -19,6 +24,8 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for older Pythons
 DEFAULT_BIN_DIR = Path("bin")
 VALID_DEVICES = ("dotbot-v3", "gateway")
 VALID_PROGRAMMERS = ("jlink", "daplink")
+CONFIG_ADDR = 0x0103F800
+CONFIG_MAGIC = 0x5753524D
 
 DEVICE_ASSETS: Dict[str, Dict[str, str]] = {
     "dotbot-v3": {
@@ -64,8 +71,28 @@ def resolve_fw_root(bin_dir: Path, fw_version: str) -> Path:
     return bin_dir / fw_version
 
 
-def make_config_hex_path(device: str, fw_version: str, net_id_hex: str) -> Path:
-    return Path("/tmp") / f"config-{device}-{fw_version}-{net_id_hex}.hex"
+def find_existing_config_hex(fw_root: Path) -> Optional[Path]:
+    candidates = sorted(fw_root.glob("config-*.hex"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0] if candidates else None
+
+
+def make_config_hex_path(fw_root: Path, device: str, fw_version: str, net_id_hex: str) -> Path:
+    ts = time.strftime("%Y%b%d-%H%M%S")
+    return fw_root / f"config-{device}-{fw_version}-{net_id_hex}-{ts}.hex"
+
+
+def create_config_hex(dest: Path, net_id_value: int) -> None:
+    if IntelHex is None:
+        raise click.ClickException("intelhex not available; install it to build config hex.")
+    ih = IntelHex()
+    for offset, word in enumerate((CONFIG_MAGIC, net_id_value)):
+        addr = CONFIG_ADDR + offset * 4
+        ih[addr + 0] = (word >> 0) & 0xFF
+        ih[addr + 1] = (word >> 8) & 0xFF
+        ih[addr + 2] = (word >> 16) & 0xFF
+        ih[addr + 3] = (word >> 24) & 0xFF
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    ih.tofile(str(dest), "hex")
 
 
 @click.group(help="Swarmit provisioning tool (skeleton).")
@@ -165,11 +192,20 @@ def cmd_flash(
 
     net_id_val, net_id_hex = net_id
     fw_root = resolve_fw_root(bin_dir, fw_version)
+    if not fw_root.exists():
+        raise click.ClickException(f"Firmware root not found: {fw_root}")
     assets = DEVICE_ASSETS[device]
 
     app_hex = fw_root / assets["app"]
     net_hex = fw_root / assets["net"]
-    config_hex = make_config_hex_path(device, fw_version, net_id_hex)
+    config_hex = find_existing_config_hex(fw_root)
+    if config_hex is None:
+        config_hex = make_config_hex_path(fw_root, device, fw_version, net_id_hex)
+
+    missing = [str(p) for p in (app_hex, net_hex) if not p.exists()]
+    if missing:
+        missing_list = ", ".join(missing)
+        raise click.ClickException(f"Missing firmware files: {missing_list}")
 
     click.echo(f"[INFO] device: {device}")
     click.echo(f"[INFO] fw_version: {fw_version}")
@@ -178,7 +214,12 @@ def cmd_flash(
     click.echo(f"[INFO] net hex: {net_hex}")
     click.echo(f"[INFO] config hex: {config_hex}")
 
-    click.echo("[TODO] build config hex, flash app/net, flash config hex")
+    if not config_hex.exists():
+        create_config_hex(config_hex, net_id_val)
+        click.echo(f"[OK  ] wrote config hex: {config_hex}")
+    else:
+        click.echo(f"[INFO] using existing config hex: {config_hex}")
+    click.echo("[TODO] flash app/net, flash config hex")
     click.echo("[TODO] read back config + device ID and print summary")
 
 
