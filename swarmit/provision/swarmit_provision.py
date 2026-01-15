@@ -407,8 +407,6 @@ def cmd_flash(
     click.echo(f"[INFO] net hex: {net_hex}")
     click.echo(f"[INFO] config hex: {config_hex}")
 
-    return
-
     if not config_hex.exists():
         create_config_hex(config_hex, net_id_val)
         click.echo(f"[OK  ] wrote config hex: {config_hex}")
