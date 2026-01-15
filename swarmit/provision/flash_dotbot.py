@@ -79,13 +79,13 @@ def jlink_flash_hex(jlink_exe, device, image_hex, timeout=TIMEOUT_JLINK_SEC):
         raise RuntimeError("J-Link flash failed; see log above.")
 
 
-def pyocd_flash_hex(jlink_bin, device):
+def pyocd_flash_hex(jlink_bin, device, pack_path: str):
     erase_args = [
         "pyocd",
         "erase",
         "--chip",
         "--pack",
-        "Geehy.APM32F1xx_DFP.1.1.0.pack",
+        pack_path,
         "-t",
         str(device),
         "--uid",
@@ -93,12 +93,12 @@ def pyocd_flash_hex(jlink_bin, device):
     ]
     rc, out = run(erase_args, timeout=60)
     args = ["pyocd", "flash", str(jlink_bin)]
-    args += ["--pack", "Geehy.APM32F1xx_DFP.1.1.0.pack"]
+    args += ["--pack", pack_path]
     args += ["-t", str(device)]
     rc, out = run(args, timeout=120)
 
 
-def do_daplink(bl_hex: Path, apm_device: str, jlinktool: str | None):
+def do_daplink(bl_hex: Path, apm_device: str, jlinktool: str | None, pack_path: str):
     """Flash STM32 bootloader (DAPLink) using external J-Link."""
     jlink_tool = which_tool(
         "JLink.exe",
@@ -116,28 +116,28 @@ def do_daplink(bl_hex: Path, apm_device: str, jlinktool: str | None):
     print("[OK] DAPLink bootloader programmed.")
 
 
-def do_daplink_if(if_hex: Path, apm_device: str):
+def do_daplink_if(if_hex: Path, apm_device: str, pack_path: str):
     """Flash DAPLink interface firmware over SWD using pyOCD."""
     if not if_hex.exists():
         raise FileNotFoundError(f"DAPLink interface image not found: {if_hex}")
 
     print("== Flashing DAPLink interface image via pyOCD ==")
-    pyocd_flash_hex(if_hex, apm_device)
+    pyocd_flash_hex(if_hex, apm_device, pack_path)
     print("[OK] DAPLink interface programmed.")
 
 
-def do_jlink(jlink_bin: Path, bl_hex: Path, apm_device: str, jlinktool: str | None):
+def do_jlink(jlink_bin: Path, bl_hex: Path, apm_device: str, jlinktool: str | None, pack_path: str):
     """Flash STM32 bootloader, then J-Link OB image (overwrites BL)."""
     if not jlink_bin.exists():
         raise FileNotFoundError(f"J-Link OB image not found: {jlink_bin}")
 
-    do_daplink(bl_hex=bl_hex, apm_device=apm_device, jlinktool=jlinktool)
+    do_daplink(bl_hex=bl_hex, apm_device=apm_device, jlinktool=jlinktool, pack_path=pack_path)
 
     print("[INFO] Waiting 5 seconds for STM32 bootloader to enumerate...")
     time.sleep(5)
 
     print("== Flashing J-Link OB image via pyOCD ==")
-    pyocd_flash_hex(jlink_bin, apm_device)
+    pyocd_flash_hex(jlink_bin, apm_device, pack_path)
     print("[OK] J-Link OB programmed.")
 
 
@@ -155,6 +155,17 @@ def pick_last_jlink_snr(nrfjprog_opt=None):
         return ids[-1]
     raise RuntimeError("Unable to auto-select J-Link; provide --snr explicitly.")
 
+def pick_matching_jlink_snr(sn_starting_digits: str, nrfjprog_opt: str | None = None):
+    nrfjprog = which_tool("nrfjprog.exe", nrfjprog_opt, candidates=[
+        # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
+        "/usr/local/bin/nrfjprog",
+    ])
+    rc2, out2 = run([nrfjprog, "--ids"], timeout=10)
+    ids = [l.strip() for l in out2.splitlines() if l.strip().isdigit() and l.strip().startswith(sn_starting_digits)] if rc2 == 0 else []
+    print(f"[DEBUG] Found J-Link IDs: {ids}")
+    if not ids:
+        raise RuntimeError(f"No J-Link found with serial number starting with {sn_starting_digits}")
+    return ids[0]
 
 def nrfjprog_recover(nrfjprog, snr=None):
     args = [nrfjprog, "-f", "NRF53"]
@@ -196,7 +207,7 @@ def _parse_memrd_words(output: str) -> list[str]:
     return words
 
 
-def read_device_id() -> str:
+def read_device_id(snr: str | None = None) -> str:
     nrfjprog = which_tool(
         "nrfjprog.exe",
         candidates=[
@@ -204,16 +215,20 @@ def read_device_id() -> str:
             "/usr/local/bin/nrfjprog",
         ],
     )
-    out = run_capture(
-        [nrfjprog, "-f", "NRF53", "--coprocessor", "CP_NETWORK", "--memrd", "0x01FF0204", "--n", "8"]
-    )
+    args = [nrfjprog, "-f", "NRF53"]
+    args += ["--coprocessor", "CP_NETWORK"]
+    args += ["--memrd", "0x01FF0204"]
+    args += ["--n", "8"]
+    if snr:
+        args += ["-s", str(snr)]
+    out = run_capture(args)
     words = _parse_memrd_words(out)
     if len(words) < 2:
         raise RuntimeError(f"Unexpected device ID output: {out.strip()}")
     return f"{words[1]}{words[0]}"
 
 
-def read_net_id() -> str:
+def read_net_id(snr: str | None = None) -> str:
     nrfjprog = which_tool(
         "nrfjprog.exe",
         candidates=[
@@ -221,9 +236,13 @@ def read_net_id() -> str:
             "/usr/local/bin/nrfjprog",
         ],
     )
-    out = run_capture(
-        [nrfjprog, "-f", "NRF53", "--coprocessor", "CP_NETWORK", "--memrd", "0x0103F804", "--n", "4"]
-    )
+    args = [nrfjprog, "-f", "NRF53"]
+    args += ["--coprocessor", "CP_NETWORK"]
+    args += ["--memrd", "0x0103F804"]
+    args += ["--n", "4"]
+    if snr:
+        args += ["-s", str(snr)]
+    out = run_capture(args)
     words = _parse_memrd_words(out)
     if len(words) < 1:
         raise RuntimeError(f"Unexpected net ID output: {out.strip()}")
@@ -348,7 +367,7 @@ def cmd_jlink(jlink_bin, bl_hex, apm_device, jlinktool):
     """
     jlink_path = Path(jlink_bin).expanduser().resolve()
     bl_path = Path(bl_hex).expanduser().resolve()
-    do_jlink(jlink_path, bl_path, apm_device, jlinktool)
+    do_jlink(jlink_path, bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
 
 
 @cli.command("daplink")
@@ -361,12 +380,12 @@ def cmd_daplink(bl_hex, if_hex, apm_device, jlinktool):
     Flash the STM32 bootloader (DAPLink), optionally followed by the DAPLink interface.
     """
     bl_path = Path(bl_hex).expanduser().resolve()
-    do_daplink(bl_path, apm_device, jlinktool)
+    do_daplink(bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
 
     if_path = Path(if_hex).expanduser().resolve()
     # Small delay to let the target settle if needed
     time.sleep(1.0)
-    do_daplink_if(if_path, apm_device)
+    do_daplink_if(if_path, apm_device, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
 
 
 @cli.command("nrf")
@@ -401,7 +420,7 @@ def cmd_jlink_nrf(jlink_bin, bl_hex, net_hex, app_hex, apm_device, jlinktool, nr
     app_path = Path(app_hex).expanduser().resolve()
     net_path = Path(net_hex).expanduser().resolve()
 
-    do_jlink(jlink_path, bl_path, apm_device, jlinktool)
+    do_jlink(jlink_path, bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
     flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
 
 
@@ -423,11 +442,11 @@ def cmd_daplink_nrf(bl_hex, if_hex, net_hex, app_hex, apm_device, jlinktool, nrf
     app_path = Path(app_hex).expanduser().resolve()
     net_path = Path(net_hex).expanduser().resolve()
 
-    do_daplink(bl_path, apm_device, jlinktool)
+    do_daplink(bl_path, apm_device, jlinktool, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
 
     # Small delay to let the target settle if needed
     time.sleep(1.0)
-    do_daplink_if(if_path, apm_device)
+    do_daplink_if(if_path, apm_device, pack_path="Geehy.APM32F1xx_DFP.1.1.0.pack")
 
     flash_nrf_both_cores(app_path, net_path, nrfjprog_opt=nrfjprog, snr_opt=snr)
 

@@ -12,9 +12,29 @@ from typing import Dict, Optional, Tuple
 import click
 
 try:
-    from .flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, pick_last_jlink_snr, read_device_id, read_net_id
+    from .flash_dotbot import (
+        flash_nrf_both_cores,
+        flash_nrf_one_core,
+        pick_last_jlink_snr,
+        pick_matching_jlink_snr,
+        read_device_id,
+        read_net_id,
+        do_daplink,
+        do_daplink_if,
+        do_jlink,
+    )
 except ImportError:  # allow running as a script
-    from flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, pick_last_jlink_snr, read_device_id, read_net_id
+    from flash_dotbot import (
+        flash_nrf_both_cores,
+        flash_nrf_one_core,
+        pick_last_jlink_snr,
+        pick_matching_jlink_snr,
+        read_device_id,
+        read_net_id,
+        do_daplink,
+        do_daplink_if,
+        do_jlink,
+    )
 
 try:
     from intelhex import IntelHex
@@ -32,6 +52,11 @@ VALID_PROGRAMMERS = ("jlink", "daplink")
 CONFIG_ADDR = 0x0103F800
 CONFIG_MAGIC = 0x5753524D
 CONFIG_MANIFEST_NAME = "config-manifest.json"
+# Programmer bring-up files
+GEEHY_PACK_NAME = "Geehy.APM32F1xx_DFP.1.1.0.pack"
+JLINK_REQUIRED_FILES = ("JLink-ob.bin", "stm32f103xb_bl.hex", GEEHY_PACK_NAME)
+DAPLINK_REQUIRED_FILES = ("stm32f103xb_bl.hex", "stm32f103xb_if.hex", GEEHY_PACK_NAME)
+APM_DEVICE = "APM32F103CB"
 # it seems to always start with 77
 DOTBOT_V3_SERIAL_PATTERN = r"77[0-9A-F]{7}"
 
@@ -214,6 +239,7 @@ def cmd_fetch(fw_version: str, local_root: Optional[Path], bin_dir: Path) -> Non
 @click.option("--fw-version", "-f", help="Firmware version tag or 'local'.")
 @click.option("--config", "config_path", type=click.Path(path_type=Path, dir_okay=False))
 @click.option("--network-id", "-n", help="16-bit hex network ID, e.g. 0100.")
+@click.option("--sn-starting-digits", "-s", help="Serial number pattern to use for auto-selection, e.g. 77.")
 @click.option(
     "--bin-dir",
     default=DEFAULT_BIN_DIR,
@@ -226,22 +252,26 @@ def cmd_flash(
     fw_version: Optional[str],
     config_path: Optional[Path],
     network_id: Optional[str],
+    sn_starting_digits: Optional[str],
     bin_dir: Path,
 ) -> None:
     assets = DEVICE_ASSETS[device]
 
-    snr = pick_last_jlink_snr()
+    if sn_starting_digits:
+        snr = pick_matching_jlink_snr(sn_starting_digits)
+    else:
+        snr = pick_last_jlink_snr()
     if snr is None:
         raise click.ClickException("Unable to auto-select J-Link; provide --snr explicitly.")
     click.echo(f"[INFO] using J-Link with serial number: {snr}")
 
     if device == "dotbot-v3" and not snr.startswith("77"):
         click.secho(f"[WARN] Serial number {snr} seems to not be a DotBot, but you are trying to flash a {device} firmware to it.", fg="yellow")
-        if not click.confirm("Do you want to continue?", default=True):
+        if not click.confirm("Do you want to continue? (you can check or plug the right board)", default=True):
             raise click.ClickException("Aborting.")
     elif device == "gateway" and snr.startswith("77"):
         click.secho(f"[WARN] Serial number {snr} seems to be a DotBot, but you are trying to flash a {device} firmware to it.", fg="yellow")
-        if not click.confirm("Do you want to continue?", default=True):
+        if not click.confirm("Do you want to continue? (you can check or plug the right board)", default=True):
             raise click.ClickException("Aborting.")
 
     config = {}
@@ -303,12 +333,12 @@ def cmd_flash(
         click.echo(f"[INFO] manifest: {json.dumps(manifest_payload, indent=2)}")
     else:
         click.echo(f"[INFO] using existing config hex: {config_hex}")
-    flash_nrf_both_cores(app_hex, net_hex, nrfjprog_opt=None, snr_opt=None)
-    flash_nrf_one_core(net_hex=config_hex, nrfjprog_opt=None, snr_opt=None)
+    flash_nrf_both_cores(app_hex, net_hex, nrfjprog_opt=None, snr_opt=snr)
+    flash_nrf_one_core(net_hex=config_hex, nrfjprog_opt=None, snr_opt=snr)
     click.echo(f"\n[INFO] ==== Flash Complete ====\n")
     try:
-        readback_net_id = read_net_id()
-        readback_device_id = read_device_id()
+        readback_net_id = read_net_id(snr=snr)
+        readback_device_id = read_device_id(snr=snr)
     except RuntimeError as exc:
         click.echo(f"[WARN] readback failed: {exc}", err=True)
         return
@@ -329,10 +359,18 @@ def cmd_flash_hex(app_hex: Optional[Path], net_hex: Optional[Path]) -> None:
 
 
 @cli.command("read-config", help="Read config from the device (skeleton).")
-def cmd_read_config() -> None:
+@click.option("--sn-starting-digits", "-s", help="Serial number pattern to use for auto-selection, e.g. 77.")
+def cmd_read_config(sn_starting_digits: Optional[str]) -> None:
+    if sn_starting_digits:
+        snr = pick_matching_jlink_snr(sn_starting_digits)
+    else:
+        snr = pick_last_jlink_snr()
+    if snr is None:
+        raise click.ClickException("Unable to auto-select J-Link; provide --snr explicitly.")
+    click.echo(f"[INFO] using J-Link with serial number: {snr}")
     try:
-        readback_net_id = read_net_id()
-        readback_device_id = read_device_id()
+        readback_net_id = read_net_id(snr=snr)
+        readback_device_id = read_device_id(snr=snr)
     except RuntimeError as exc:
         click.echo(f"[WARN] readback failed: {exc}", err=True)
         return
@@ -354,8 +392,8 @@ def cmd_flash_bringup(programmer_firmware: str, files_dir: Path) -> None:
         raise click.ClickException(f"files-dir does not exist: {files_dir}")
 
     required = {
-        "jlink": ["JLink-ob.bin", "stm32f103xb_bl.hex", "Geehy.APM32F1xx_DFP.1.1.0.pack"],
-        "daplink": ["stm32f103xb_bl.hex", "stm32f103xb_if.hex", "Geehy.APM32F1xx_DFP.1.1.0.pack"],
+        "jlink": JLINK_REQUIRED_FILES,
+        "daplink": DAPLINK_REQUIRED_FILES,
     }[programmer_firmware]
 
     missing = [name for name in required if not (files_dir / name).exists()]
@@ -365,7 +403,24 @@ def cmd_flash_bringup(programmer_firmware: str, files_dir: Path) -> None:
 
     click.echo(f"[INFO] programmer: {programmer_firmware}")
     click.echo(f"[INFO] files-dir: {files_dir}")
-    click.echo("[TODO] flash programmer firmware using J-Link / pyOCD flow")
+    if programmer_firmware == "jlink":
+        jlink_bin = (files_dir / "JLink-ob.bin").resolve()
+        bl_hex = (files_dir / "stm32f103xb_bl.hex").resolve()
+        pack_path = str((files_dir / GEEHY_PACK_NAME).resolve())
+        do_jlink(jlink_bin, bl_hex, apm_device=APM_DEVICE, jlinktool=None, pack_path=pack_path)
+    elif programmer_firmware == "daplink":
+        bl_hex = (files_dir / "stm32f103xb_bl.hex").resolve()
+        if_hex = (files_dir / "stm32f103xb_if.hex").resolve()
+        pack_path = str((files_dir / GEEHY_PACK_NAME).resolve())
+        do_daplink(bl_hex, apm_device=APM_DEVICE, jlinktool=None, pack_path=pack_path)
+        time.sleep(1.0)
+        do_daplink_if(if_hex, apm_device=APM_DEVICE, pack_path=pack_path)
+    else:
+        raise click.ClickException(f"Invalid programmer firmware: {programmer_firmware}")
+
+    # small delay to let the target settle if needed
+    time.sleep(1.0)
+    click.secho(f"[OK  ] ==== {programmer_firmware} programmer firmware flashed ====", fg="green")
 
 
 def main() -> int:
