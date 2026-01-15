@@ -35,7 +35,7 @@ firmware_version = "v0.6.0"
 ```
 
 ```bash
-python swarmit_provision.py flash --device dotbot-v3 --config config-adi-1k.toml --fw-version v0.6.1
+python swarmit_provision.py flash --device dotbot-v3 --config provision-config-sample.toml --fw-version v0.6.1
 ```
 
 ### Flash explicit hex files

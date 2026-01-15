@@ -25,6 +25,13 @@ def run(cmd, timeout=None, cwd=None):
     return proc.returncode, proc.stdout
 
 
+def run_capture(cmd):
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stdout.strip() or f"Command failed: {' '.join(cmd)}")
+    return proc.stdout
+
+
 def which_tool(exe_name, user_supplied=None, candidates=None):
     if user_supplied:
         return user_supplied
@@ -175,6 +182,49 @@ def nrfjprog_program(nrfjprog, hex_path, network=False, verify=True, reset=True,
         raise RuntimeError("nrfjprog programming failed; see log above.")
 
 
+def _parse_memrd_words(output: str) -> list[str]:
+    line = output.strip().splitlines()[0] if output.strip() else ""
+    if ":" not in line:
+        raise RuntimeError(f"Unexpected memrd output: {output.strip()}")
+    _, rest = line.split(":", 1)
+    words = [w for w in rest.strip().split() if not w.startswith(("0x", "0X"))]
+    return words
+
+
+def read_device_id() -> str:
+    nrfjprog = which_tool(
+        "nrfjprog.exe",
+        candidates=[
+            # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
+            "/usr/local/bin/nrfjprog",
+        ],
+    )
+    out = run_capture(
+        [nrfjprog, "-f", "NRF53", "--coprocessor", "CP_NETWORK", "--memrd", "0x01FF0204", "--n", "8"]
+    )
+    words = _parse_memrd_words(out)
+    if len(words) < 2:
+        raise RuntimeError(f"Unexpected device ID output: {out.strip()}")
+    return f"{words[1]}{words[0]}"
+
+
+def read_net_id() -> str:
+    nrfjprog = which_tool(
+        "nrfjprog.exe",
+        candidates=[
+            # r"C:\Program Files\Nordic Semiconductor\nrf-command-line-tools\bin\nrfjprog.exe"
+            "/usr/local/bin/nrfjprog",
+        ],
+    )
+    out = run_capture(
+        [nrfjprog, "-f", "NRF53", "--coprocessor", "CP_NETWORK", "--memrd", "0x0103F804", "--n", "4"]
+    )
+    words = _parse_memrd_words(out)
+    if len(words) < 1:
+        raise RuntimeError(f"Unexpected net ID output: {out.strip()}")
+    return f"{words[0][-4:]}"
+
+
 def flash_nrf_both_cores(app_hex: Path, net_hex: Path, nrfjprog_opt: str | None, snr_opt: str | None):
     """Flash nRF5340 application and network cores with full recover + chiperase."""
     if not app_hex.exists():
@@ -257,6 +307,19 @@ def flash_nrf_one_core(
             snr=snr,
         )
         print("[OK] Network core programmed.")
+        # also need to reset the application core (without programming, just reset)
+        nrfjprog_reset_core(nrfjprog, snr=snr, core="CP_APPLICATION")
+        print("[OK] Application core reset.")
+
+
+def nrfjprog_reset_core(nrfjprog, snr=None, core="CP_APPLICATION"):
+    args = [nrfjprog, "-f", "NRF53"]
+    if snr:
+        args += ["-s", str(snr)]
+    args += ["--reset", "--coprocessor", core]
+    rc, out = run(args, timeout=120)
+    if rc != 0 or "ERROR" in out.upper() or "failed" in out.lower():
+        raise RuntimeError("nrfjprog reset failed; see log above.")
 
 
 # ---------- CLI (click) ----------

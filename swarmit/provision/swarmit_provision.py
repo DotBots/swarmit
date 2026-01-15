@@ -12,9 +12,9 @@ from typing import Dict, Optional, Tuple
 import click
 
 try:
-    from .flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core
+    from .flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, read_device_id, read_net_id
 except ImportError:  # allow running as a script
-    from flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core
+    from flash_dotbot import flash_nrf_both_cores, flash_nrf_one_core, read_device_id, read_net_id
 
 try:
     from intelhex import IntelHex
@@ -204,8 +204,11 @@ def cmd_flash(
     app_hex = fw_root / assets["app"]
     net_hex = fw_root / assets["net"]
     config_hex = find_existing_config_hex(fw_root)
-    if config_hex is None:
+    if config_hex is not None:
+        click.secho(f"[NOTE] using existing config hex: {config_hex}", fg="yellow")
+    else:
         config_hex = make_config_hex_path(fw_root, device, fw_version, net_id_hex)
+        click.secho(f"[INFO] created new config hex: {config_hex}", fg="green")
 
     missing = [str(p) for p in (app_hex, net_hex) if not p.exists()]
     if missing:
@@ -226,7 +229,15 @@ def cmd_flash(
         click.echo(f"[INFO] using existing config hex: {config_hex}")
     flash_nrf_both_cores(app_hex, net_hex, nrfjprog_opt=None, snr_opt=None)
     flash_nrf_one_core(net_hex=config_hex, nrfjprog_opt=None, snr_opt=None)
-    click.echo("[TODO] read back config + device ID and print summary")
+    click.echo(f"\n[INFO] ==== Flash Complete ====\n")
+    try:
+        readback_net_id = read_net_id()
+        readback_device_id = read_device_id()
+    except RuntimeError as exc:
+        click.echo(f"[WARN] readback failed: {exc}", err=True)
+        return
+    click.echo(f"[INFO] readback net_id: {readback_net_id}")
+    click.echo(f"[INFO] readback device_id: {readback_device_id}")
 
 
 @cli.command("flash-hex", help="Flash explicit app/net hex files (skeleton).")
@@ -239,6 +250,18 @@ def cmd_flash_hex(app_hex: Optional[Path], net_hex: Optional[Path]) -> None:
         click.echo(f"[TODO] flash app core: {app_hex}")
     if net_hex:
         click.echo(f"[TODO] flash net core: {net_hex}")
+
+
+@cli.command("read-config", help="Read config from the device (skeleton).")
+def cmd_read_config() -> None:
+    try:
+        readback_net_id = read_net_id()
+        readback_device_id = read_device_id()
+    except RuntimeError as exc:
+        click.echo(f"[WARN] readback failed: {exc}", err=True)
+        return
+    click.echo(f"[INFO] readback net_id: {readback_net_id}")
+    click.echo(f"[INFO] readback device_id: {readback_device_id}")
 
 
 @cli.command("flash-bringup", help="Flash J-Link OB or DAPLink programmer (skeleton).")
