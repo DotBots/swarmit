@@ -68,6 +68,7 @@ dashboard = [
 
 [project.scripts]
 swarmit = "swarmit.cli.main:main"
+swarmit-provision = "swarmit.provision.cli:main"
 
 [tool.hatch.envs.default]
 dependencies = [

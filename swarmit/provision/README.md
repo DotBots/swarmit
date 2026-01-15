@@ -9,13 +9,13 @@ This directory contains a Click-based CLI skeleton for provisioning DotBot devic
 Download firmware into `bin/<fw-version>/`:
 
 ```bash
-python swarmit_provision.py fetch --fw-version v0.6.0
+swarmit-provision fetch --fw-version v0.6.0
 ```
 
 Use local artifacts (e.g. for dev builds):
 
 ```bash
-python swarmit_provision.py fetch --fw-version local --local-root /path/to/swarmit
+swarmit-provision fetch --fw-version local --local-root /path/to/swarmit
 ```
 
 ### Provision devices
@@ -23,7 +23,7 @@ python swarmit_provision.py fetch --fw-version local --local-root /path/to/swarm
 Flash app + net cores and write config:
 
 ```bash
-python swarmit_provision.py flash --device dotbot-v3 --fw-version v0.6.0 --network-id 0100
+swarmit-provision flash --device dotbot-v3 --fw-version v0.6.0 --network-id 0100
 ```
 
 Use a TOML config:
@@ -35,20 +35,20 @@ firmware_version = "v0.6.0"
 ```
 
 ```bash
-python swarmit_provision.py flash --device dotbot-v3 --config provision-config-sample.toml --fw-version v0.6.1
+swarmit-provision flash --device dotbot-v3 --config provision-config-sample.toml --fw-version v0.6.1
 ```
 
 ### Flash explicit hex files
 
 ```bash
-python swarmit_provision.py flash-hex --app path/to/app.hex --net path/to/net.hex
+swarmit-provision flash-hex --app path/to/app.hex --net path/to/net.hex
 ```
 
 ### Programmer bring-up (J-Link OB / DAPLink)
 
 ```bash
-python swarmit_provision.py flash-bringup --programmer jlink --files-dir ../dotbot-programmer-fw/
-python swarmit_provision.py flash-bringup --programmer daplink --files-dir ../dotbot-programmer-fw/
+swarmit-provision flash-bringup --programmer jlink --files-dir ../dotbot-programmer-fw/
+swarmit-provision flash-bringup --programmer daplink --files-dir ../dotbot-programmer-fw/
 ```
 
 ## Notes
