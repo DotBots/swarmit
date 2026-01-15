@@ -10,30 +10,17 @@ from pathlib import Path
 
 import click
 
-try:
-    from .nrf_flash import (
-        do_daplink,
-        do_daplink_if,
-        do_jlink,
-        flash_nrf_both_cores,
-        flash_nrf_one_core,
-        pick_last_jlink_snr,
-        pick_matching_jlink_snr,
-        read_device_id,
-        read_net_id,
-    )
-except ImportError:  # allow running as a script
-    from nrf_flash import (
-        do_daplink,
-        do_daplink_if,
-        do_jlink,
-        flash_nrf_both_cores,
-        flash_nrf_one_core,
-        pick_last_jlink_snr,
-        pick_matching_jlink_snr,
-        read_device_id,
-        read_net_id,
-    )
+from .nrf_flash import (
+    do_daplink,
+    do_daplink_if,
+    do_jlink,
+    flash_nrf_both_cores,
+    flash_nrf_one_core,
+    pick_last_jlink_snr,
+    pick_matching_jlink_snr,
+    read_device_id,
+    read_net_id,
+)
 
 try:
     from intelhex import IntelHex
