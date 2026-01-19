@@ -46,8 +46,7 @@ OTA_ACK_TIMEOUT_DEFAULT = 0.7
 SERIAL_PORT_DEFAULT = get_default_port()
 BROADCAST_ADDRESS = 0xFFFFFFFFFFFFFFFF
 VOLTAGE_MAX = 3000  # mV
-VOLTAGE_WARNING = 2200  # mV
-VOLTAGE_DANGER = 2000  # mV
+VOLTAGE_WARNING = 1500  # mV
 
 
 @dataclass
@@ -120,12 +119,7 @@ def addr_to_hex(addr: int) -> str:
 
 
 def battery_level_color(level: int):
-    if level > VOLTAGE_WARNING:
-        return "green"
-    elif level > VOLTAGE_DANGER:
-        return "dark_orange"
-    else:
-        return "red"
+    return "green" if level > VOLTAGE_WARNING else "red"
 
 
 def generate_status(status_data, devices=[], status_message="found"):
