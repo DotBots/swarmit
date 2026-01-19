@@ -33,6 +33,8 @@
 #define BATTERY_UPDATE_DELAY        (1000U)
 #define POSITION_UPDATE_DELAY_MS    (100U) ///< 100ms delay between each position update
 
+#define BATTERY_VOLTAGE_WARNING     (1500)
+
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
 
 typedef struct {
@@ -47,7 +49,8 @@ typedef struct {
     bool            battery_update;
 } bootloader_app_data_t;
 
-static const gpio_t _status_led = { .port = 1, .pin = 5 };  // TODO: use board specific values
+static const gpio_t _status_red_led = { .port = DB_RGB_LED_PWM_RED_PORT, .pin = DB_RGB_LED_PWM_RED_PIN };
+static const gpio_t _status_green_led = { .port = DB_RGB_LED_PWM_GREEN_PORT, .pin = DB_RGB_LED_PWM_GREEN_PIN };
 
 static bootloader_app_data_t _bootloader_vars = { 0 };
 
@@ -317,8 +320,10 @@ int main(void) {
     _bootloader_vars.base_addr = SWARMIT_BASE_ADDRESS;
     _bootloader_vars.ota_require_erase = true;
 
-    // Status LED
-    db_gpio_init(&_status_led, DB_GPIO_OUT);
+    // Status LEDs
+    db_gpio_init(&_status_red_led, DB_GPIO_OUT);
+    db_gpio_init(&_status_green_led, DB_GPIO_OUT);
+
     // Periodic Timer and Lighthouse initialization
     db_timer_init(1);
     db_timer_set_periodic_ms(1, 1, POSITION_UPDATE_DELAY_MS, &_update_position);
@@ -382,9 +387,16 @@ int main(void) {
         }
 
         if (_bootloader_vars.battery_update) {
-            db_gpio_toggle(&_status_led);
-            ipc_shared_data.battery_level = battery_level_read();
             _bootloader_vars.battery_update = false;
+            uint16_t battery_level = battery_level_read();
+            ipc_shared_data.battery_level = battery_level;
+            if (battery_level > BATTERY_VOLTAGE_WARNING) {
+                db_gpio_clear(&_status_red_led);
+                db_gpio_toggle(&_status_green_led);
+            } else {
+                db_gpio_toggle(&_status_red_led);
+                db_gpio_clear(&_status_green_led);
+            }
         }
 
         // Process available lighthouse data
