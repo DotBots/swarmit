@@ -105,8 +105,8 @@ class SwarmitNode(threading.Thread):
                         device=self.device_type.value,
                         status=self.status.value,
                         battery=self.battery,
-                        pos_x=0.5 * 1e6,
-                        pos_y=0.5 * 1e6,
+                        pos_x=2500,
+                        pos_y=2500,
                     ),
                 )
                 self.send_packet(packet)

@@ -283,8 +283,8 @@ def test_controller_reset():
     for node in nodes:
         test_adapter.add_node(node)
     locations = {
-        "00000001": ResetLocation(pos_x=1000000, pos_y=2000000),
-        "00000002": ResetLocation(pos_x=2000000, pos_y=1000000),
+        "00000001": ResetLocation(pos_x=1000000, pos_y=2000),
+        "00000002": ResetLocation(pos_x=2000000, pos_y=1000),
     }
     controller.reset(locations=locations)
     time.sleep(0.3)
@@ -317,8 +317,8 @@ def test_controller_reset_not_ready():
     for node in nodes:
         test_adapter.add_node(node)
     locations = {
-        "00000001": ResetLocation(pos_x=1000000, pos_y=2000000),
-        "00000002": ResetLocation(pos_x=2000000, pos_y=1000000),
+        "00000001": ResetLocation(pos_x=1000000, pos_y=2000),
+        "00000002": ResetLocation(pos_x=2000000, pos_y=1000),
     }
     controller.reset(locations=locations)
     time.sleep(0.3)
