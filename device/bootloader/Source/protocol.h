@@ -113,8 +113,8 @@ typedef struct __attribute__((packed)) {
 
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {
-    uint32_t x;  ///< X coordinate, multiplied by 1e6
-    uint32_t y;  ///< Y coordinate, multiplied by 1e6
+    uint32_t x;  ///< X coordinate in mm
+    uint32_t y;  ///< Y coordinate in mm
 } protocol_lh2_location_t;
 
 /**
