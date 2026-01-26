@@ -330,9 +330,8 @@ def monitor(ctx):
 @click.pass_context
 def status(ctx, watch):
     """Print current status of the robots."""
-    print("Fetching status...")
     controller = Controller(ctx.obj["settings"])
-    controller.status(watch)
+    controller.status(watch=watch)
     controller.terminate()
 
 
