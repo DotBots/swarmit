@@ -14,6 +14,7 @@ from swarmit.testbed.webserver import api, init_api, mount_frontend
 DEFAULTS_DASHBOARD = {
     **DEFAULTS,
     "http_port": 8001,
+    "map_size": "2500x2500",
 }
 
 
@@ -74,6 +75,13 @@ DEFAULTS_DASHBOARD = {
     help="Subset list of device addresses to interact with, separated with ,",
 )
 @click.option(
+    "-m",
+    "--map-size",
+    type=str,
+    default=DEFAULTS_DASHBOARD['map_size'],
+    help="Size of the map on the ground in mm, in the format WIDTHxHEIGHT. Default: 2500x2500.",
+)
+@click.option(
     "-v",
     "--verbose",
     is_flag=True,
@@ -101,6 +109,7 @@ def main(
     network_id,
     adapter,
     devices,
+    map_size,
     verbose,
     open_browser,
 ):
@@ -114,6 +123,7 @@ def main(
         "mqtt_use_tls": mqtt_use_tls,
         "swarmit_network_id": network_id,
         "devices": devices,
+        "map_size": map_size,
         "verbose": verbose,
         "http_port": http_port,
     }
@@ -134,6 +144,7 @@ def main(
         network_id=int(final_config["swarmit_network_id"], 16),
         adapter=final_config["adapter"],
         devices=[d for d in final_config["devices"].split(",") if d],
+        map_size=final_config["map_size"],
         verbose=final_config["verbose"],
     )
 

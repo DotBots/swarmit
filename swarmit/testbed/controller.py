@@ -164,7 +164,7 @@ def generate_status(status_data, devices=[], status_message="found"):
             f"{device_addr}",
             f"{device_data.device.name}",
             f"[{battery_level_color(device_data.battery)}]{device_data.battery / 1000:.2f}V ({int(device_data.battery / 3000 * 100)}%)",
-            f"({(device_data.pos_x / 1e6):.2f}, {(device_data.pos_y / 1e6):.2f})",
+            f"({device_data.pos_x}, {device_data.pos_y})",
             f"{'[bold cyan]' if device_data.status == StatusType.Running else '[bold green]'}{device_data.status.name}",
         )
     return Group(header, table)
@@ -214,6 +214,7 @@ class ControllerSettings:
     network_id: int = 1
     adapter: str = "serial"  # or "mqtt", "marilib-edge", "marilib-cloud"
     devices: list[str] = dataclasses.field(default_factory=lambda: [])
+    map_size: str = "2500x2500"
     ota_max_retries: int = OTA_MAX_RETRIES_DEFAULT
     ota_timeout: float = OTA_ACK_TIMEOUT_DEFAULT
     adapter_wait_timeout: float = 3

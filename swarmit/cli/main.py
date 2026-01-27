@@ -193,8 +193,8 @@ def reset(ctx, locations):
         return
     locations = {
         int(location.split(":")[0], 16): ResetLocation(
-            pos_x=int(float(location.split(":")[1].split(",")[0]) * 1e6),
-            pos_y=int(float(location.split(":")[1].split(",")[1]) * 1e6),
+            pos_x=int(float(location.split(":")[1].split(",")[0])),
+            pos_y=int(float(location.split(":")[1].split(",")[1])),
         )
         for location in locations.split("-")
     }
