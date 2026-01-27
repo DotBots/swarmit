@@ -4,12 +4,10 @@
 
 #include "localization.h"
 
-#define LH2_CALIBRATION_IS_VALID    (1)
+#define LH2_CALIBRATION_IS_VALID    (0)
+#define LH2_CALIBRATION_COUNT       (0)
 
-static int32_t swrmt_homography[3][3] = {
-    {-910156, 4037136, -16647},
-    {1519258, 3291055, -139111},
-    {264976, 3267254, 1000000},
+static int32_t swrmt_homography[LH2_CALIBRATION_COUNT][3][3] = {
 };
 
 #endif // __LH2_CALIBRATION_H

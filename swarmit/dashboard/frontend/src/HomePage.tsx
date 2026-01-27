@@ -6,10 +6,14 @@ interface HomePageProps {
   token: Token | null;
   tokenActiveness: tokenActivenessType;
   dotbots: Record<string, DotBotData>;
+  areaSize: {
+    width: number;
+    height: number;
+  };
 }
 
 
-export default function HomePage({ token, tokenActiveness, dotbots }: HomePageProps) {
+export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -141,7 +145,7 @@ export default function HomePage({ token, tokenActiveness, dotbots }: HomePagePr
 
   return (
     <div>
-      <DotBotsMap dotbots={dotbots} />
+      <DotBotsMap dotbots={dotbots} areaSize={areaSize} />
       <div className="max-w-md mx-auto p-6 space-y-6 bg-white rounded-2xl shadow mt-10 animate-fadeIn">
         {token?.payload && <div className="border p-4 rounded-lg bg-gray-50">
           <h3 className="font-semibold mb-2">Token Info</h3>

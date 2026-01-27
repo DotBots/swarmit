@@ -226,12 +226,20 @@ async def status(request: Request):
 
 class SettingsResponse(BaseModel):
     network_id: int
+    area_width: int
+    area_height: int
 
 
 @api.get("/settings", response_model=SettingsResponse)
 async def settings(request: Request):
     controller: Controller = request.app.state.controller
-    return SettingsResponse(network_id=controller.settings.network_id)
+    map_size = controller.settings.map_size
+    width_str, height_str = map_size.lower().split('x')
+    return SettingsResponse(
+        network_id=controller.settings.network_id,
+        area_width=int(width_str),
+        area_height=int(height_str),
+    )
 
 
 @api.post("/start")
