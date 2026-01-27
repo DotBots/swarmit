@@ -1,18 +1,28 @@
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "board_config.h"
 #include "lh2.h"
 #include "localization.h"
 #include "lh2_calibration.h"
 
+#define VALID_POSITION_DISTANCE_THRESHOLD_MM 500.0f  ///< Maximum distance in mm between two consecutive position measurements for the position to be considered valid
+
 typedef struct {
     db_lh2_t                lh2;
     double                  coordinates[2];
+    position_2d_t           position;
+    position_2d_t           previous_position;
 } localization_data_t;
 
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 
+float _distance(position_2d_t *reference, position_2d_t *current) {
+    float dx = ((float)current->x - (float)reference->x);
+    float dy = ((float)current->y - (float)reference->y);
+    return sqrtf(powf(dx, 2) + powf(dy, 2));
+}
 
 void localization_init(void) {
     puts("Initialize localization");
@@ -59,19 +69,33 @@ bool localization_get_position(position_2d_t *position) {
         db_lh2_start();
 
         if (_localization_data.coordinates[0] < 0 || _localization_data.coordinates[0] > 100000 || _localization_data.coordinates[1] < 0 || _localization_data.coordinates[1] > 100000) {
-            printf("Invalid coordinates (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
+            printf("Invalid position (%u,%u)\n", _localization_data.position.x, _localization_data.position.y);
             return false;
         }
 
-        uint32_t position_x = (uint32_t)(_localization_data.coordinates[0]);
-        uint32_t position_y = (uint32_t)(_localization_data.coordinates[1]);
+        _localization_data.position.x = (uint32_t)_localization_data.coordinates[0];
+        _localization_data.position.y = (uint32_t)_localization_data.coordinates[1];
 
-        if (position_x == UINT32_MAX || position_y == UINT32_MAX) {
+        if (_localization_data.previous_position.x == 0 && _localization_data.previous_position.y == 0) {
+            _localization_data.previous_position.x = _localization_data.position.x;
+            _localization_data.previous_position.y = _localization_data.position.y;
+        }
+
+        float distance = _distance((position_2d_t *)&_localization_data.previous_position, (position_2d_t *)&_localization_data.position);
+        if (distance > VALID_POSITION_DISTANCE_THRESHOLD_MM) {
+            printf("Distance (%f) from (%u,%u) to (%u,%u) is too high\n",
+                    distance,
+                   _localization_data.previous_position.x,
+                   _localization_data.previous_position.y,
+                   _localization_data.position.x,
+                   _localization_data.position.y);
             return false;
         }
 
-        position->x = (uint32_t)(_localization_data.coordinates[0]);
-        position->y = (uint32_t)(_localization_data.coordinates[1]);
+        _localization_data.previous_position.x = _localization_data.position.x;
+        _localization_data.previous_position.y = _localization_data.position.y;
+        position->x = _localization_data.position.x;
+        position->y = _localization_data.position.y;
         printf("Position (%u,%u)\n", position->x, position->y);
         return true;
     }
