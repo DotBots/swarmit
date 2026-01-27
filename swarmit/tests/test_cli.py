@@ -326,7 +326,7 @@ def test_status_watch(controller_mock):
     controller = controller_mock()
     result = runner.invoke(main, ["status", "-w"])
     assert result.exit_code == 0
-    controller.status.assert_called_with(True)
+    controller.status.assert_called_with(watch=True)
     controller.terminate.assert_called_once()
 
 
