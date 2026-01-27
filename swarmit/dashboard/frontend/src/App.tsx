@@ -73,6 +73,8 @@ export function usePersistedToken() {
 export interface SettingsResponse {
   response: {
     network_id: number;
+    map_width: number;
+    map_height: number;
   };
 }
 
@@ -84,6 +86,7 @@ export default function MainDashboard() {
   const { token, setToken } = usePersistedToken();
   const [tokenActiveness, setTokenActiveness] = useState<tokenActivenessType>("NoToken");
   const [settings, setSettings] = useState<SettingsType | null>(null);
+  const [areaSize, setAreaSize] = useState<{width: number; height: number}>({width: 2500, height: 2500});
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -96,6 +99,7 @@ export default function MainDashboard() {
           network_id: json.response.network_id.toString(16),
         };
         setSettings(settings);
+        setAreaSize({width: json.response.map_width, height: json.response.map_height});
       } catch (err) {
         console.error("Error fetching settings:", err);
       }
@@ -141,7 +145,7 @@ export default function MainDashboard() {
         .then((json) => {
           const dotbots = Object.fromEntries(
             Object.entries(json.response as Record<string, DotBotData>)
-              .map(([k, v]) => [k, { ...v, battery: v.battery / 1000, pos_x: v.pos_x / 1000000, pos_y: v.pos_y / 1000000 }]));
+              .map(([k, v]) => [k, { ...v, battery: v.battery / 1000, pos_x: v.pos_x, pos_y: v.pos_y }]));
           setDotBots(dotbots);
         })
         .catch((_err) => {
@@ -188,7 +192,7 @@ export default function MainDashboard() {
 
         <main className="flex-1 p-8">
           {page === 1 && (
-            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} />
+            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} areaSize={areaSize} />
           )}
 
           {page === 2 && (
