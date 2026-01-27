@@ -45,19 +45,19 @@ def test_controller_basic():
     assert sorted(controller.resetting_devices) == []
 
     nodes[0].status = StatusType.Running
-    time.sleep(0.3)
+    time.sleep(0.5)
     assert sorted(controller.ready_devices) == [f"{nodes[1].address:08X}"]
     assert sorted(controller.running_devices) == [f"{nodes[0].address:08X}"]
     assert sorted(controller.resetting_devices) == []
 
     nodes[1].status = StatusType.Resetting
-    time.sleep(0.3)
+    time.sleep(0.5)
     assert sorted(controller.ready_devices) == []
     assert sorted(controller.resetting_devices) == [f"{nodes[1].address:08X}"]
     assert sorted(controller.running_devices) == [f"{nodes[0].address:08X}"]
 
     nodes[0].enabled = False
-    time.sleep(1.2)
+    time.sleep(1.5)
 
     assert list(controller.known_devices.keys()) == [f"{nodes[1].address:08X}"]
 

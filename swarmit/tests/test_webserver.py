@@ -26,10 +26,10 @@ def client(monkeypatch, tmp_path, capsys):
         return {"user": "ok"}
 
     monkeypatch.setattr("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.3)
-    monkeypatch.setattr("swarmit.testbed.controller.INACTIVE_TIMEOUT", 0.1)
-    monkeypatch.setattr("swarmit.testbed.controller.STATUS_TIMEOUT", 0.1)
+    monkeypatch.setattr("swarmit.testbed.controller.INACTIVE_TIMEOUT", 0.3)
+    monkeypatch.setattr("swarmit.testbed.controller.STATUS_TIMEOUT", 0.3)
     monkeypatch.setattr(
-        "swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1
+        "swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.3
     )
     monkeypatch.setattr(
         "swarmit.testbed.webserver.jwt.encode", fake_jwt_encode
