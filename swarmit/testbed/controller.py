@@ -214,6 +214,7 @@ class ControllerSettings:
     network_id: int = 1
     adapter: str = "serial"  # or "mqtt", "marilib-edge", "marilib-cloud"
     devices: list[str] = dataclasses.field(default_factory=lambda: [])
+    map_size: str = "2500x2500"
     ota_max_retries: int = OTA_MAX_RETRIES_DEFAULT
     ota_timeout: float = OTA_ACK_TIMEOUT_DEFAULT
     adapter_wait_timeout: float = 3

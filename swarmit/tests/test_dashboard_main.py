@@ -27,6 +27,8 @@ Options:
                               gateway. Default: edge
   -d, --devices TEXT          Subset list of device addresses to interact with,
                               separated with ,
+  -m, --map-size TEXT         Size of the map on the ground in mm, in the format
+                              WIDTHxHEIGHT. Default: 2500x2500.
   -v, --verbose               Enable verbose mode.
   --open-browser              Open the dashboard in a web browser automatically.
   --http-port INTEGER         HTTP port. Default: edge
