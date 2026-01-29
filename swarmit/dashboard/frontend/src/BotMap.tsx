@@ -72,13 +72,14 @@ interface DotBotsMapProps {
 
 export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize }: DotBotsMapProps) => {
   const mapSize = 1000;
-  const gridSize = `${mapSize + 1}px`;
+  const gridWidth = `${mapSize + 1}px`;
+  const gridHeight = `${mapSize * areaSize.height / areaSize.width + 1}px`;
 
   return (
     <div className={`${Object.keys(dotbots).length > 0 ? "visible" : "invisible"}`}>
       <div className="flex justify-center">
-        <div style={{ height: gridSize, width: gridSize }}>
-          <svg style={{ height: gridSize, width: gridSize }}>
+        <div style={{ height: gridHeight, width: gridWidth }}>
+          <svg style={{ height: gridHeight, width: gridWidth }}>
             <defs>
               <pattern id={`grid${mapSize}`} width={`${500 * mapSize / areaSize!.width}`} height={`${500 * mapSize / areaSize!.width}`} patternUnits="userSpaceOnUse">
                 <rect width={`${500 * mapSize / areaSize.width}`} height={`${500 * mapSize / areaSize!.width}`} fill={`url(#smallGrid${mapSize})`}/>

@@ -71,11 +71,9 @@ export function usePersistedToken() {
 }
 
 export interface SettingsResponse {
-  response: {
-    network_id: number;
-    map_width: number;
-    map_height: number;
-  };
+  network_id: number;
+  area_width: number;
+  area_height: number;
 }
 
 
@@ -94,12 +92,12 @@ export default function MainDashboard() {
         const res = await fetch(`${API_URL}/settings`);
         if (!res.ok) throw new Error("Network response was not ok");
 
-        const json: SettingsResponse = await res.json();
+        const json = await res.json();
         const settings: SettingsType = {
-          network_id: json.response.network_id.toString(16),
+          network_id: json.network_id.toString(16),
         };
         setSettings(settings);
-        setAreaSize({width: json.response.map_width, height: json.response.map_height});
+        setAreaSize({width: json.area_width, height: json.area_height});
       } catch (err) {
         console.error("Error fetching settings:", err);
       }
