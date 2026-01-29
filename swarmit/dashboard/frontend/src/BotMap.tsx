@@ -18,7 +18,7 @@ function DotBotsMapPoint({
   areaSize,
 }: DotBotsMapPointProps) {
   const posX = mapSize * dotbot.pos_x / areaSize!.width;
-  const posY = mapSize * dotbot.pos_y / areaSize!.height;
+  const posY = mapSize * dotbot.pos_y / areaSize!.width;
 
   const getStatusColor = (status: StatusType) => {
     switch (status) {
