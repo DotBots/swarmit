@@ -5,15 +5,20 @@ interface DotBotsMapPointProps {
   dotbot: DotBotData;
   address: string;
   mapSize: number;
+  areaSize: {
+    width: number;
+    height: number;
+  };
 }
 
 function DotBotsMapPoint({
   dotbot,
   address,
   mapSize,
+  areaSize,
 }: DotBotsMapPointProps) {
-  const posX = mapSize * dotbot.pos_x;
-  const posY = mapSize * dotbot.pos_y;
+  const posX = mapSize * dotbot.pos_x / areaSize!.width;
+  const posY = mapSize * dotbot.pos_y / areaSize!.width;
 
   const getStatusColor = (status: StatusType) => {
     switch (status) {
@@ -59,24 +64,26 @@ Position: ${posX}x${posY}`}</title>
 
 interface DotBotsMapProps {
   dotbots: Record<string, DotBotData>;
+  areaSize: {
+    width: number;
+    height: number;
+  };
 }
 
-export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots }: DotBotsMapProps) => {
-  const mapSize = 700;
-  const gridSize = `${mapSize + 1}px`;
+export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize }: DotBotsMapProps) => {
+  const mapSize = 1000;
+  const gridWidth = `${mapSize + 1}px`;
+  const gridHeight = `${mapSize * areaSize.height / areaSize.width + 1}px`;
 
   return (
     <div className={`${Object.keys(dotbots).length > 0 ? "visible" : "invisible"}`}>
       <div className="flex justify-center">
-        <div style={{ height: gridSize, width: gridSize }}>
-          <svg style={{ height: gridSize, width: gridSize }}>
+        <div style={{ height: gridHeight, width: gridWidth }}>
+          <svg style={{ height: gridHeight, width: gridWidth }}>
             <defs>
-              <pattern id={`smallGrid${mapSize}`} width={mapSize / 50} height={mapSize / 50} patternUnits="userSpaceOnUse">
-                <path d={`M ${mapSize / 50} 0 L 0 0 0 ${mapSize / 50}`} fill="none" stroke="gray" strokeWidth={0.5} />
-              </pattern>
-              <pattern id={`grid${mapSize}`} width={mapSize / 5} height={mapSize / 5} patternUnits="userSpaceOnUse">
-                <rect width={mapSize / 5} height={mapSize / 5} fill={`url(#smallGrid${mapSize})`} />
-                <path d={`M ${mapSize / 5} 0 L 0 0 0 ${mapSize / 5}`} fill="none" stroke="gray" strokeWidth={1} />
+              <pattern id={`grid${mapSize}`} width={`${500 * mapSize / areaSize!.width}`} height={`${500 * mapSize / areaSize!.width}`} patternUnits="userSpaceOnUse">
+                <rect width={`${500 * mapSize / areaSize.width}`} height={`${500 * mapSize / areaSize!.width}`} fill={`url(#smallGrid${mapSize})`}/>
+                <path d={`M ${500 * mapSize / areaSize!.width} 0 L 0 0 0 ${500 * mapSize / areaSize!.width}`} fill="none" stroke="gray" strokeWidth="1"/>
               </pattern>
             </defs>
 
@@ -90,7 +97,7 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots }: DotBotsMapPro
 
             {Object.entries(dotbots)
               .map(([address, dotbot]) => (
-                <DotBotsMapPoint key={address} dotbot={dotbot} address={address} mapSize={mapSize} />
+                <DotBotsMapPoint key={address} dotbot={dotbot} address={address} mapSize={mapSize} areaSize={areaSize} />
               ))}
           </svg>
         </div>

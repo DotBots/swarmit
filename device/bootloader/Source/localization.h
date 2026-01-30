@@ -18,13 +18,13 @@
 
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {
-    uint32_t x;  ///< X coordinate, multiplied by 1e6
-    uint32_t y;  ///< Y coordinate, multiplied by 1e6
+    uint32_t x;  ///< X coordinate in mm
+    uint32_t y;  ///< Y coordinate in mm
 } position_2d_t;
 
 typedef struct __attribute__((packed)) {
     uint8_t basestation_index;        ///< which LH basestation is this homography for?
-    int32_t homography_matrix[3][3];  ///< homography matrix, each element multiplied by 1e6
+    int32_t homography_matrix[3][3];  ///< homography matrix, each element multiplied by 1e3
 } localization_homography_t;
 
 void localization_init(void);

@@ -84,7 +84,11 @@ def test_status_endpoint(client):
 def test_settings_endpoint(client):
     res = client.get("/settings")
     assert res.status_code == 200
-    assert res.json() == {"network_id": 999}
+    assert res.json() == {
+        "network_id": 999,
+        "area_height": 2500,
+        "area_width": 2500,
+    }
 
 
 def test_start_endpoint(client):
