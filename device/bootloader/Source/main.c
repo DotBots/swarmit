@@ -33,6 +33,7 @@
 #define BATTERY_UPDATE_DELAY        (1000U)
 #define POSITION_UPDATE_DELAY_MS    (100U) ///< 100ms delay between each position update
 
+#define BATTERY_VOLTAGE_FULL        (2900)
 #define BATTERY_VOLTAGE_WARNING     (1500)
 
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
@@ -51,6 +52,7 @@ typedef struct {
 
 static const gpio_t _status_red_led = { .port = DB_RGB_LED_PWM_RED_PORT, .pin = DB_RGB_LED_PWM_RED_PIN };
 static const gpio_t _status_green_led = { .port = DB_RGB_LED_PWM_GREEN_PORT, .pin = DB_RGB_LED_PWM_GREEN_PIN };
+static const gpio_t _status_blue_led = { .port = DB_RGB_LED_PWM_BLUE_PORT, .pin = DB_RGB_LED_PWM_BLUE_PIN };
 
 static bootloader_app_data_t _bootloader_vars = { 0 };
 
@@ -323,6 +325,7 @@ int main(void) {
     // Status LEDs
     db_gpio_init(&_status_red_led, DB_GPIO_OUT);
     db_gpio_init(&_status_green_led, DB_GPIO_OUT);
+    db_gpio_init(&_status_blue_led, DB_GPIO_OUT);
 
     // Periodic Timer and Lighthouse initialization
     db_timer_init(1);
@@ -390,12 +393,18 @@ int main(void) {
             _bootloader_vars.battery_update = false;
             uint16_t battery_level = battery_level_read();
             ipc_shared_data.battery_level = battery_level;
-            if (battery_level > BATTERY_VOLTAGE_WARNING) {
+            if (battery_level > BATTERY_VOLTAGE_FULL) {
+                db_gpio_clear(&_status_red_led);
+                db_gpio_clear(&_status_green_led);
+                db_gpio_toggle(&_status_blue_led);
+            } else if (battery_level > BATTERY_VOLTAGE_WARNING) {
                 db_gpio_clear(&_status_red_led);
                 db_gpio_toggle(&_status_green_led);
+                db_gpio_clear(&_status_blue_led);
             } else {
                 db_gpio_toggle(&_status_red_led);
                 db_gpio_clear(&_status_green_led);
+                db_gpio_clear(&_status_blue_led);
             }
         }
 
