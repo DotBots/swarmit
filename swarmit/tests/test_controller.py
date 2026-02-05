@@ -209,7 +209,7 @@ def test_controller_status(capsys):
     out, _ = capsys.readouterr()
     assert "No device found" in out
 
-    node1 = SwarmitNode(address=0x01, adapter=test_adapter)
+    node1 = SwarmitNode(address=0x01, adapter=test_adapter, battery=2950)
     node2 = SwarmitNode(address=0x02, adapter=test_adapter, battery=2100)
     node3 = SwarmitNode(address=0x03, adapter=test_adapter, battery=1500)
     nodes = [node1, node2, node3]
@@ -222,7 +222,7 @@ def test_controller_status(capsys):
     assert f"{node1.address:08X}" in out
     assert f"{node2.address:08X}" in out
     assert f"{node3.address:08X}" in out
-    assert f"{2500/1000:.2f}V" in out
+    assert f"{2950/1000:.2f}V" in out
     assert f"{2100/1000:.2f}V" in out
     assert f"{1500/1000:.2f}V" in out
 
