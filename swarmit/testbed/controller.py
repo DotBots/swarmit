@@ -234,8 +234,6 @@ class Controller:
         self.settings = settings
         self._interface: GatewayAdapterBase = None
         self.status_data: dict[str, NodeStatus] = {}
-        self.started_data: list[str] = []
-        self.stopped_data: list[str] = []
         self.chunks: list[DataChunk] = []
         self.start_ota_data: StartOtaData = StartOtaData()
         self.transfer_data: dict[str, TransferDataStatus] = {}
@@ -350,9 +348,6 @@ class Controller:
 
     def on_frame_received(self, header, packet: Packet):
         """Handle the received frame."""
-        # if self.settings.verbose:
-        #     print()
-        #     print(Frame(header, packet))
         device_addr = f"{header.source:08X}"
         if packet.payload_type == PayloadType.SWARMIT_STATUS:
             now = time.time()
@@ -431,50 +426,53 @@ class Controller:
         if devices is None:
             devices = self.settings.devices or []
         ready_devices = self.ready_devices
+        devices_to_start = (
+            ready_devices
+            if not devices
+            else [d for d in devices if d in ready_devices]
+        )
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
-            self.status_data[addr].status == StatusType.Running
-            for addr in ready_devices
+            addr in self.status_data
+            and self.status_data[addr].status == StatusType.Running
+            for addr in devices_to_start
         ):
             if not devices:
                 self._send_start(addr_to_hex(BROADCAST_ADDRESS))
             else:
-                for device_addr in devices:
-                    if device_addr not in ready_devices:
-                        continue
+                for device_addr in devices_to_start:
                     self._send_start(device_addr)
             attempts += 1
             time.sleep(COMMAND_ATTEMPT_DELAY)
-        self._live_status(timeout, devices=ready_devices, message="to start")
+        self._live_status(
+            timeout, devices=devices_to_start, message="to start"
+        )
 
     def stop(self, devices=None, timeout=COMMAND_TIMEOUT):
         """Stop the application."""
         if devices is None:
             devices = self.settings.devices or []
         stoppable_devices = self.running_devices + self.resetting_devices
+        devices_to_stop = (
+            stoppable_devices
+            if not devices
+            else [d for d in devices if d in stoppable_devices]
+        )
 
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
             self.status_data[addr].status
             in [StatusType.Stopping, StatusType.Bootloader]
-            for addr in stoppable_devices
+            for addr in devices_to_stop
         ):
             if not devices:
                 self.send_payload(BROADCAST_ADDRESS, PayloadStop())
             else:
-                for device_addr in devices:
-                    if (
-                        device_addr not in stoppable_devices
-                        or self.status_data[device_addr].status
-                        in [StatusType.Stopping, StatusType.Bootloader]
-                    ):
-                        continue
+                for device_addr in devices_to_stop:
                     self.send_payload(int(device_addr, 16), PayloadStop())
             attempts += 1
             time.sleep(COMMAND_ATTEMPT_DELAY)
-        self._live_status(
-            timeout, devices=stoppable_devices, message="to stop"
-        )
+        self._live_status(timeout, devices=devices_to_stop, message="to stop")
 
     def _send_reset(self, device_addr: int, location: ResetLocation):
         payload = PayloadReset(
