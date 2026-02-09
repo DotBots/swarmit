@@ -108,6 +108,7 @@ def test_controller_start_unicast():
         f"{node.address:08X}" for node in nodes
     ]
 
+    controller.status_data = {}
     controller.start(devices=["00000001", "00000003"], timeout=0.1)
     time.sleep(0.3)
     assert nodes[0].status == StatusType.Running
