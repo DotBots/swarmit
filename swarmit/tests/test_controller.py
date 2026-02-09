@@ -232,7 +232,7 @@ def test_controller_status(capsys):
     "swarmit.testbed.adapter.MarilibMQTTAdapter",
     MarilibMQTTAdapterMock,
 )
-def test_controller_status_adpater_cloud(capsys):
+def test_controller_status_adapter_cloud(capsys):
     controller = Controller(
         ControllerSettings(
             adapter="cloud", network_id=42, adapter_wait_timeout=0.1
