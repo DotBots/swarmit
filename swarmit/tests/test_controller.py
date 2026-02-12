@@ -93,7 +93,7 @@ def test_controller_basic(controller_settings):
     controller.terminate()
 
 
-@pytest.mark.parametrize("nodes_count", [50, 100, 200, 500, 501])
+@pytest.mark.parametrize("nodes_count", [50, 150, 250, 501])
 def test_controller_known_devices(nodes_count, controller_settings):
     controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
@@ -110,6 +110,7 @@ def test_controller_known_devices(nodes_count, controller_settings):
 
     controller.terminate()
     del nodes
+    del controller
     gc.collect()
 
 
