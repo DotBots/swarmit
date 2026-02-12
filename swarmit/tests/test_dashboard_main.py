@@ -49,6 +49,9 @@ def controller_mock(monkeypatch, tmp_path, capsys):
         f"sqlite:///{tmp_path}/database.db",
     )
     monkeypatch.setattr("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_DEFAULT", 0.1
+    )
 
     class ControllerSettingsMock(ControllerSettings):
         adapter_wait_timeout: float = 0.1

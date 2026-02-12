@@ -1,7 +1,9 @@
+import gc
 import logging
 import time
 from unittest.mock import patch
 
+import pytest
 from marilib.model import GatewayInfo, MariGateway
 
 from swarmit.testbed.controller import (
@@ -20,13 +22,40 @@ from swarmit.tests.utils import (
 )
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.INACTIVE_TIMEOUT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_basic():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+@pytest.fixture
+def controller_settings(monkeypatch):
+    monkeypatch.setattr("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+    monkeypatch.setattr("swarmit.testbed.controller.INACTIVE_TIMEOUT", 0.1)
+    monkeypatch.setattr("swarmit.testbed.controller.STATUS_TIMEOUT", 0.1)
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_DEFAULT", 0.1
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_500", 0.1
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_200", 0.1
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_100", 0.1
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.adapter.MarilibSerialAdapter",
+        MarilibSerialAdapterMock,
+    )
+
+    settings = ControllerSettings(adapter_wait_timeout=0.1)
+    yield settings
+
+
+def test_controller_basic(controller_settings):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(address=addr, adapter=test_adapter)
@@ -64,13 +93,28 @@ def test_controller_basic():
     controller.terminate()
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_start_broadcast():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+@pytest.mark.parametrize("nodes_count", [50, 100, 200, 500, 501])
+def test_controller_known_devices(nodes_count, controller_settings):
+    controller = Controller(controller_settings)
+    test_adapter = controller.interface.mari.serial_interface
+    nodes = [
+        SwarmitNode(address=addr, adapter=test_adapter)
+        for addr in range(nodes_count)
+    ]
+    for node in nodes:
+        test_adapter.add_node(node)
+
+    assert sorted(controller.known_devices.keys()) == [
+        f"{node.address:08X}" for node in nodes
+    ]
+
+    controller.terminate()
+    del nodes
+    gc.collect()
+
+
+def test_controller_start_broadcast(controller_settings):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(address=addr, adapter=test_adapter)
@@ -84,13 +128,8 @@ def test_controller_start_broadcast():
     assert all([node.status == StatusType.Running for node in nodes]) is True
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_start_unicast():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+def test_controller_start_unicast(controller_settings):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(address=addr, adapter=test_adapter)
@@ -143,13 +182,8 @@ def test_controller_start_broadcast_cloud_adapter():
     assert all([node.status == StatusType.Running for node in nodes]) is True
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_stop_broadcast():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+def test_controller_stop_broadcast(controller_settings):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(
@@ -167,13 +201,8 @@ def test_controller_stop_broadcast():
     )
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_stop_unicast():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+def test_controller_stop_unicast(controller_settings):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(
@@ -198,12 +227,8 @@ def test_controller_stop_unicast():
     assert nodes[2].status == StatusType.Bootloader
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_status(capsys):
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+def test_controller_status(controller_settings, capsys):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     controller.status(timeout=0.1)
     out, _ = capsys.readouterr()
@@ -265,16 +290,9 @@ def test_controller_status_adpater_cloud(capsys):
     assert f"{1500/1000:.2f}V" in out
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_reset():
-    controller = Controller(
-        ControllerSettings(
-            devices=["00000001", "00000002"], adapter_wait_timeout=0.1
-        )
-    )
+def test_controller_reset(controller_settings):
+    controller_settings.devices = ["00000001", "00000002"]
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(address=addr, adapter=test_adapter)
@@ -297,16 +315,9 @@ def test_controller_reset():
     )
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_reset_not_ready():
-    controller = Controller(
-        ControllerSettings(
-            devices=["00000001", "00000002"], adapter_wait_timeout=0.1
-        )
-    )
+def test_controller_reset_not_ready(controller_settings):
+    controller_settings.devices = ["00000001", "00000002"]
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     node1 = SwarmitNode(address=0x01, adapter=test_adapter)
     node2 = SwarmitNode(
@@ -331,13 +342,10 @@ def test_controller_reset_not_ready():
     assert node2.status == StatusType.Bootloader
 
 
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_monitor(caplog):
+def test_controller_monitor(controller_settings, caplog):
     caplog.set_level(logging.INFO)
     setup_logging()
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    controller = Controller(controller_settings)
 
     controller.monitor(run_forever=False, timeout=0.1)
     assert "Monitoring testbed" in caplog.text
@@ -358,15 +366,11 @@ def test_controller_monitor(caplog):
     controller.terminate()
 
 
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_monitor_single_device(caplog):
+def test_controller_monitor_single_device(controller_settings, caplog):
     caplog.set_level(logging.INFO)
+    controller_settings.devices = ["00000001"]
     setup_logging()
-    controller = Controller(
-        ControllerSettings(devices=["00000001"], adapter_wait_timeout=0.1)
-    )
+    controller = Controller(controller_settings)
 
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
@@ -384,16 +388,9 @@ def test_controller_monitor_single_device(caplog):
     controller.terminate()
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_send_message_unicast(capsys):
-    controller = Controller(
-        ControllerSettings(
-            devices=["00000001", "00000003"], adapter_wait_timeout=0.1
-        )
-    )
+def test_controller_send_message_unicast(controller_settings, capsys):
+    controller_settings.devices = ["00000001", "00000003"]
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(
@@ -412,12 +409,8 @@ def test_controller_send_message_unicast(capsys):
     assert "Node 00000003 received message: Hello robot!" not in out
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_send_message_broadcast(capsys):
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+def test_controller_send_message_broadcast(controller_settings, capsys):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(
@@ -434,13 +427,8 @@ def test_controller_send_message_broadcast(capsys):
         assert f"Node {node} received message: Hello robot!" in out
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_ota_broadcast():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+def test_controller_ota_broadcast(controller_settings):
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(address=addr, adapter=test_adapter)
@@ -463,15 +451,9 @@ def test_controller_ota_broadcast():
     assert all([transfer.success for transfer in result.values()]) is True
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_ota_broadcast_verbose(capsys):
-    controller = Controller(
-        ControllerSettings(adapter_wait_timeout=0.1, verbose=True)
-    )
+def test_controller_ota_broadcast_verbose(controller_settings, capsys):
+    controller_settings.verbose = True
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(address=addr, adapter=test_adapter)
@@ -495,15 +477,9 @@ def test_controller_ota_broadcast_verbose(capsys):
     assert "Transfer completed" in capsys.readouterr().out
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_ota_unicast():
-    controller = Controller(
-        ControllerSettings(devices=["00000001"], adapter_wait_timeout=0.1)
-    )
+def test_controller_ota_unicast(controller_settings):
+    controller_settings.devices = ["00000001"]
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     nodes = [
         SwarmitNode(address=addr, adapter=test_adapter)
@@ -531,12 +507,10 @@ def test_controller_ota_unicast():
 @patch(
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
-def test_controller_ota_with_retries(capsys):
-    controller = Controller(
-        ControllerSettings(
-            adapter_wait_timeout=0.1, ota_max_retries=3, verbose=True
-        )
-    )
+def test_controller_ota_with_retries(controller_settings, capsys):
+    controller_settings.ota_max_retries = 3
+    controller_settings.verbose = True
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     node1 = SwarmitNode(
         address=0x01,
@@ -571,17 +545,10 @@ def test_controller_ota_with_retries(capsys):
     assert sum(chunk.retries for chunk in result["00000002"].chunks) == 3
 
 
-@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
-@patch("swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1)
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-def test_controller_ota_index_out_range(capsys):
-    controller = Controller(
-        ControllerSettings(
-            adapter_wait_timeout=0.1, ota_max_retries=3, verbose=True
-        )
-    )
+def test_controller_ota_index_out_range(controller_settings, capsys):
+    controller_settings.ota_max_retries = 3
+    controller_settings.verbose = True
+    controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
     node = SwarmitNode(
         address=0x01,

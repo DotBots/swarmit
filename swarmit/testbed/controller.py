@@ -5,6 +5,7 @@ import threading
 import time
 from binascii import hexlify
 from dataclasses import dataclass
+from typing import Optional
 
 from cryptography.hazmat.primitives import hashes
 from dotbot_utils.protocol import Packet, Payload
@@ -35,6 +36,10 @@ from swarmit.testbed.protocol import (
 )
 
 CHUNK_SIZE = 128
+KNOWN_DEVICES_TIMEOUT_DEFAULT = 5  # s
+KNOWN_DEVICES_TIMEOUT_100 = 7  # s
+KNOWN_DEVICES_TIMEOUT_200 = 10  # s
+KNOWN_DEVICES_TIMEOUT_500 = 15  # s
 COMMAND_TIMEOUT = 6
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
@@ -222,6 +227,7 @@ class ControllerSettings:
     map_size: str = "2500x2500"
     ota_max_retries: int = OTA_MAX_RETRIES_DEFAULT
     ota_timeout: float = OTA_ACK_TIMEOUT_DEFAULT
+    known_devices_timeout: Optional[float] = None
     adapter_wait_timeout: float = 3
     verbose: bool = False
 
@@ -263,11 +269,25 @@ class Controller:
         self._interface.init(self.on_frame_received)
         self._cleanup_thread.start()
 
+    def _known_devices_timeout(self) -> float:
+        """Return the command timeout based on the number of nodes."""
+        nodes_count = len(self._interface.mari.nodes)
+        if self.settings.known_devices_timeout is not None:
+            return self.settings.known_devices_timeout
+        if nodes_count > 500:
+            return KNOWN_DEVICES_TIMEOUT_500
+        elif nodes_count > 200:
+            return KNOWN_DEVICES_TIMEOUT_200
+        elif nodes_count > 100:
+            return KNOWN_DEVICES_TIMEOUT_100
+        else:
+            return KNOWN_DEVICES_TIMEOUT_DEFAULT
+
     @property
     def known_devices(self) -> dict[str, StatusType]:
         """Return the known devices."""
         if not self._known_devices:
-            wait_for_done(COMMAND_TIMEOUT)
+            wait_for_done(self._known_devices_timeout())
             self._known_devices = self.status_data
         return self._known_devices
 
