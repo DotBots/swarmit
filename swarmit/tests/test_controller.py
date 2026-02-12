@@ -1,5 +1,6 @@
 import gc
 import logging
+import sys
 import time
 from unittest.mock import patch
 
@@ -93,6 +94,9 @@ def test_controller_basic(controller_settings):
     controller.terminate()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Limitation with multithreading"
+)
 @pytest.mark.parametrize("nodes_count", [50, 150, 250, 501])
 def test_controller_known_devices(nodes_count, controller_settings):
     controller = Controller(controller_settings)
