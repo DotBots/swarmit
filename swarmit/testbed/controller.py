@@ -453,7 +453,8 @@ class Controller:
         ready_devices = self.ready_devices
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
-            self.status_data[addr].status == StatusType.Running
+            addr in self.status_data
+            and self.status_data[addr].status == StatusType.Running
             for addr in ready_devices
         ):
             if not devices:
