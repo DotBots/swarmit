@@ -484,10 +484,12 @@ class Controller:
                 self.send_payload(BROADCAST_ADDRESS, PayloadStop())
             else:
                 for device_addr in devices:
-                    if (
-                        device_addr not in stoppable_devices
-                        or self.status_data[device_addr].status
-                        in [StatusType.Stopping, StatusType.Bootloader]
+                    if device_addr not in stoppable_devices or (
+                        device_addr in self.status_data
+                        and (
+                            self.status_data[device_addr].status
+                            in [StatusType.Stopping, StatusType.Bootloader]
+                        )
                     ):
                         continue
                     self.send_payload(int(device_addr, 16), PayloadStop())
