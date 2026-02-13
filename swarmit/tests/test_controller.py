@@ -104,11 +104,10 @@ def test_controller_known_devices(nodes_count, controller_settings):
     ]
     for node in nodes:
         test_adapter.add_node(node)
-
-    assert sorted(controller.known_devices.keys()) == [
-        f"{node.address:08X}" for node in nodes
-    ]
+    result = sorted(controller.known_devices.keys())
     controller.terminate()
+
+    assert result == [f"{node.address:08X}" for node in nodes]
 
 
 def test_controller_start_broadcast(controller_settings):
