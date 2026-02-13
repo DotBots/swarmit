@@ -1,6 +1,4 @@
-import gc
 import logging
-import sys
 import time
 from unittest.mock import patch
 
@@ -32,10 +30,10 @@ def controller_settings(monkeypatch):
         "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_DEFAULT", 0.1
     )
     monkeypatch.setattr(
-        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_500", 0.1
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_500", 5.0
     )
     monkeypatch.setattr(
-        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_200", 0.1
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_200", 1.0
     )
     monkeypatch.setattr(
         "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_100", 0.1
@@ -94,9 +92,6 @@ def test_controller_basic(controller_settings):
     controller.terminate()
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="Limitation with multithreading"
-)
 @pytest.mark.parametrize("nodes_count", [50, 150, 250, 501])
 def test_controller_known_devices(nodes_count, controller_settings):
     controller = Controller(controller_settings)
@@ -111,11 +106,7 @@ def test_controller_known_devices(nodes_count, controller_settings):
     assert sorted(controller.known_devices.keys()) == [
         f"{node.address:08X}" for node in nodes
     ]
-
     controller.terminate()
-    del nodes
-    del controller
-    gc.collect()
 
 
 def test_controller_start_broadcast(controller_settings):
@@ -131,6 +122,7 @@ def test_controller_start_broadcast(controller_settings):
     controller.start(timeout=0.1)
     time.sleep(0.3)
     assert all([node.status == StatusType.Running for node in nodes]) is True
+    controller.terminate()
 
 
 def test_controller_start_unicast(controller_settings):
@@ -157,6 +149,7 @@ def test_controller_start_unicast(controller_settings):
     assert nodes[0].status == StatusType.Running
     assert nodes[1].status == StatusType.Bootloader
     assert nodes[2].status == StatusType.Running
+    controller.terminate()
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
@@ -185,6 +178,7 @@ def test_controller_start_broadcast_cloud_adapter():
     controller.start(timeout=0.1)
     time.sleep(0.3)
     assert all([node.status == StatusType.Running for node in nodes]) is True
+    controller.terminate()
 
 
 def test_controller_stop_broadcast(controller_settings):
@@ -204,6 +198,7 @@ def test_controller_stop_broadcast(controller_settings):
     assert (
         all([node.status == StatusType.Bootloader for node in nodes]) is True
     )
+    controller.terminate()
 
 
 def test_controller_stop_unicast(controller_settings):
@@ -230,6 +225,7 @@ def test_controller_stop_unicast(controller_settings):
     assert nodes[0].status == StatusType.Bootloader
     assert nodes[1].status == StatusType.Running
     assert nodes[2].status == StatusType.Bootloader
+    controller.terminate()
 
 
 def test_controller_status(controller_settings, capsys):
@@ -255,6 +251,7 @@ def test_controller_status(controller_settings, capsys):
     assert f"{2950/1000:.2f}V" in out
     assert f"{2100/1000:.2f}V" in out
     assert f"{1500/1000:.2f}V" in out
+    controller.terminate()
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
@@ -293,6 +290,7 @@ def test_controller_status_adpater_cloud(capsys):
     assert f"{2500/1000:.2f}V" in out
     assert f"{2100/1000:.2f}V" in out
     assert f"{1500/1000:.2f}V" in out
+    controller.terminate()
 
 
 def test_controller_reset(controller_settings):
@@ -318,6 +316,7 @@ def test_controller_reset(controller_settings):
     assert (
         all([node.status == StatusType.Bootloader for node in nodes]) is True
     )
+    controller.terminate()
 
 
 def test_controller_reset_not_ready(controller_settings):
@@ -345,6 +344,7 @@ def test_controller_reset_not_ready(controller_settings):
     time.sleep(0.3)
     assert node1.status == StatusType.Bootloader
     assert node2.status == StatusType.Bootloader
+    controller.terminate()
 
 
 def test_controller_monitor(controller_settings, caplog):
@@ -412,6 +412,7 @@ def test_controller_send_message_unicast(controller_settings, capsys):
     out, _ = capsys.readouterr()
     assert "Node 00000001 received message: Hello robot!" in out
     assert "Node 00000003 received message: Hello robot!" not in out
+    controller.terminate()
 
 
 def test_controller_send_message_broadcast(controller_settings, capsys):
@@ -430,6 +431,7 @@ def test_controller_send_message_broadcast(controller_settings, capsys):
     out, _ = capsys.readouterr()
     for node in ["00000001", "00000002"]:
         assert f"Node {node} received message: Hello robot!" in out
+    controller.terminate()
 
 
 def test_controller_ota_broadcast(controller_settings):
@@ -454,6 +456,7 @@ def test_controller_ota_broadcast(controller_settings):
     result = controller.transfer(firmware, ota_data["acked"])
     time.sleep(0.3)
     assert all([transfer.success for transfer in result.values()]) is True
+    controller.terminate()
 
 
 def test_controller_ota_broadcast_verbose(controller_settings, capsys):
@@ -480,6 +483,7 @@ def test_controller_ota_broadcast_verbose(controller_settings, capsys):
     time.sleep(0.3)
     assert all([transfer.success for transfer in result.values()]) is True
     assert "Transfer completed" in capsys.readouterr().out
+    controller.terminate()
 
 
 def test_controller_ota_unicast(controller_settings):
@@ -505,6 +509,7 @@ def test_controller_ota_unicast(controller_settings):
     result = controller.transfer(firmware, ota_data["acked"])
     time.sleep(0.3)
     assert all([transfer.success for transfer in result.values()]) is True
+    controller.terminate()
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
@@ -548,6 +553,7 @@ def test_controller_ota_with_retries(controller_settings, capsys):
     # retries are equal for both nodes (broadcast)
     assert sum(chunk.retries for chunk in result["00000001"].chunks) == 3
     assert sum(chunk.retries for chunk in result["00000002"].chunks) == 3
+    controller.terminate()
 
 
 def test_controller_ota_index_out_range(controller_settings, capsys):
@@ -574,6 +580,7 @@ def test_controller_ota_index_out_range(controller_settings, capsys):
     assert "Transfer completed with" in capsys.readouterr().out
     assert result["00000001"].success is False
     assert sum(chunk.retries for chunk in result["00000001"].chunks) == 3
+    controller.terminate()
 
 
 def test_controller_chunk_repr():

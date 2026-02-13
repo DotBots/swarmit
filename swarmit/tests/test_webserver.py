@@ -80,6 +80,8 @@ def client(monkeypatch, tmp_path, capsys):
     with TestClient(api) as c:
         yield c
 
+    controller.terminate()
+
 
 def test_status_endpoint(client):
     res = client.get("/status")
