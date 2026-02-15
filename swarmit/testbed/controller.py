@@ -37,9 +37,12 @@ from swarmit.testbed.protocol import (
 
 CHUNK_SIZE = 128
 KNOWN_DEVICES_TIMEOUT_DEFAULT = 5  # s
-KNOWN_DEVICES_TIMEOUT_100 = 7  # s
-KNOWN_DEVICES_TIMEOUT_200 = 10  # s
-KNOWN_DEVICES_TIMEOUT_500 = 15  # s
+KNOWN_DEVICES_TIMEOUT_SMALL = 7  # s
+KNOWN_DEVICES_THRESHOLD_SMALL = 100  # of nodes
+KNOWN_DEVICES_TIMEOUT_MEDIUM = 10  # s
+KNOWN_DEVICES_THRESHOLD_MEDIUM = 200  # of nodes
+KNOWN_DEVICES_TIMEOUT_LARGE = 15  # s
+KNOWN_DEVICES_THRESHOLD_LARGE = 500  # of nodes
 COMMAND_TIMEOUT = 6
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
@@ -274,12 +277,12 @@ class Controller:
         nodes_count = len(self._interface.mari.nodes)
         if self.settings.known_devices_timeout is not None:
             return self.settings.known_devices_timeout
-        if nodes_count > 500:
-            return KNOWN_DEVICES_TIMEOUT_500
-        elif nodes_count > 200:
-            return KNOWN_DEVICES_TIMEOUT_200
-        elif nodes_count > 100:
-            return KNOWN_DEVICES_TIMEOUT_100
+        if nodes_count > KNOWN_DEVICES_THRESHOLD_LARGE:
+            return KNOWN_DEVICES_TIMEOUT_LARGE
+        elif nodes_count > KNOWN_DEVICES_THRESHOLD_MEDIUM:
+            return KNOWN_DEVICES_TIMEOUT_MEDIUM
+        elif nodes_count > KNOWN_DEVICES_THRESHOLD_SMALL:
+            return KNOWN_DEVICES_TIMEOUT_SMALL
         else:
             return KNOWN_DEVICES_TIMEOUT_DEFAULT
 

@@ -31,13 +31,22 @@ def controller_settings(monkeypatch):
         "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_DEFAULT", 0.1
     )
     monkeypatch.setattr(
-        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_500", 5.0
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_LARGE", 5.0
     )
     monkeypatch.setattr(
-        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_200", 1.0
+        "swarmit.testbed.controller.KNOWN_DEVICES_THRESHOLD_LARGE", 50
     )
     monkeypatch.setattr(
-        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_100", 0.1
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_MEDIUM", 1.0
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_THRESHOLD_MEDIUM", 20
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_SMALL", 0.1
+    )
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_THRESHOLD_SMALL", 10
     )
     monkeypatch.setattr(
         "swarmit.testbed.controller.OTA_ACK_TIMEOUT_DEFAULT", 0.1
@@ -94,7 +103,23 @@ def test_controller_basic(controller_settings):
 
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="Takes too long on macOS")
-@pytest.mark.parametrize("nodes_count", [50, 150, 250, 501])
+@pytest.mark.parametrize(
+    "nodes_count",
+    [
+        pytest.param(
+            15,
+            id="small (15)",
+        ),
+        pytest.param(
+            25,
+            id="medium (25)",
+        ),
+        pytest.param(
+            55,
+            id="large (55)",
+        ),
+    ],
+)
 def test_controller_known_devices(nodes_count, controller_settings):
     controller = Controller(controller_settings)
     test_adapter = controller.interface.mari.serial_interface
