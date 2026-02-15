@@ -29,6 +29,9 @@ def client(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr("swarmit.testbed.controller.INACTIVE_TIMEOUT", 0.3)
     monkeypatch.setattr("swarmit.testbed.controller.STATUS_TIMEOUT", 0.3)
     monkeypatch.setattr(
+        "swarmit.testbed.controller.KNOWN_DEVICES_TIMEOUT_DEFAULT", 0.1
+    )
+    monkeypatch.setattr(
         "swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.3
     )
     monkeypatch.setattr(
@@ -55,7 +58,10 @@ def client(monkeypatch, tmp_path, capsys):
     controller = init_api(
         api,
         ControllerSettings(
-            network_id=999, adapter="edge", adapter_wait_timeout=0.1
+            network_id=999,
+            adapter="edge",
+            adapter_wait_timeout=0.1,
+            known_devices_timeout=0.1,
         ),
     )
     mount_frontend(api)
@@ -73,6 +79,8 @@ def client(monkeypatch, tmp_path, capsys):
 
     with TestClient(api) as c:
         yield c
+
+    controller.terminate()
 
 
 def test_status_endpoint(client):

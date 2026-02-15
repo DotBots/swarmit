@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import queue
 import threading
 import time
 
@@ -33,16 +34,16 @@ class ChunkAckStrategy:
     )
 
 
-class LogEventTask(threading.Thread):
+class LogEventTask:
 
     def __init__(
         self, node: SwarmitNode, message, event_interval: float = 0.5
     ):
+        self.thread = threading.Thread(target=self.run, daemon=True)
         self.node = node
         self.message = message
         self.event_interval = event_interval
         self._stop_event = threading.Event()
-        super().__init__(daemon=True)
 
     def run(self):
         time.sleep(0.05)  # allow some time for initialization
@@ -58,12 +59,18 @@ class LogEventTask(threading.Thread):
             )
             time.sleep(self.event_interval)
 
+    def is_alive(self):
+        return self.thread.is_alive()
+
+    def start(self):
+        self.thread.start()
+
     def stop(self):
         self._stop_event.set()
-        self.join()
+        self.thread.join()
 
 
-class SwarmitNode(threading.Thread):
+class SwarmitNode:
 
     def __init__(
         self,
@@ -76,6 +83,7 @@ class SwarmitNode(threading.Thread):
         ack_strategy: ChunkAckStrategy = ChunkAckStrategy(),
         ota_should_fail: bool = False,
     ):
+        self.thread = threading.Thread(target=self.run, daemon=True)
         self.adapter = adapter
         self.address = address
         self.device_type = device_type
@@ -85,17 +93,16 @@ class SwarmitNode(threading.Thread):
         self.ack_strategy = ack_strategy
         self.ota_should_fail = ota_should_fail
         self._stop_event = threading.Event()
-        super().__init__(daemon=True)
         self.enabled = True
         self.total_chunks = 0
         self.last_chunk_acked = -1
         self.ota_bytes_received = 0
         self.ota_expected_bytes_received = 0
-        self.start()
         self.log_event_task = LogEventTask(
             self,
             message=f"Node {self.address:08X} log event",
         )
+        self.thread.start()
 
     def run(self):
         while not self._stop_event.is_set():
@@ -116,7 +123,7 @@ class SwarmitNode(threading.Thread):
         if self.log_event_task.is_alive():
             self.log_event_task.stop()
         self._stop_event.set()
-        self.join()
+        self.thread.join()
 
     def start_log_event_task(self):
         self.log_event_task.start()
@@ -175,7 +182,7 @@ class SwarmitNode(threading.Thread):
                 self.status = StatusType.Bootloader
 
     def send_packet(self, packet: Packet):
-        self.adapter.handle_data_received(
+        self.adapter.queue.put(
             EdgeEvent.to_bytes(EdgeEvent.NODE_DATA)
             + Frame(
                 header=Header(
@@ -189,11 +196,20 @@ class SwarmitNode(threading.Thread):
 class MarilibAdapterMockBase:
 
     nodes: dict[int, SwarmitNode]
+    queue: queue.Queue
+    thread: threading.Thread
 
     def send_data(self, data: bytes):
         """Send data to the interface."""
         for node in self.nodes.values():
             node.handle_frame(Frame().from_bytes(data[1:]))
+
+    def process_queue(self):
+        while True:
+            data = self.queue.get()
+            if data is None:
+                break
+            self.handle_data_received(data)
 
 
 class MarilibSerialAdapterMock(MarilibAdapterMockBase):
@@ -202,6 +218,9 @@ class MarilibSerialAdapterMock(MarilibAdapterMockBase):
         self.port = port
         self.baudrate = baudrate
         self.nodes = {}
+        self.queue = queue.Queue()
+        self.thread = threading.Thread(target=self.process_queue)
+        self.thread.start()
 
     def init(self, on_data_received: callable):
         """Initialize the interface."""
@@ -215,7 +234,7 @@ class MarilibSerialAdapterMock(MarilibAdapterMockBase):
             ),
             payload=b"",
         )
-        self.handle_data_received(
+        self.queue.put(
             EdgeEvent.to_bytes(EdgeEvent.NODE_JOINED) + frame.to_bytes()
         )
 
@@ -228,11 +247,13 @@ class MarilibSerialAdapterMock(MarilibAdapterMockBase):
                 ),
                 payload=b"",
             )
-            self.handle_data_received(
+            self.queue.put(
                 EdgeEvent.to_bytes(EdgeEvent.NODE_LEFT) + frame.to_bytes()
             )
             node.stop()
         self.nodes = {}
+        self.queue.put(None)  # unblock the queue
+        self.thread.join()
 
 
 class MarilibMQTTAdapterMock(MarilibAdapterMockBase):
@@ -246,6 +267,9 @@ class MarilibMQTTAdapterMock(MarilibAdapterMockBase):
         self.on_data_received = None
         self.use_tls = use_tls
         self.nodes = {}
+        self.queue = queue.Queue()
+        self.thread = threading.Thread(target=self.process_queue)
+        self.thread.start()
 
     def set_network_id(self, network_id: str):
         self.network_id = network_id
@@ -257,10 +281,14 @@ class MarilibMQTTAdapterMock(MarilibAdapterMockBase):
         """Initialize the interface."""
         pass
 
+    def close(self):
+        self.queue.put(None)  # unblock the queue
+        self.thread.join()
+
     def add_node(self, node: SwarmitNode):
         self.nodes[node.address] = node
         frame = NodeInfoCloud(address=node.address, gateway_address=0)
-        self.handle_data_received(
+        self.queue.put(
             EdgeEvent.to_bytes(EdgeEvent.NODE_JOINED) + frame.to_bytes()
         )
 

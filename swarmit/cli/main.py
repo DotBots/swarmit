@@ -33,6 +33,7 @@ DEFAULTS = {
     # See https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
     "swarmit_network_id": "1200",
     "mqtt_use_tls": False,
+    "known_devices_timeout": None,
     "verbose": False,
 }
 
@@ -94,6 +95,12 @@ DEFAULTS = {
     help="Subset list of device addresses to interact with, separated with ,",
 )
 @click.option(
+    "-k",
+    "--known-devices-timeout",
+    type=float,
+    help="Known devices timeout (seconds).",
+)
+@click.option(
     "-v",
     "--verbose",
     is_flag=True,
@@ -112,6 +119,7 @@ def main(
     network_id,
     adapter,
     devices,
+    known_devices_timeout,
     verbose,
 ):
     config_data = load_toml_config(config_path)
@@ -124,6 +132,7 @@ def main(
         "mqtt_use_tls": mqtt_use_tls,
         "swarmit_network_id": network_id,
         "devices": devices,
+        "known_devices_timeout": known_devices_timeout,
         "verbose": verbose,
     }
 
@@ -145,6 +154,7 @@ def main(
         network_id=int(final_config["swarmit_network_id"], 16),
         adapter=final_config["adapter"],
         devices=[d for d in final_config["devices"].split(",") if d],
+        known_devices_timeout=final_config["known_devices_timeout"],
         verbose=final_config["verbose"],
     )
 

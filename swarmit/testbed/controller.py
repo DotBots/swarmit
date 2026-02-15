@@ -5,6 +5,7 @@ import threading
 import time
 from binascii import hexlify
 from dataclasses import dataclass
+from typing import Optional
 
 from cryptography.hazmat.primitives import hashes
 from dotbot_utils.protocol import Packet, Payload
@@ -35,6 +36,13 @@ from swarmit.testbed.protocol import (
 )
 
 CHUNK_SIZE = 128
+KNOWN_DEVICES_TIMEOUT_DEFAULT = 5  # s
+KNOWN_DEVICES_TIMEOUT_SMALL = 7  # s
+KNOWN_DEVICES_THRESHOLD_SMALL = 100  # of nodes
+KNOWN_DEVICES_TIMEOUT_MEDIUM = 10  # s
+KNOWN_DEVICES_THRESHOLD_MEDIUM = 200  # of nodes
+KNOWN_DEVICES_TIMEOUT_LARGE = 15  # s
+KNOWN_DEVICES_THRESHOLD_LARGE = 500  # of nodes
 COMMAND_TIMEOUT = 6
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
@@ -222,6 +230,7 @@ class ControllerSettings:
     map_size: str = "2500x2500"
     ota_max_retries: int = OTA_MAX_RETRIES_DEFAULT
     ota_timeout: float = OTA_ACK_TIMEOUT_DEFAULT
+    known_devices_timeout: Optional[float] = None
     adapter_wait_timeout: float = 3
     verbose: bool = False
 
@@ -263,11 +272,25 @@ class Controller:
         self._interface.init(self.on_frame_received)
         self._cleanup_thread.start()
 
+    def _known_devices_timeout(self) -> float:
+        """Return the command timeout based on the number of nodes."""
+        nodes_count = len(self._interface.mari.nodes)
+        if self.settings.known_devices_timeout is not None:
+            return self.settings.known_devices_timeout
+        if nodes_count > KNOWN_DEVICES_THRESHOLD_LARGE:
+            return KNOWN_DEVICES_TIMEOUT_LARGE
+        elif nodes_count > KNOWN_DEVICES_THRESHOLD_MEDIUM:
+            return KNOWN_DEVICES_TIMEOUT_MEDIUM
+        elif nodes_count > KNOWN_DEVICES_THRESHOLD_SMALL:
+            return KNOWN_DEVICES_TIMEOUT_SMALL
+        else:
+            return KNOWN_DEVICES_TIMEOUT_DEFAULT
+
     @property
     def known_devices(self) -> dict[str, StatusType]:
         """Return the known devices."""
         if not self._known_devices:
-            wait_for_done(COMMAND_TIMEOUT)
+            wait_for_done(self._known_devices_timeout())
             self._known_devices = self.status_data
         return self._known_devices
 
@@ -433,7 +456,8 @@ class Controller:
         ready_devices = self.ready_devices
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
-            self.status_data[addr].status == StatusType.Running
+            addr in self.status_data
+            and self.status_data[addr].status == StatusType.Running
             for addr in ready_devices
         ):
             if not devices:
@@ -455,7 +479,8 @@ class Controller:
 
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
-            self.status_data[addr].status
+            addr in self.status_data
+            and self.status_data[addr].status
             in [StatusType.Stopping, StatusType.Bootloader]
             for addr in stoppable_devices
         ):
@@ -463,10 +488,12 @@ class Controller:
                 self.send_payload(BROADCAST_ADDRESS, PayloadStop())
             else:
                 for device_addr in devices:
-                    if (
-                        device_addr not in stoppable_devices
-                        or self.status_data[device_addr].status
-                        in [StatusType.Stopping, StatusType.Bootloader]
+                    if device_addr not in stoppable_devices or (
+                        device_addr in self.status_data
+                        and (
+                            self.status_data[device_addr].status
+                            in [StatusType.Stopping, StatusType.Bootloader]
+                        )
                     ):
                         continue
                     self.send_payload(int(device_addr, 16), PayloadStop())
