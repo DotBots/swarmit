@@ -108,6 +108,7 @@ def test_controller_start_unicast():
         f"{node.address:08X}" for node in nodes
     ]
 
+    controller.status_data = {}
     controller.start(devices=["00000001", "00000003"], timeout=0.1)
     time.sleep(0.3)
     assert nodes[0].status == StatusType.Running
@@ -232,7 +233,7 @@ def test_controller_status(capsys):
     "swarmit.testbed.adapter.MarilibMQTTAdapter",
     MarilibMQTTAdapterMock,
 )
-def test_controller_status_adpater_cloud(capsys):
+def test_controller_status_adapter_cloud(capsys):
     controller = Controller(
         ControllerSettings(
             adapter="cloud", network_id=42, adapter_wait_timeout=0.1
