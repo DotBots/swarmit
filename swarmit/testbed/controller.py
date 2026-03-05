@@ -573,10 +573,10 @@ class Controller:
                 print(payload)
                 print(Packet.from_payload(payload).to_bytes())
             # for _ in range(COMMAND_MAX_ATTEMPTS):
-            for _ in range(1):
+            for _ in range(3):
                 # simple strategy to bypass non-reliable link layer, just send the payload multiple times
                 self.send_payload(BROADCAST_ADDRESS, payload)
-                time.sleep(0.2) # give the device some time to process the payload
+                time.sleep(0.1) # give the device some time to process the payload
 
     def _send_start_ota(
         self, device_addr: str, devices_to_flash: set[str], firmware: bytes

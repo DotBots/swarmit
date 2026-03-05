@@ -165,6 +165,13 @@ static void _send_status(void) {
     _app_vars.send_status = true;
 }
 
+static void _commit_config_and_reboot(void) {
+    nvmc_page_erase(SWARMIT_NET_CONFIG_PAGE);
+    nvmc_write((const uint32_t *)SWARMIT_NET_CONFIG_START_ADDRESS, &_app_vars.config, sizeof(_app_vars.config));
+
+    puts("Calibration/config committed to flash");
+}
+
 //=========================== main ==============================================
 
 int main(void) {
@@ -312,27 +319,31 @@ int main(void) {
                         printf("Invalid calibration index %u\n", pkt->homography_index);
                         break;
                     }
+                    if (pkt->homography_count == 0 || pkt->homography_count > LH2_BASESTATION_COUNT_MAX) {
+                        printf("Invalid calibration count %u\n", pkt->homography_count);
+                        break;
+                    }
+                    if (pkt->homography_index >= pkt->homography_count) {
+                        printf("Invalid calibration tuple (idx=%u, count=%u)\n",
+                               pkt->homography_index,
+                               pkt->homography_count);
+                        break;
+                    }
 
-                    /* Backup full config from flash (preserve has_net_id, net_id, etc.) */
-                    swarmit_config_t config;
-                    const swarmit_config_t *cfg_flash = (const swarmit_config_t *)SWARMIT_NET_CONFIG_START_ADDRESS;
-                    memcpy(&config, cfg_flash, sizeof(config));
-
-                    /* Merge new calibration into backup */
-                    config.homography_count = pkt->homography_count;
-                    memcpy(config.homographies[pkt->homography_index], pkt->homography, sizeof(config.homographies[0]));
-
-                    /* Erase config page then write entire config */
-                    nvmc_page_erase(SWARMIT_NET_CONFIG_PAGE);
-                    nvmc_write((const uint32_t *)SWARMIT_NET_CONFIG_START_ADDRESS, &config, sizeof(config));
-
-                    _app_vars.lh2_calibration_ready = true;
+                    /* Keep receiving matrices in RAM and commit once on the last index. */
+                    _app_vars.config.homography_count = pkt->homography_count;
+                    memcpy(_app_vars.config.homographies[pkt->homography_index], pkt->homography, sizeof(_app_vars.config.homographies[0]));
 
                     printf(
-                        "Calibration data stored (count: %u, index: %u)\n",
+                        "Calibration matrix received (count: %u, index: %u)\n",
                         pkt->homography_count,
                         pkt->homography_index
                     );
+
+                    /* User-defined protocol: last matrix index triggers flash commit + reboot. */
+                    if (pkt->homography_index == (pkt->homography_count - 1)) {
+                        _commit_config_and_reboot();
+                    }
                 } break;
                 default:
                     break;
