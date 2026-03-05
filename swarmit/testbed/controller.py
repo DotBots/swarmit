@@ -346,8 +346,8 @@ class Controller:
     def send_payload(self, destination: int, payload: Payload):
         """Send a frame to the devices."""
         print(f"Sending payload to {destination}...")
-        print(payload)
-        print(Packet.from_payload(payload).to_bytes())
+        print(payload.homography)
+        # print(Packet.from_payload(payload).to_bytes())
         self.interface.send_payload(destination, payload)
 
     def on_frame_received(self, header, packet: Packet):
@@ -527,30 +527,56 @@ class Controller:
                 self._send_message(int(addr, 16), message)
 
     def send_calibration_data(self, calibration_file: bytes):
-        running_devices = self.running_devices
+        ready_devices = self.ready_devices
+        if not ready_devices:
+            print("No ready devices found, aborting")
+            return
 
-        # TODO: handle the file
+        matrix_size = 3 * 3 * 4  # 3x3, each element is 4 bytes (int32_t)
+        if not calibration_file:
+            raise ValueError("Calibration file is empty")
 
-        # DEBUG: use a dummy calibration data
-        payload = PayloadCalibrationData(
-            homography_count=1,
-            homography_index=0,
-            homography=(
-                    b'\xff\xff\xff\xff'  # -1
-                    b'\xe7\x03\x00\x00'  # 999
-                    b'\x01\x00\x00\x00'  # 1
-                    b'\x98\xb1\x01\x00'  # 111000
-                    b'\x09\x00\x00\x00'  # 9
-                    b'\x68\x4e\xfe\xff'  # -111000
-                    b'\x01\x00\x00\x00'  # 1
-                    b'\x58\x3e\x0f\x00'  # 999000
-                    b'\xff\xff\xff\xff'  # -1
-            ),
-        )
-        print(f"Sending calibration data to {BROADCAST_ADDRESS}...")
-        print(payload)
-        print(Packet.from_payload(payload).to_bytes())
-        self.send_payload(BROADCAST_ADDRESS, payload)
+        # Supported format: 1-byte count + N * 36 bytes
+        if len(calibration_file) < 1 or (len(calibration_file) - 1) % matrix_size != 0:
+            raise ValueError(
+                f"Invalid calibration file size: expected 1+N*{matrix_size} bytes (count byte + matrices)"
+            )
+
+        homography_count = calibration_file[0]
+        matrices_bytes = calibration_file[1:]
+        expected_count = len(matrices_bytes) // matrix_size
+        if homography_count != expected_count:
+            raise ValueError(
+                "Invalid calibration file: count byte does not match matrix payload length"
+            )
+        if homography_count == 0:
+            raise ValueError("Invalid calibration file: homography count cannot be zero")
+
+        if homography_count > 16:
+            raise ValueError(
+                "Invalid calibration file: homography count exceeds LH2 limit (16)"
+            )
+
+        print(f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}...")
+        for homography_index in range(homography_count):
+            print(f"Sending calibration matrix {homography_index}...")
+            # if homography_index == 0:
+            #     continue
+            start = homography_index * matrix_size
+            end = start + matrix_size
+            payload = PayloadCalibrationData(
+                homography_count=homography_count,
+                homography_index=homography_index,
+                homography=matrices_bytes[start:end],
+            )
+            if self.settings.verbose:
+                print(payload)
+                print(Packet.from_payload(payload).to_bytes())
+            # for _ in range(COMMAND_MAX_ATTEMPTS):
+            for _ in range(1):
+                # simple strategy to bypass non-reliable link layer, just send the payload multiple times
+                self.send_payload(BROADCAST_ADDRESS, payload)
+                time.sleep(0.2) # give the device some time to process the payload
 
     def _send_start_ota(
         self, device_addr: str, devices_to_flash: set[str], firmware: bytes

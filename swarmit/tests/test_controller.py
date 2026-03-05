@@ -1,7 +1,8 @@
 import logging
 import time
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
+import pytest
 from marilib.model import GatewayInfo, MariGateway
 
 from swarmit.testbed.controller import (
@@ -433,6 +434,100 @@ def test_controller_send_message_broadcast(capsys):
     out, _ = capsys.readouterr()
     for node in ["00000001", "00000002"]:
         assert f"Node {node} received message: Hello robot!" in out
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_send_calibration_data_from_file_bytes():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    matrix_0 = bytes(range(36))
+    matrix_1 = bytes(range(36, 72))
+    calibration_file = bytes([2]) + matrix_0 + matrix_1
+
+    with (
+        patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]),
+        patch.object(controller, "send_payload") as send_payload_mock,
+    ):
+        controller.send_calibration_data(calibration_file)
+
+    assert send_payload_mock.call_count == 2
+    first_call = send_payload_mock.call_args_list[0].args
+    second_call = send_payload_mock.call_args_list[1].args
+
+    assert first_call[0] == 0xFFFFFFFFFFFFFFFF
+    assert first_call[1].homography_count == 2
+    assert first_call[1].homography_index == 0
+    assert first_call[1].homography == matrix_0
+
+    assert second_call[0] == 0xFFFFFFFFFFFFFFFF
+    assert second_call[1].homography_count == 2
+    assert second_call[1].homography_index == 1
+    assert second_call[1].homography == matrix_1
+    controller.terminate()
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_send_calibration_data_from_legacy_out_format():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    matrix = bytes(range(36))
+    calibration_file = bytes([1]) + matrix
+
+    with (
+        patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]),
+        patch.object(controller, "send_payload") as send_payload_mock,
+    ):
+        controller.send_calibration_data(calibration_file)
+
+    assert send_payload_mock.call_count == 1
+    call = send_payload_mock.call_args_list[0].args
+    assert call[0] == 0xFFFFFFFFFFFFFFFF
+    assert call[1].homography_count == 1
+    assert call[1].homography_index == 0
+    assert call[1].homography == matrix
+    controller.terminate()
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_send_calibration_data_invalid_size():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
+        with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
+            controller.send_calibration_data(b"\x00" * 35)
+    controller.terminate()
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_send_calibration_data_legacy_count_mismatch():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    calibration_file = bytes([2]) + bytes(range(36))
+    with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
+        with pytest.raises(ValueError, match="count byte does not match"):
+            controller.send_calibration_data(calibration_file)
+    controller.terminate()
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_send_calibration_data_raw_format_rejected():
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    raw_matrix_only = bytes(range(36))
+    with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
+        with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
+            controller.send_calibration_data(raw_matrix_only)
+    controller.terminate()
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)

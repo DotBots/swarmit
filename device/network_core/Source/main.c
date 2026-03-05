@@ -326,19 +326,6 @@ int main(void) {
                     nvmc_page_erase(SWARMIT_NET_CONFIG_PAGE);
                     nvmc_write((const uint32_t *)SWARMIT_NET_CONFIG_START_ADDRESS, &config, sizeof(config));
 
-                    /* Update IPC and notify bootloader immediately (no reboot needed) */
-                    // FIXME: remove this part, only useful for debugging
-                    mutex_lock();
-                    ipc_shared_data.lh2_calibration.homography_count = config.homography_count;
-                    for (uint32_t idx = 0; idx < config.homography_count; idx++) {
-                        for (uint32_t row = 0; row < 3; row++) {
-                            for (uint32_t col = 0; col < 3; col++) {
-                                ipc_shared_data.lh2_calibration.homographies[idx][row][col] =
-                                    config.homographies[idx][row][col];
-                            }
-                        }
-                    }
-                    mutex_unlock();
                     _app_vars.lh2_calibration_ready = true;
 
                     printf(
