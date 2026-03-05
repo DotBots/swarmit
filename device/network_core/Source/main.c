@@ -58,6 +58,7 @@ typedef struct {
     uint8_t     computed_hash[SWRMT_OTA_SHA256_LENGTH];
     uint64_t    device_id;
     uint16_t    mari_net_id;
+    bool        mari_initialized;
     int32_t     last_chunk_acked;
     uint32_t    metrics_rx_counter;
     uint32_t    metrics_tx_counter;
@@ -169,12 +170,16 @@ static void _commit_config_and_reboot(void) {
     nvmc_page_erase(SWARMIT_NET_CONFIG_PAGE);
     nvmc_write((const uint32_t *)SWARMIT_NET_CONFIG_START_ADDRESS, &_app_vars.config, sizeof(_app_vars.config));
 
-    puts("Calibration/config committed to flash");
+    puts("Calibration/config committed to flash, rebooting netcore");
+    NVIC_SystemReset();
+    while (1) {}
 }
 
 //=========================== main ==============================================
 
 int main(void) {
+    bool self_reboot = (NRF_RESET_NS->RESETREAS & RESET_RESETREAS_LSREQ_Msk) != 0;
+    NRF_RESET_NS->RESETREAS = RESET_RESETREAS_LSREQ_Msk;
 
     _app_vars.device_id = _deviceid();
     _load_config();
@@ -200,6 +205,13 @@ int main(void) {
 
     // Network core must remain on
     ipc_shared_data.net_ready = true;
+
+    // If reboot was self-triggered after calibration commit, bring Mari back automatically
+    if (self_reboot) {
+        puts("Self-reboot detected, auto-initialize Mari");
+        mari_init(MARI_NODE, _app_vars.mari_net_id, &schedule_tiny, &mari_event_callback);
+        _app_vars.mari_initialized = true;
+    }
 
     while (1) {
         __WFE();
@@ -355,7 +367,10 @@ int main(void) {
             switch (_app_vars.ipc_req) {
                 // Mira node functions
                 case IPC_MARI_INIT_REQ:
-                    mari_init(MARI_NODE, _app_vars.mari_net_id, &schedule_tiny, &mari_event_callback);
+                    if (!_app_vars.mari_initialized) {
+                        mari_init(MARI_NODE, _app_vars.mari_net_id, &schedule_tiny, &mari_event_callback);
+                        _app_vars.mari_initialized = true;
+                    }
                     break;
                 case IPC_MARI_NODE_TX_REQ:
                     while (!mari_node_is_connected()) {}

@@ -39,19 +39,6 @@ void localization_init(int32_t homographies[][3][3], uint32_t homography_count) 
         }
         db_lh2_store_homography(&_localization_data.lh2, lh_index, homographies[lh_index]);
     }
-
-    // now print as hex just for debugging
-    // FIXME: remove this part, only useful for debugging
-    printf("Homography matrices as hex:\n");
-    for (uint8_t lh_index = 0; lh_index < homography_count; lh_index++) {
-        printf("LH%u:\n", lh_index);
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                printf("%02x ", homographies[lh_index][i][j]);
-            }
-            printf("\n");
-        }
-    }
 }
 
 bool localization_process_data(void) {
