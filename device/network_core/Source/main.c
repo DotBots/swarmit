@@ -14,6 +14,7 @@
 #include <nrf.h>
 // Include BSP headers
 #include "ipc.h"
+#include "nvmc.h"
 #include "protocol.h"
 #include "rng.h"
 #include "sha256.h"
@@ -28,12 +29,20 @@
 #define NETCORE_MAIN_TIMER                  (0)
 
 #define SWARMIT_NET_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
-#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524D) // "SWRM"
+#define SWARMIT_NET_CONFIG_PAGE             (127)       // page index for config (last page)
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0x12AA)
+#define LH2_BASESTATION_COUNT_MAX           (16)
 
 //=========================== variables =========================================
+
+typedef struct {
+    uint32_t has_net_id;                                    ///< true if network ID is set
+    uint32_t net_id;                                        ///< Mari network ID
+    uint32_t homography_count;                              ///< number of homography matrices used for localization
+    int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization
+} swarmit_config_t;
 
 typedef struct {
     bool        req_received;
@@ -53,12 +62,9 @@ typedef struct {
     uint32_t    metrics_rx_counter;
     uint32_t    metrics_tx_counter;
     bool        metrics_received;
+    swarmit_config_t config;
+    bool        lh2_calibration_ready;
 } swrmt_app_data_t;
-
-typedef struct {
-    uint32_t magic;      // to detect if config is valid
-    uint32_t net_id;     // Mari network ID
-} swarmit_config_t;
 
 static swrmt_app_data_t _app_vars = { 0 };
 extern schedule_t schedule_minuscule, schedule_tiny, schedule_small, schedule_huge, schedule_only_beacons, schedule_only_beacons_optimized_scan;
@@ -71,13 +77,14 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     memcpy(_app_vars.req_buffer, packet, length);
     uint8_t *ptr = _app_vars.req_buffer;
     uint8_t packet_type = (uint8_t)*ptr++;
-    if ((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) {
-        _app_vars.req_received = true;
-        return;
-    }
 
     if (length == sizeof(mr_metrics_payload_t) && packet_type == MARI_PAYLOAD_TYPE_METRICS_PROBE) {
         _app_vars.metrics_received = true;
+        return;
+    }
+
+    if (((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) || (packet_type == SWRMT_MSG_CALIBRATION_DATA)) {
+        _app_vars.req_received = true;
         return;
     }
 
@@ -122,14 +129,32 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
     }
 }
 
-static uint16_t _net_id(void) {
-    const swarmit_config_t *cfg = (const swarmit_config_t *)SWARMIT_NET_CONFIG_START_ADDRESS;
+static void _load_config(void) {
+    // load config into RAM
+    const swarmit_config_t *cfg_flash = (const swarmit_config_t *)SWARMIT_NET_CONFIG_START_ADDRESS;
+    memcpy(&_app_vars.config, cfg_flash, sizeof(_app_vars.config));
 
-    if (cfg->magic != SWARMIT_CONFIG_MAGIC_VALUE) {
-        // No network config found, use default network ID
-        return SWARMIT_DEFAULT_NET_ID;
+    // set network ID
+    if (cfg_flash->has_net_id == 1) {
+        _app_vars.mari_net_id = (uint16_t)(_app_vars.config.net_id & 0xFFFFu);
+    } else {
+        _app_vars.mari_net_id = SWARMIT_DEFAULT_NET_ID;
     }
-    return (uint16_t)(cfg->net_id & 0xFFFFu);
+
+    // set lighthouse calibration data
+    if (_app_vars.config.homography_count > 0 && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX) {
+        // copy homography matrices to shared memory without casting away volatile
+        for (uint32_t idx = 0; idx < _app_vars.config.homography_count; idx++) {
+            for (uint32_t row = 0; row < 3; row++) {
+                for (uint32_t col = 0; col < 3; col++) {
+                    ipc_shared_data.lh2_calibration.homographies[idx][row][col] =
+                        _app_vars.config.homographies[idx][row][col];
+                }
+            }
+        }
+        ipc_shared_data.lh2_calibration.homography_count = _app_vars.config.homography_count;
+        _app_vars.lh2_calibration_ready = true;
+    }
 }
 
 uint64_t _deviceid(void) {
@@ -145,7 +170,7 @@ static void _send_status(void) {
 int main(void) {
 
     _app_vars.device_id = _deviceid();
-    _app_vars.mari_net_id = _net_id();
+    _load_config();
 
     NRF_IPC_NS->INTENSET                             = (1 << IPC_CHAN_REQ) | (1 << IPC_CHAN_LOG_EVENT);
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_RADIO_RX]          = 1 << IPC_CHAN_RADIO_RX;
@@ -154,6 +179,7 @@ int main(void) {
     //NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_RESET] = 1 << IPC_CHAN_APPLICATION_RESET;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_START]         = 1 << IPC_CHAN_OTA_START;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_CHUNK]         = 1 << IPC_CHAN_OTA_CHUNK;
+    NRF_IPC_NS->SEND_CNF[IPC_CHAN_CALIBRATION_DATA]  = 1 << IPC_CHAN_CALIBRATION_DATA;
     NRF_IPC_NS->RECEIVE_CNF[IPC_CHAN_REQ]            = 1 << IPC_CHAN_REQ;
     NRF_IPC_NS->RECEIVE_CNF[IPC_CHAN_LOG_EVENT]      = 1 << IPC_CHAN_LOG_EVENT;
 
@@ -170,6 +196,11 @@ int main(void) {
 
     while (1) {
         __WFE();
+
+        if (_app_vars.lh2_calibration_ready) {
+            _app_vars.lh2_calibration_ready = false;
+            NRF_IPC_NS->TASKS_SEND[IPC_CHAN_CALIBRATION_DATA] = 1;
+        }
 
         if (_app_vars.send_status) {
             _app_vars.send_status = false;
@@ -269,6 +300,52 @@ int main(void) {
                     }
                     printf("Process OTA chunk request (index: %u, size: %u)\n", ipc_shared_data.ota.chunk_index, ipc_shared_data.ota.chunk_size);
                     NRF_IPC_NS->TASKS_SEND[IPC_CHAN_OTA_CHUNK] = 1;
+                } break;
+                case SWRMT_MSG_CALIBRATION_DATA:
+                {
+                    if (ipc_shared_data.status != SWRMT_APPLICATION_READY) {
+                        break;
+                    }
+
+                    const swrmt_lh2_calibration_data_t *pkt = (const swrmt_lh2_calibration_data_t *)req->data;
+                    if (pkt->homography_index >= LH2_BASESTATION_COUNT_MAX) {
+                        printf("Invalid calibration index %u\n", pkt->homography_index);
+                        break;
+                    }
+
+                    /* Backup full config from flash (preserve has_net_id, net_id, etc.) */
+                    swarmit_config_t config;
+                    const swarmit_config_t *cfg_flash = (const swarmit_config_t *)SWARMIT_NET_CONFIG_START_ADDRESS;
+                    memcpy(&config, cfg_flash, sizeof(config));
+
+                    /* Merge new calibration into backup */
+                    config.homography_count = pkt->homography_count;
+                    memcpy(config.homographies[pkt->homography_index], pkt->homography, sizeof(config.homographies[0]));
+
+                    /* Erase config page then write entire config */
+                    nvmc_page_erase(SWARMIT_NET_CONFIG_PAGE);
+                    nvmc_write((const uint32_t *)SWARMIT_NET_CONFIG_START_ADDRESS, &config, sizeof(config));
+
+                    /* Update IPC and notify bootloader immediately (no reboot needed) */
+                    // FIXME: remove this part, only useful for debugging
+                    mutex_lock();
+                    ipc_shared_data.lh2_calibration.homography_count = config.homography_count;
+                    for (uint32_t idx = 0; idx < config.homography_count; idx++) {
+                        for (uint32_t row = 0; row < 3; row++) {
+                            for (uint32_t col = 0; col < 3; col++) {
+                                ipc_shared_data.lh2_calibration.homographies[idx][row][col] =
+                                    config.homographies[idx][row][col];
+                            }
+                        }
+                    }
+                    mutex_unlock();
+                    _app_vars.lh2_calibration_ready = true;
+
+                    printf(
+                        "Calibration data stored (count: %u, index: %u)\n",
+                        pkt->homography_count,
+                        pkt->homography_index
+                    );
                 } break;
                 default:
                     break;

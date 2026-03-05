@@ -24,25 +24,34 @@ float _distance(position_2d_t *reference, position_2d_t *current) {
     return sqrtf(powf(dx, 2) + powf(dy, 2));
 }
 
-void localization_init(void) {
-    puts("Initialize localization");
+void localization_init(int32_t homographies[][3][3], uint32_t homography_count) {
+    printf("Initialize localization with %u homography matrices\n", homography_count);
     db_lh2_init(&_localization_data.lh2, &db_lh2_d, &db_lh2_e);
     db_lh2_start();
 
-#if LH2_CALIBRATION_IS_VALID
-    // Only store the homography if a valid one is set in lh2_calibration.h
-    for (uint8_t lh_index = 0; lh_index < LH2_CALIBRATION_COUNT; lh_index++) {
+    for (uint8_t lh_index = 0; lh_index < homography_count; lh_index++) {
         printf("Store homography matrix for LH%u:\n", lh_index);
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
-                printf("%i ", swrmt_homographies[lh_index][i][j]);
+                printf("%i ", homographies[lh_index][i][j]);
             }
             printf("\n");
         }
-        db_lh2_store_homography(&_localization_data.lh2, lh_index, swrmt_homographies[lh_index]);
+        db_lh2_store_homography(&_localization_data.lh2, lh_index, homographies[lh_index]);
     }
-#endif
 
+    // now print as hex just for debugging
+    // FIXME: remove this part, only useful for debugging
+    printf("Homography matrices as hex:\n");
+    for (uint8_t lh_index = 0; lh_index < homography_count; lh_index++) {
+        printf("LH%u:\n", lh_index);
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                printf("%02x ", homographies[lh_index][i][j]);
+            }
+            printf("\n");
+        }
+    }
 }
 
 bool localization_process_data(void) {

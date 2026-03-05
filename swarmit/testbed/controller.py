@@ -24,6 +24,7 @@ from swarmit.testbed.adapter import (
 from swarmit.testbed.logger import LOGGER
 from swarmit.testbed.protocol import (
     DeviceType,
+    PayloadCalibrationData,
     PayloadMessage,
     PayloadOTAChunk,
     PayloadOTAStart,
@@ -35,11 +36,11 @@ from swarmit.testbed.protocol import (
 )
 
 CHUNK_SIZE = 128
-COMMAND_TIMEOUT = 6
+COMMAND_TIMEOUT = 1
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
 INACTIVE_TIMEOUT = 3  # s
-STATUS_TIMEOUT = 5
+STATUS_TIMEOUT = 1
 MONITOR_TIMEOUT = 60  # s
 OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 0.7
@@ -344,6 +345,9 @@ class Controller:
 
     def send_payload(self, destination: int, payload: Payload):
         """Send a frame to the devices."""
+        print(f"Sending payload to {destination}...")
+        print(payload)
+        print(Packet.from_payload(payload).to_bytes())
         self.interface.send_payload(destination, payload)
 
     def on_frame_received(self, header, packet: Packet):
@@ -419,6 +423,9 @@ class Controller:
 
     def _send_start(self, device_addr: str):
         payload = PayloadStart()
+        print(f"Sending start to {device_addr}...")
+        print(payload)
+        print(Packet.from_payload(payload).to_bytes())
         self.send_payload(int(device_addr, 16), payload)
 
     def start(self, devices=None, timeout=COMMAND_TIMEOUT):
@@ -518,6 +525,32 @@ class Controller:
                 if addr not in running_devices:
                     continue
                 self._send_message(int(addr, 16), message)
+
+    def send_calibration_data(self, calibration_file: bytes):
+        running_devices = self.running_devices
+
+        # TODO: handle the file
+
+        # DEBUG: use a dummy calibration data
+        payload = PayloadCalibrationData(
+            homography_count=1,
+            homography_index=0,
+            homography=(
+                    b'\xff\xff\xff\xff'  # -1
+                    b'\xe7\x03\x00\x00'  # 999
+                    b'\x01\x00\x00\x00'  # 1
+                    b'\x98\xb1\x01\x00'  # 111000
+                    b'\x09\x00\x00\x00'  # 9
+                    b'\x68\x4e\xfe\xff'  # -111000
+                    b'\x01\x00\x00\x00'  # 1
+                    b'\x58\x3e\x0f\x00'  # 999000
+                    b'\xff\xff\xff\xff'  # -1
+            ),
+        )
+        print(f"Sending calibration data to {BROADCAST_ADDRESS}...")
+        print(payload)
+        print(Packet.from_payload(payload).to_bytes())
+        self.send_payload(BROADCAST_ADDRESS, payload)
 
     def _send_start_ota(
         self, device_addr: str, devices_to_flash: set[str], firmware: bytes

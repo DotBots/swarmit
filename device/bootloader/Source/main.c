@@ -28,7 +28,8 @@
 #include "localization.h"
 #include "timer.h"
 
-#define SWARMIT_BASE_ADDRESS        (0x10000)
+#define SWARMIT_BASE_ADDRESS            (0x10000)
+#define SWARMIT_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
 
 #define BATTERY_UPDATE_DELAY        (1000U)
 #define POSITION_UPDATE_DELAY_MS    (100U) ///< 100ms delay between each position update
@@ -44,6 +45,7 @@ typedef struct {
     bool            ota_start_request;
     bool            ota_require_erase;
     bool            ota_chunk_request;
+    bool            lh2_calibration_ready;
     bool            start_application;
     position_2d_t   last_position;
     bool            position_update;
@@ -246,7 +248,8 @@ int main(void) {
                             1 << IPC_CHAN_RADIO_RX |
                             1 << IPC_CHAN_OTA_START |
                             1 << IPC_CHAN_OTA_CHUNK |
-                            1 << IPC_CHAN_APPLICATION_START
+                            1 << IPC_CHAN_APPLICATION_START |
+                            1 << IPC_CHAN_CALIBRATION_DATA
                             //1 << IPC_CHAN_APPLICATION_RESET
                         );
     NRF_IPC_S->SEND_CNF[IPC_CHAN_REQ]                   = 1 << IPC_CHAN_REQ;
@@ -257,6 +260,7 @@ int main(void) {
     //NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_APPLICATION_RESET]  = 1 << IPC_CHAN_APPLICATION_RESET;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_START]          = 1 << IPC_CHAN_OTA_START;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_CHUNK]          = 1 << IPC_CHAN_OTA_CHUNK;
+    NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_CALIBRATION_DATA]   = 1 << IPC_CHAN_CALIBRATION_DATA;
     NVIC_EnableIRQ(IPC_IRQn);
     NVIC_ClearPendingIRQ(IPC_IRQn);
     NVIC_SetPriority(IPC_IRQn, IPC_IRQ_PRIORITY);
@@ -287,7 +291,6 @@ int main(void) {
 
     NVIC_ClearTargetState(SPIM4_IRQn);
     NVIC_ClearTargetState(IPC_IRQn);
-    localization_init();
 
     // Check reset reason and switch to user image if reset was not triggered by any wdt timeout
     uint32_t resetreas = NRF_RESET_S->RESETREAS;
@@ -337,6 +340,11 @@ int main(void) {
 
     while (1) {
         __WFE();
+
+        if (_bootloader_vars.lh2_calibration_ready) {
+            _bootloader_vars.lh2_calibration_ready = false;
+            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
+        }
 
         if (_bootloader_vars.ota_start_request) {
             _bootloader_vars.ota_start_request = false;
@@ -444,5 +452,10 @@ void IPC_IRQHandler(void) {
     if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_APPLICATION_START]) {
         NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_APPLICATION_START] = 0;
         _bootloader_vars.start_application = true;
+    }
+
+    if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_CALIBRATION_DATA]) {
+        NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_CALIBRATION_DATA] = 0;
+        _bootloader_vars.lh2_calibration_ready = true;
     }
 }

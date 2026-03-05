@@ -345,5 +345,14 @@ def message(ctx, message):
     controller.terminate()
 
 
+@main.command()
+@click.argument("calibration-file", type=click.File(mode="rb"), required=True)
+@click.pass_context
+def calibrate(ctx, calibration_file):
+    """Send calibration data to the robots."""
+    controller = Controller(ctx.obj["settings"])
+    controller.send_calibration_data(bytearray(calibration_file.read()))
+    controller.terminate()
+
 if __name__ == "__main__":
     main(obj={})  # pragma: no cover

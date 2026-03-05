@@ -22,6 +22,8 @@
 
 #define IPC_LOG_SIZE     (128)
 
+#define LH2_BASESTATION_COUNT_MAX (16)
+
 typedef enum {
     IPC_REQ_NONE,        ///< Sorry, but nothing
     IPC_MARI_INIT_REQ,
@@ -39,6 +41,7 @@ typedef enum {
     IPC_CHAN_LOG_EVENT          = 5,    ///< Channel used for logging events
     IPC_CHAN_OTA_START          = 6,    ///< Channel used for starting an OTA process
     IPC_CHAN_OTA_CHUNK          = 7,    ///< Channel used for writing a non secure image chunk
+    IPC_CHAN_CALIBRATION_DATA   = 8,    ///< Channel used for sending calibration data
 } ipc_channels_t;
 
 typedef struct {
@@ -64,6 +67,12 @@ typedef struct __attribute__((packed)) {
     uint8_t chunk[INT8_MAX + 1];
 } ipc_ota_data_t;
 
+/// LH2 calibration data
+typedef struct __attribute__((packed)) {
+    uint32_t homography_count; // number of homography matrices used for localization
+    int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization
+} ipc_lh2_calibration_t;
+
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {
     uint32_t x;  ///< X coordinate in mm
@@ -84,6 +93,7 @@ typedef struct __attribute__((packed)) {
     position_2d_t           current_position;   ///< Current 2D position
     ipc_radio_pdu_t         tx_pdu;             ///< TX pdu
     ipc_radio_pdu_t         rx_pdu;             ///< RX pdu
+    ipc_lh2_calibration_t    lh2_calibration;     ///< LH2 calibration data
 } ipc_shared_data_t;
 
 /**

@@ -38,6 +38,12 @@ typedef enum {
     SWRMT_MSG_OTA_CHUNK_ACK = 0x87,
     SWRMT_MSG_GPIO_EVENT = 0x88,
     SWRMT_MSG_LOG_EVENT = 0x89,
+    // FIXME: we need better namespacing for these messages, for example,
+    // use 0x80 for SwarmIT application type, and then use an internal namespace for SwarmIT messages,
+    // like 0x80.0x01 for SwarmIT status, 0x80.0x02 for SwarmIT start, etc.
+    // for the moment, I am just appending SWRMT_MSG_CALIBRATION_DATA after SWRMT_MESSAGE.
+    SWRMT_MESSAGE = 0xA0, // custom message type
+    SWRMT_MSG_CALIBRATION_DATA = 0xA1,
 } swrmt_message_type_t;
 
 /// Protocol packet type
@@ -81,6 +87,12 @@ typedef struct __attribute__((packed)) {
     uint8_t  sha[8];
     uint8_t  chunk[SWRMT_OTA_CHUNK_SIZE];       ///< Bytes array of the firmware chunk
 } swrmt_ota_chunk_pkt_t;
+
+typedef struct __attribute__((packed)) {
+    uint32_t homography_count;              ///< number of homography matrices used for localization
+    uint32_t homography_index;              ///< index of the homography matrix to use for localization
+    int32_t homography[3][3];               ///< homography matrix for localization
+} swrmt_lh2_calibration_data_t;
 
 typedef struct __attribute__((packed)) {
     uint8_t port;  ///< Port number of the GPIO
