@@ -41,9 +41,9 @@ typedef enum {
     // FIXME: we need better namespacing for these messages, for example,
     // use 0x80 for SwarmIT application type, and then use an internal namespace for SwarmIT messages,
     // like 0x80.0x01 for SwarmIT status, 0x80.0x02 for SwarmIT start, etc.
-    // for the moment, I am just appending SWRMT_MSG_CALIBRATION_DATA after SWRMT_MESSAGE.
+    // for the moment, I am just appending SWRMT_MSG_LH2_CALIBRATION after SWRMT_MESSAGE.
     SWRMT_MESSAGE = 0xA0, // custom message type
-    SWRMT_MSG_CALIBRATION_DATA = 0xA1,
+    SWRMT_MSG_LH2_CALIBRATION = 0xA1,
 } swrmt_message_type_t;
 
 /// Protocol packet type

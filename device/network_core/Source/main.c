@@ -84,7 +84,7 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
         return;
     }
 
-    if (((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) || (packet_type == SWRMT_MSG_CALIBRATION_DATA)) {
+    if (((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) || (packet_type == SWRMT_MSG_LH2_CALIBRATION)) {
         _app_vars.req_received = true;
         return;
     }
@@ -320,7 +320,7 @@ int main(void) {
                     printf("Process OTA chunk request (index: %u, size: %u)\n", ipc_shared_data.ota.chunk_index, ipc_shared_data.ota.chunk_size);
                     NRF_IPC_NS->TASKS_SEND[IPC_CHAN_OTA_CHUNK] = 1;
                 } break;
-                case SWRMT_MSG_CALIBRATION_DATA:
+                case SWRMT_MSG_LH2_CALIBRATION:
                 {
                     if (ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;

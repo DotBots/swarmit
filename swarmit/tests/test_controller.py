@@ -440,7 +440,7 @@ def test_controller_send_message_broadcast(capsys):
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_calibration_data_from_file_bytes():
+def test_controller_send_lh2_calibration_from_file_bytes():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     matrix_0 = bytes(range(36))
     matrix_1 = bytes(range(36, 72))
@@ -450,7 +450,7 @@ def test_controller_send_calibration_data_from_file_bytes():
         patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]),
         patch.object(controller, "send_payload") as send_payload_mock,
     ):
-        controller.send_calibration_data(calibration_file)
+        controller.send_lh2_calibration(calibration_file)
 
     assert send_payload_mock.call_count == 2
     first_call = send_payload_mock.call_args_list[0].args
@@ -472,7 +472,7 @@ def test_controller_send_calibration_data_from_file_bytes():
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_calibration_data_from_legacy_out_format():
+def test_controller_send_lh2_calibration_from_legacy_out_format():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     matrix = bytes(range(36))
     calibration_file = bytes([1]) + matrix
@@ -481,7 +481,7 @@ def test_controller_send_calibration_data_from_legacy_out_format():
         patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]),
         patch.object(controller, "send_payload") as send_payload_mock,
     ):
-        controller.send_calibration_data(calibration_file)
+        controller.send_lh2_calibration(calibration_file)
 
     assert send_payload_mock.call_count == 1
     call = send_payload_mock.call_args_list[0].args
@@ -496,11 +496,11 @@ def test_controller_send_calibration_data_from_legacy_out_format():
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_calibration_data_invalid_size():
+def test_controller_send_lh2_calibration_invalid_size():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
         with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
-            controller.send_calibration_data(b"\x00" * 35)
+            controller.send_lh2_calibration(b"\x00" * 35)
     controller.terminate()
 
 
@@ -508,12 +508,12 @@ def test_controller_send_calibration_data_invalid_size():
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_calibration_data_legacy_count_mismatch():
+def test_controller_send_lh2_calibration_legacy_count_mismatch():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     calibration_file = bytes([2]) + bytes(range(36))
     with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
         with pytest.raises(ValueError, match="count byte does not match"):
-            controller.send_calibration_data(calibration_file)
+            controller.send_lh2_calibration(calibration_file)
     controller.terminate()
 
 
@@ -521,12 +521,12 @@ def test_controller_send_calibration_data_legacy_count_mismatch():
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_calibration_data_raw_format_rejected():
+def test_controller_send_lh2_calibration_raw_format_rejected():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     raw_matrix_only = bytes(range(36))
     with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
         with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
-            controller.send_calibration_data(raw_matrix_only)
+            controller.send_lh2_calibration(raw_matrix_only)
     controller.terminate()
 
 

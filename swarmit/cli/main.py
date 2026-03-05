@@ -346,12 +346,12 @@ def message(ctx, message):
 
 
 @main.command()
-@click.argument("calibration-file", type=click.File(mode="rb"), required=True)
+@click.argument("lh2-calibration-file", type=click.File(mode="rb"), required=True)
 @click.pass_context
-def calibrate(ctx, calibration_file):
-    """Send calibration data to the robots."""
+def calibrate_lh2(ctx, lh2_calibration_file):
+    """Send LH2 calibration data to the robots."""
     controller = Controller(ctx.obj["settings"])
-    controller.send_calibration_data(bytearray(calibration_file.read()))
+    controller.send_lh2_calibration(bytearray(lh2_calibration_file.read()))
     controller.terminate()
 
 if __name__ == "__main__":

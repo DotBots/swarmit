@@ -345,9 +345,6 @@ class Controller:
 
     def send_payload(self, destination: int, payload: Payload):
         """Send a frame to the devices."""
-        print(f"Sending payload to {destination}...")
-        print(payload.homography)
-        # print(Packet.from_payload(payload).to_bytes())
         self.interface.send_payload(destination, payload)
 
     def on_frame_received(self, header, packet: Packet):
@@ -423,9 +420,6 @@ class Controller:
 
     def _send_start(self, device_addr: str):
         payload = PayloadStart()
-        print(f"Sending start to {device_addr}...")
-        print(payload)
-        print(Packet.from_payload(payload).to_bytes())
         self.send_payload(int(device_addr, 16), payload)
 
     def start(self, devices=None, timeout=COMMAND_TIMEOUT):
@@ -526,7 +520,7 @@ class Controller:
                     continue
                 self._send_message(int(addr, 16), message)
 
-    def send_calibration_data(self, calibration_file: bytes):
+    def send_lh2_calibration(self, calibration_file: bytes):
         ready_devices = self.ready_devices
         if not ready_devices:
             print("No ready devices found, aborting")
@@ -560,8 +554,6 @@ class Controller:
         print(f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}...")
         for homography_index in range(homography_count):
             print(f"Sending calibration matrix {homography_index}...")
-            # if homography_index == 0:
-            #     continue
             start = homography_index * matrix_size
             end = start + matrix_size
             payload = PayloadCalibrationData(
@@ -572,8 +564,7 @@ class Controller:
             if self.settings.verbose:
                 print(payload)
                 print(Packet.from_payload(payload).to_bytes())
-            # for _ in range(COMMAND_MAX_ATTEMPTS):
-            for _ in range(3):
+            for _ in range(COMMAND_MAX_ATTEMPTS):
                 # simple strategy to bypass non-reliable link layer, just send the payload multiple times
                 self.send_payload(BROADCAST_ADDRESS, payload)
                 time.sleep(0.1) # give the device some time to process the payload

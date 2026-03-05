@@ -52,7 +52,7 @@ class PayloadType(IntEnum):
     SWARMIT_MESSAGE = 0xA0
 
     # SwarmIT calibration data
-    SWARMIT_CALIBRATION_DATA = 0xA1
+    SWARMIT_LH2_CALIBRATION = 0xA1
 
     # Marilib metrics probe
     METRICS_PROBE = MariDefaultPayloadType.METRICS_PROBE
@@ -240,5 +240,5 @@ register_parser(PayloadType.SWARMIT_OTA_START_ACK, PayloadOTAStartAck)
 register_parser(PayloadType.SWARMIT_OTA_CHUNK_ACK, PayloadOTAChunkAck)
 register_parser(PayloadType.SWARMIT_EVENT_LOG, PayloadEvent)
 register_parser(PayloadType.SWARMIT_MESSAGE, PayloadMessage)
-register_parser(PayloadType.SWARMIT_CALIBRATION_DATA, PayloadCalibrationData)
+register_parser(PayloadType.SWARMIT_LH2_CALIBRATION, PayloadCalibrationData)
 register_parser(PayloadType.METRICS_PROBE, MetricsProbePayload)
