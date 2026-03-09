@@ -301,6 +301,13 @@ int main(void) {
         // Experiment is running
         ipc_shared_data.status = SWRMT_APPLICATION_RUNNING;
 
+        // ensure LH2 localization is initialized
+        if (ipc_shared_data.lh2_calibration.homography_count > 0 && ipc_shared_data.lh2_calibration.homography_count <= LH2_BASESTATION_COUNT_MAX) {
+            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
+        } else {
+            printf("Initializing without LH2 calibration data, homography count: %u\n", ipc_shared_data.lh2_calibration.homography_count);
+        }
+
         // Initialize watchdog and non secure access
         setup_ns_user();
         setup_watchdog0();
