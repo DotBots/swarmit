@@ -36,11 +36,11 @@ from swarmit.testbed.protocol import (
 )
 
 CHUNK_SIZE = 128
-COMMAND_TIMEOUT = 1
+COMMAND_TIMEOUT = 2
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
 INACTIVE_TIMEOUT = 3  # s
-STATUS_TIMEOUT = 1
+STATUS_TIMEOUT = 2
 MONITOR_TIMEOUT = 60  # s
 OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 0.7
@@ -521,11 +521,6 @@ class Controller:
                 self._send_message(int(addr, 16), message)
 
     def send_lh2_calibration(self, calibration_file: bytes):
-        ready_devices = self.ready_devices
-        if not ready_devices:
-            print("No ready devices found, aborting")
-            return
-
         matrix_size = 3 * 3 * 4  # 3x3, each element is 4 bytes (int32_t)
         if not calibration_file:
             raise ValueError("Calibration file is empty")
@@ -551,7 +546,12 @@ class Controller:
                 "Invalid calibration file: homography count exceeds LH2 limit (16)"
             )
 
-        print(f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}...")
+        ready_devices = self.ready_devices
+        if not ready_devices:
+            print(f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}...")
+        else:
+            print(f"Sending {homography_count} calibration matrix/matrices to {len(ready_devices)} devices: {str(ready_devices)}...")
+
         for homography_index in range(homography_count):
             print(f"Sending calibration matrix {homography_index}...")
             start = homography_index * matrix_size
@@ -566,7 +566,11 @@ class Controller:
                 print(Packet.from_payload(payload).to_bytes())
             for _ in range(COMMAND_MAX_ATTEMPTS):
                 # simple strategy to bypass non-reliable link layer, just send the payload multiple times
-                self.send_payload(BROADCAST_ADDRESS, payload)
+                if not ready_devices:
+                    self.send_payload(BROADCAST_ADDRESS, payload)
+                else:
+                    for device_addr in ready_devices:
+                        self.send_payload(int(device_addr, 16), payload)
                 time.sleep(0.1) # give the device some time to process the payload
 
     def _send_start_ota(

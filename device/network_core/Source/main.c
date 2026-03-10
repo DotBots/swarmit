@@ -18,6 +18,7 @@
 #include "protocol.h"
 #include "rng.h"
 #include "sha256.h"
+#include "mr_gpio.h"
 
 // Mira includes
 #include "mr_timer_hf.h"
@@ -32,7 +33,7 @@
 #define SWARMIT_NET_CONFIG_PAGE             (127)       // page index for config (last page)
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
-#define SWARMIT_DEFAULT_NET_ID              (0x12AA)
+#define SWARMIT_DEFAULT_NET_ID              (0xA000)
 #define LH2_BASESTATION_COUNT_MAX           (16)
 
 //=========================== variables =========================================
@@ -71,6 +72,9 @@ static swrmt_app_data_t _app_vars = { 0 };
 extern schedule_t schedule_minuscule, schedule_tiny, schedule_small, schedule_huge, schedule_only_beacons, schedule_only_beacons_optimized_scan;
 
 volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
+
+static const mr_gpio_t _debug1 = { .port = 1, .pin = 8 };
+//static const mr_gpio_t _debug2 = { .port = 1, .pin = 10 };
 
 //=========================== functions =========================================
 
@@ -167,8 +171,14 @@ static void _send_status(void) {
 }
 
 static void _commit_config_and_reboot(void) {
+    mr_gpio_set(&_debug1); mr_gpio_clear(&_debug1);
+
+    mr_gpio_set(&_debug1);
     nvmc_page_erase(SWARMIT_NET_CONFIG_PAGE);
+    mr_gpio_clear(&_debug1);
+    mr_gpio_set(&_debug1);
     nvmc_write((const uint32_t *)SWARMIT_NET_CONFIG_START_ADDRESS, &_app_vars.config, sizeof(_app_vars.config));
+    mr_gpio_clear(&_debug1);
 
     puts("Calibration/config committed to flash, rebooting netcore");
     NVIC_SystemReset();
@@ -202,6 +212,12 @@ int main(void) {
     // Configure timer used for timestamping events
     mr_timer_hf_init(NETCORE_MAIN_TIMER);
     mr_timer_hf_set_periodic_us(NETCORE_MAIN_TIMER, 0, 1000000UL, _send_status);
+
+    mr_gpio_init(&_debug1, MR_GPIO_OUT);
+    // mr_gpio_init(&_debug2, MR_GPIO_OUT);
+
+    mr_gpio_set(&_debug1); mr_gpio_clear(&_debug1);
+    // mr_gpio_set(&_debug2); mr_gpio_clear(&_debug2);
 
     // Network core must remain on
     ipc_shared_data.net_ready = true;
@@ -322,23 +338,24 @@ int main(void) {
                 } break;
                 case SWRMT_MSG_LH2_CALIBRATION:
                 {
+                    // mr_gpio_set(&_debug1);
                     if (ipc_shared_data.status != SWRMT_APPLICATION_READY) {
                         break;
                     }
 
                     const swrmt_lh2_calibration_data_t *pkt = (const swrmt_lh2_calibration_data_t *)req->data;
                     if (pkt->homography_index >= LH2_BASESTATION_COUNT_MAX) {
-                        printf("Invalid calibration index %u\n", pkt->homography_index);
+                        // printf("Invalid calibration index %u\n", pkt->homography_index);
                         break;
                     }
                     if (pkt->homography_count == 0 || pkt->homography_count > LH2_BASESTATION_COUNT_MAX) {
-                        printf("Invalid calibration count %u\n", pkt->homography_count);
+                        // printf("Invalid calibration count %u\n", pkt->homography_count);
                         break;
                     }
                     if (pkt->homography_index >= pkt->homography_count) {
-                        printf("Invalid calibration tuple (idx=%u, count=%u)\n",
-                               pkt->homography_index,
-                               pkt->homography_count);
+                        // printf("Invalid calibration tuple (idx=%u, count=%u)\n",
+                        //        pkt->homography_index,
+                        //        pkt->homography_count);
                         break;
                     }
 
@@ -346,11 +363,13 @@ int main(void) {
                     _app_vars.config.homography_count = pkt->homography_count;
                     memcpy(_app_vars.config.homographies[pkt->homography_index], pkt->homography, sizeof(_app_vars.config.homographies[0]));
 
-                    printf(
-                        "Calibration matrix received (count: %u, index: %u)\n",
-                        pkt->homography_count,
-                        pkt->homography_index
-                    );
+                    // printf(
+                    //     "Calibration matrix received (count: %u, index: %u)\n",
+                    //     pkt->homography_count,
+                    //     pkt->homography_index
+                    // );
+
+                    // mr_gpio_set(&_debug1);
 
                     /* User-defined protocol: last matrix index triggers flash commit + reboot. */
                     if (pkt->homography_index == (pkt->homography_count - 1)) {
