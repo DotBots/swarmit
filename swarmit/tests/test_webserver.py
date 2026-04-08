@@ -74,8 +74,8 @@ def client(monkeypatch, tmp_path, capsys):
         yield c
 
     # Reset OTA state between test runs
-    api.state.ota_status = "idle"
-    api.state.ota_error = None
+    api.state.ota_transfer_status = "idle"
+    api.state.ota_transfer_error = None
 
 
 # ------------------------------------------------------------------
@@ -236,7 +236,19 @@ def test_ota_start_success(client):
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
-    data = res.json()
+    assert res.json() == {"status": "pending"}
+
+    # Poll until done
+    for _ in range(20):
+        status = client.get(
+            "/ota/start/status",
+            headers={"Authorization": "Bearer FAKE_TOKEN"},
+        )
+        assert status.status_code == 200
+        if status.json()["status"] == "done":
+            break
+        time.sleep(0.1)
+    data = status.json()
     assert "00000001" in data["acked"]
     assert data["missed"] == []
     assert data["total_chunks"] > 0
@@ -278,55 +290,81 @@ def test_ota_start_no_ready_device(client):
     assert res.json()["detail"] == "no ready devices to flash"
 
 
-def test_ota_start_missing_acks(client, monkeypatch):
-    from swarmit.testbed.controller import StartOtaData
+def test_ota_start_status_requires_token(client):
+    res = client.get("/ota/start/status")
+    assert res.status_code in (401, 403)
 
+
+def test_ota_start_missing_acks(client, monkeypatch):
     async def fake_start_ota(_self, fw, devices=None):
-        return {"ota": StartOtaData(), "missed": ["00000001"], "acked": []}
+        _self.start_ota_data.status = "done"
+        _self.start_ota_data.acked = []
+        _self.start_ota_data.missed = ["00000001"]
 
     monkeypatch.setattr(
         "swarmit.testbed.controller.Controller.start_ota", fake_start_ota
     )
     fw = base64.b64encode(b"abc").decode()
-    res = client.post(
+    client.post(
         "/ota/start",
         json={"firmware_b64": fw, "devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
-    assert res.status_code == 200
-    data = res.json()
+    # Poll until done
+    for _ in range(20):
+        status = client.get(
+            "/ota/start/status",
+            headers={"Authorization": "Bearer FAKE_TOKEN"},
+        )
+        if status.json()["status"] == "done":
+            break
+        time.sleep(0.1)
+    data = status.json()
     assert data["missed"] == ["00000001"]
     assert data["acked"] == []
 
 
 # ------------------------------------------------------------------
-# OTA chunks + progress
+# OTA transfer + transfer/status
 # ------------------------------------------------------------------
 
 
 def test_ota_full_success(client):
     fw = base64.b64encode(b"hello" * 50).decode()
-    # Step 1: negotiate start
+    # Step 1: initiate start (non-blocking)
     res = client.post(
         "/ota/start",
         json={"firmware_b64": fw, "devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
-    acked = res.json()["acked"]
 
-    # Step 2: transfer chunks (background task, completes before TestClient returns)
+    # Step 2: poll start/status until done
+    acked = []
+    for _ in range(20):
+        s = client.get(
+            "/ota/start/status",
+            headers={"Authorization": "Bearer FAKE_TOKEN"},
+        )
+        if s.json()["status"] == "done":
+            acked = s.json()["acked"]
+            break
+        time.sleep(0.1)
+    assert acked
+
+    # Step 3: start transfer
     res = client.post(
-        "/ota/chunks",
+        "/ota/transfer",
         json={"devices": acked},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
     assert res.json() == {"status": "started"}
 
-    # Step 3: check progress
+    # Step 4: check transfer/status
     prog = client.get(
-        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+        "/ota/transfer/status",
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert prog.status_code == 200
     data = prog.json()
@@ -334,24 +372,24 @@ def test_ota_full_success(client):
     assert data["error"] is None
 
 
-def test_ota_chunks_already_running(client):
-    client.app.state.ota_status = "running"
+def test_ota_transfer_already_running(client):
+    client.app.state.ota_transfer_status = "running"
     res = client.post(
-        "/ota/chunks",
+        "/ota/transfer",
         json={"devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 409
     assert "already in progress" in res.json()["detail"]
-    client.app.state.ota_status = "idle"
+    client.app.state.ota_transfer_status = "idle"
 
 
-def test_ota_chunks_no_public_key(client, monkeypatch):
+def test_ota_transfer_no_public_key(client, monkeypatch):
     monkeypatch.setattr(
         "swarmit.testbed.webserver.get_public_key", public_key_not_found
     )
     res = client.post(
-        "/ota/chunks",
+        "/ota/transfer",
         json={"devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
@@ -359,13 +397,15 @@ def test_ota_chunks_no_public_key(client, monkeypatch):
     assert "public.pem not found" in res.json()["detail"]
 
 
-def test_ota_chunks_transfer_failed(client, monkeypatch):
-    from swarmit.testbed.controller import StartOtaData, TransferDataStatus
-
+def test_ota_transfer_failed(client, monkeypatch):
     async def fake_start_ota(_self, fw, devices=None):
-        return {"ota": StartOtaData(), "missed": [], "acked": ["00000001"]}
+        _self.start_ota_data.status = "done"
+        _self.start_ota_data.acked = ["00000001"]
+        _self.start_ota_data.missed = []
 
     async def fake_transfer(_self, devices):
+        from swarmit.testbed.controller import TransferDataStatus
+
         return {"00000001": TransferDataStatus(success=False)}
 
     monkeypatch.setattr(
@@ -382,24 +422,26 @@ def test_ota_chunks_transfer_failed(client, monkeypatch):
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     res = client.post(
-        "/ota/chunks",
+        "/ota/transfer",
         json={"devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
 
     prog = client.get(
-        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+        "/ota/transfer/status",
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert prog.json()["status"] == "failed"
     assert prog.json()["error"] == "transfer failed"
 
 
-def test_ota_progress_idle(client):
-    client.app.state.ota_status = "idle"
-    client.app.state.ota_error = None
+def test_ota_transfer_status_idle(client):
+    client.app.state.ota_transfer_status = "idle"
+    client.app.state.ota_transfer_error = None
     res = client.get(
-        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+        "/ota/transfer/status",
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
     data = res.json()
@@ -408,11 +450,12 @@ def test_ota_progress_idle(client):
     assert data["total_chunks"] == 0
 
 
-def test_ota_progress_failed(client):
-    client.app.state.ota_status = "failed"
-    client.app.state.ota_error = "transfer failed"
+def test_ota_transfer_status_failed(client):
+    client.app.state.ota_transfer_status = "failed"
+    client.app.state.ota_transfer_error = "transfer failed"
     res = client.get(
-        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+        "/ota/transfer/status",
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
     data = res.json()
@@ -420,8 +463,8 @@ def test_ota_progress_failed(client):
     assert data["error"] == "transfer failed"
 
 
-def test_ota_progress_requires_token(client):
-    res = client.get("/ota/progress")
+def test_ota_transfer_status_requires_token(client):
+    res = client.get("/ota/transfer/status")
     assert res.status_code in (401, 403)
 
 

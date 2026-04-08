@@ -227,7 +227,7 @@ def flash(ctx, yes, start_after, firmware):
     if not yes:
         click.confirm("Do you want to continue?", default=True, abort=True)
 
-    # Step 1 – negotiate OTA start (blocks until all ACKs received)
+    # Step 1 – initiate OTA start (non-blocking)
     resp = httpx.post(
         f"{url}/ota/start",
         json={"firmware_b64": fw_b64, "devices": devices or None},
@@ -239,11 +239,21 @@ def flash(ctx, yes, start_after, firmware):
         )
         raise click.Abort()
 
-    data = resp.json()
-    acked = data["acked"]
-    missed = data["missed"]
-    total_chunks = data["total_chunks"]
-    fw_hash = data["fw_hash"]
+    # Step 2 – poll /ota/start/status until negotiation completes
+    while True:
+        status_resp = httpx.get(
+            f"{url}/ota/start/status", headers=_auth_headers(ctx)
+        )
+        status_resp.raise_for_status()
+        start_data = status_resp.json()
+        if start_data["status"] == "done":
+            break
+        time.sleep(0.25)
+
+    acked = start_data["acked"]
+    missed = start_data["missed"]
+    total_chunks = start_data["total_chunks"]
+    fw_hash = start_data["fw_hash"]
 
     console.print(
         f"Image hash: [bold cyan]{fw_hash}[/]"
@@ -259,9 +269,9 @@ def flash(ctx, yes, start_after, firmware):
         )
         raise click.Abort()
 
-    # Step 2 – start background chunk transfer
+    # Step 3 – start background chunk transfer
     resp = httpx.post(
-        f"{url}/ota/chunks",
+        f"{url}/ota/transfer",
         json={"devices": acked},
         headers=_auth_headers(ctx),
     )
@@ -274,13 +284,13 @@ def flash(ctx, yes, start_after, firmware):
         )
         raise click.Abort()
 
-    # Step 3 – poll progress with a tqdm bar
+    # Step 4 – poll transfer progress with a tqdm bar
     pbar = None
     last_n = 0
 
     while True:
         prog_resp = httpx.get(
-            f"{url}/ota/progress", headers=_auth_headers(ctx)
+            f"{url}/ota/transfer/status", headers=_auth_headers(ctx)
         )
         prog_resp.raise_for_status()
         prog = prog_resp.json()

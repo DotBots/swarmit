@@ -128,8 +128,8 @@ def init_api(api: FastAPI, settings: ControllerSettings):
 
         await controller.setup()
         app.state.controller = controller
-        app.state.ota_status = "idle"
-        app.state.ota_error = None
+        app.state.ota_transfer_status = "idle"
+        app.state.ota_transfer_error = None
 
         yield
 
@@ -178,7 +178,7 @@ class OtaStartRequest(BaseModel):
         raise ValueError("devices must be a string or list of strings")
 
 
-class OtaChunksRequest(BaseModel):
+class OtaTransferRequest(BaseModel):
     devices: List[str]
 
 
@@ -204,25 +204,34 @@ class MessageRequest(BaseModel):
 
 
 # ------------------------------------------------------------------
-# OTA background task
+# OTA background tasks
 # ------------------------------------------------------------------
 
 
-async def _chunks_background(app: FastAPI, devices: list[str]):
+async def _start_ota_background(
+    app: FastAPI, fw: bytearray, devices: list[str]
+):
+    """Negotiate OTA start with devices in a background task."""
+    controller: Controller = app.state.controller
+    async with controller_lock:
+        await controller.start_ota(fw, devices if devices else None)
+
+
+async def _transfer_background(app: FastAPI, devices: list[str]):
     """Transfer OTA chunks to *devices* in a background task."""
     controller: Controller = app.state.controller
     try:
         async with controller_lock:
             data = await controller.transfer(devices)
         if all(d.success for d in data.values()):
-            app.state.ota_status = "success"
-            app.state.ota_error = None
+            app.state.ota_transfer_status = "success"
+            app.state.ota_transfer_error = None
         else:
-            app.state.ota_status = "failed"
-            app.state.ota_error = "transfer failed"
+            app.state.ota_transfer_status = "failed"
+            app.state.ota_transfer_error = "transfer failed"
     except Exception as exc:
-        app.state.ota_status = "failed"
-        app.state.ota_error = str(exc)
+        app.state.ota_transfer_status = "failed"
+        app.state.ota_transfer_error = str(exc)
 
 
 # ------------------------------------------------------------------
@@ -231,12 +240,15 @@ async def _chunks_background(app: FastAPI, devices: list[str]):
 
 
 @api.post("/ota/start", dependencies=[Depends(verify_jwt)])
-async def ota_start(payload: OtaStartRequest, request: Request):
-    """Negotiate OTA start with devices and return ACK summary.
+async def ota_start(
+    payload: OtaStartRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """Initiate OTA start negotiation with devices (non-blocking).
 
-    This call blocks until all OTA-start ACKs have been received (or
-    the retry budget is exhausted).  The caller should inspect
-    ``missed`` before proceeding to ``POST /ota/chunks``.
+    Returns immediately.  Poll ``GET /ota/start/status`` to know when
+    all devices have acknowledged and which ones missed the deadline.
     """
     controller: Controller = request.app.state.controller
 
@@ -265,48 +277,65 @@ async def ota_start(payload: OtaStartRequest, request: Request):
                 status_code=400, detail="no ready devices to flash"
             )
 
-    async with controller_lock:
-        result = (
-            await controller.start_ota(fw, devices)
-            if devices
-            else await controller.start_ota(fw)
-        )
+    # Reset start data to "pending" before spawning the background task so
+    # that /ota/start/status immediately reflects the in-progress state.
+    controller.start_ota_data.status = "pending"
+    controller.start_ota_data.acked = []
+    controller.start_ota_data.missed = []
+    background_tasks.add_task(
+        _start_ota_background, request.app, fw, devices or []
+    )
+    return JSONResponse(content={"status": "pending"})
 
+
+@api.get("/ota/start/status", dependencies=[Depends(verify_jwt)])
+async def ota_start_status(request: Request):
+    """Return the current OTA start negotiation status.
+
+    Poll until ``status`` is ``"done"``, then inspect ``acked`` and
+    ``missed`` before calling ``POST /ota/transfer``.
+    """
+    controller: Controller = request.app.state.controller
+    d = controller.start_ota_data
     return JSONResponse(
         content={
-            "acked": result["acked"],
-            "missed": result["missed"],
-            "total_chunks": result["ota"].chunks,
-            "fw_hash": result["ota"].fw_hash.hex().upper(),
+            "status": d.status,
+            "acked": d.acked,
+            "missed": d.missed,
+            "total_chunks": d.chunks,
+            "fw_hash": d.fw_hash.hex().upper() if d.fw_hash else "",
         }
     )
 
 
-@api.post("/ota/chunks", dependencies=[Depends(verify_jwt)])
-async def ota_chunks(
-    payload: OtaChunksRequest,
+@api.post("/ota/transfer", dependencies=[Depends(verify_jwt)])
+async def ota_transfer(
+    payload: OtaTransferRequest,
     request: Request,
     background_tasks: BackgroundTasks,
 ):
     """Start the OTA chunk transfer in the background.
 
-    ``POST /ota/start`` must have been called first.  Poll
-    ``GET /ota/progress`` to track completion.
+    ``POST /ota/start`` must have completed (``/ota/start/status`` returns
+    ``"done"``) before calling this endpoint.  Poll
+    ``GET /ota/transfer/status`` to track completion.
     """
-    if request.app.state.ota_status == "running":
+    if request.app.state.ota_transfer_status == "running":
         raise HTTPException(
             status_code=409, detail="OTA transfer already in progress"
         )
 
-    request.app.state.ota_status = "running"
-    request.app.state.ota_error = None
-    background_tasks.add_task(_chunks_background, request.app, payload.devices)
+    request.app.state.ota_transfer_status = "running"
+    request.app.state.ota_transfer_error = None
+    background_tasks.add_task(
+        _transfer_background, request.app, payload.devices
+    )
     return JSONResponse(content={"status": "started"})
 
 
-@api.get("/ota/progress", dependencies=[Depends(verify_jwt)])
-async def ota_progress(request: Request):
-    """Return the current OTA transfer progress."""
+@api.get("/ota/transfer/status", dependencies=[Depends(verify_jwt)])
+async def ota_transfer_status(request: Request):
+    """Return the current OTA chunk transfer progress."""
     controller: Controller = request.app.state.controller
     total_chunks = controller.start_ota_data.chunks
     devices_progress = {
@@ -319,8 +348,8 @@ async def ota_progress(request: Request):
     }
     return JSONResponse(
         content={
-            "status": request.app.state.ota_status,
-            "error": request.app.state.ota_error,
+            "status": request.app.state.ota_transfer_status,
+            "error": request.app.state.ota_transfer_error,
             "total_chunks": total_chunks,
             "devices": devices_progress,
         }

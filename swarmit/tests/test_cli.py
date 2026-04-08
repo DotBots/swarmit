@@ -30,14 +30,15 @@ Commands:
   stop     Stop the user application.
 """
 
-OTA_START_OK = {
+OTA_START_STATUS_DONE = {
+    "status": "done",
     "acked": ["00000001"],
     "missed": [],
     "total_chunks": 1,
     "fw_hash": "ABCDEF1234",
 }
 
-OTA_PROGRESS_SUCCESS = {
+OTA_TRANSFER_STATUS_SUCCESS = {
     "status": "success",
     "error": None,
     "total_chunks": 1,
@@ -50,7 +51,7 @@ OTA_PROGRESS_SUCCESS = {
     },
 }
 
-OTA_PROGRESS_FAILED = {
+OTA_TRANSFER_STATUS_FAILED = {
     "status": "failed",
     "error": "transfer failed",
     "total_chunks": 1,
@@ -189,9 +190,13 @@ def test_flash_api_error(httpx_mock, fw):
 
 @patch("swarmit.cli.main.httpx")
 def test_flash_missing_acks(httpx_mock, fw):
-    # /ota/start succeeds but some devices missed
+    # /ota/start returns pending, /ota/start/status shows missed
     httpx_mock.post.return_value = make_response(
+        json_data={"status": "pending"}
+    )
+    httpx_mock.get.return_value = make_response(
         json_data={
+            "status": "done",
             "acked": ["00000001"],
             "missed": ["00000002"],
             "total_chunks": 1,
@@ -208,13 +213,16 @@ def test_flash_missing_acks(httpx_mock, fw):
 
 @patch("swarmit.cli.main.httpx")
 def test_flash_already_running(httpx_mock, fw):
-    # /ota/start succeeds, /ota/chunks returns 409
+    # /ota/start ok, /ota/start/status done, /ota/transfer returns 409
     httpx_mock.post.side_effect = [
-        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "pending"}),
         make_response(
             status_code=409, json_data={"detail": "OTA already in progress"}
         ),
     ]
+    httpx_mock.get.return_value = make_response(
+        json_data=OTA_START_STATUS_DONE
+    )
     runner = CliRunner()
     result = runner.invoke(
         main, ["--token", "TOK", "flash", str(fw)], input="y\n"
@@ -226,10 +234,13 @@ def test_flash_already_running(httpx_mock, fw):
 @patch("swarmit.cli.main.httpx")
 def test_flash_success(httpx_mock, fw):
     httpx_mock.post.side_effect = [
-        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "pending"}),
         make_response(json_data={"status": "started"}),
     ]
-    httpx_mock.get.return_value = make_response(json_data=OTA_PROGRESS_SUCCESS)
+    httpx_mock.get.side_effect = [
+        make_response(json_data=OTA_START_STATUS_DONE),
+        make_response(json_data=OTA_TRANSFER_STATUS_SUCCESS),
+    ]
     runner = CliRunner()
     result = runner.invoke(
         main, ["--token", "TOK", "flash", str(fw)], input="y\n"
@@ -238,24 +249,27 @@ def test_flash_success(httpx_mock, fw):
     assert "Flash successful" in result.output
     assert httpx_mock.post.call_count == 2
     assert "/ota/start" in httpx_mock.post.call_args_list[0].args[0]
-    assert "/ota/chunks" in httpx_mock.post.call_args_list[1].args[0]
+    assert "/ota/transfer" in httpx_mock.post.call_args_list[1].args[0]
 
 
 @patch("swarmit.cli.main.httpx")
 def test_flash_success_with_start(httpx_mock, fw):
     httpx_mock.post.side_effect = [
-        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "pending"}),
         make_response(json_data={"status": "started"}),
         make_response(json_data={"response": "done"}),
     ]
-    httpx_mock.get.return_value = make_response(json_data=OTA_PROGRESS_SUCCESS)
+    httpx_mock.get.side_effect = [
+        make_response(json_data=OTA_START_STATUS_DONE),
+        make_response(json_data=OTA_TRANSFER_STATUS_SUCCESS),
+    ]
     runner = CliRunner()
     result = runner.invoke(
         main, ["--token", "TOK", "flash", "--start", str(fw)], input="y\n"
     )
     assert result.exit_code == 0
     assert "Flash successful" in result.output
-    # /ota/start, /ota/chunks, /start
+    # /ota/start, /ota/transfer, /start
     assert httpx_mock.post.call_count == 3
     assert "/start" in httpx_mock.post.call_args_list[2].args[0]
 
@@ -263,10 +277,13 @@ def test_flash_success_with_start(httpx_mock, fw):
 @patch("swarmit.cli.main.httpx")
 def test_flash_failed(httpx_mock, fw):
     httpx_mock.post.side_effect = [
-        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "pending"}),
         make_response(json_data={"status": "started"}),
     ]
-    httpx_mock.get.return_value = make_response(json_data=OTA_PROGRESS_FAILED)
+    httpx_mock.get.side_effect = [
+        make_response(json_data=OTA_START_STATUS_DONE),
+        make_response(json_data=OTA_TRANSFER_STATUS_FAILED),
+    ]
     runner = CliRunner()
     result = runner.invoke(
         main, ["--token", "TOK", "flash", str(fw)], input="y\n"
@@ -278,17 +295,20 @@ def test_flash_failed(httpx_mock, fw):
 @patch("swarmit.cli.main.httpx")
 def test_flash_no_confirm_needed_with_yes(httpx_mock, fw):
     httpx_mock.post.side_effect = [
-        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "pending"}),
         make_response(json_data={"status": "started"}),
     ]
-    httpx_mock.get.return_value = make_response(
-        json_data={
-            "status": "success",
-            "error": None,
-            "total_chunks": 0,
-            "devices": {},
-        }
-    )
+    httpx_mock.get.side_effect = [
+        make_response(json_data=OTA_START_STATUS_DONE),
+        make_response(
+            json_data={
+                "status": "success",
+                "error": None,
+                "total_chunks": 0,
+                "devices": {},
+            }
+        ),
+    ]
     runner = CliRunner()
     result = runner.invoke(main, ["--token", "TOK", "flash", "-y", str(fw)])
     assert result.exit_code == 0

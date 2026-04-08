@@ -71,6 +71,9 @@ class StartOtaData:
     fw_hash: bytes = b""
     addrs: list[str] = dataclasses.field(default_factory=lambda: [])
     retries: int = 0
+    status: str = "idle"  # "idle" | "pending" | "done"
+    acked: list[str] = dataclasses.field(default_factory=lambda: [])
+    missed: list[str] = dataclasses.field(default_factory=lambda: [])
 
 
 @dataclass
@@ -459,7 +462,7 @@ class Controller:
         ota_timeout = self.settings.ota_timeout
         ota_max_retries = self.settings.ota_max_retries
 
-        self.start_ota_data = StartOtaData()
+        self.start_ota_data = StartOtaData(status="pending")
         self.chunks = []
         digest = hashes.Hash(hashes.SHA256())
         chunks_count = int(len(firmware) / CHUNK_SIZE) + int(
@@ -507,12 +510,15 @@ class Controller:
                     addr, devices, ota_timeout, ota_max_retries
                 )
                 await asyncio.sleep(0.2)
+        self.start_ota_data.acked = sorted(self.start_ota_data.addrs)
+        self.start_ota_data.missed = sorted(
+            set(devices).difference(set(self.start_ota_data.addrs))
+        )
+        self.start_ota_data.status = "done"
         return {
             "ota": self.start_ota_data,
-            "acked": sorted(self.start_ota_data.addrs),
-            "missed": sorted(
-                set(devices).difference(set(self.start_ota_data.addrs))
-            ),
+            "acked": self.start_ota_data.acked,
+            "missed": self.start_ota_data.missed,
         }
 
     async def send_chunk(
