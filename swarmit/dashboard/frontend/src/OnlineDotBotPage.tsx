@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useState } from "react";
 import { API_URL, checkTokenActiveness, DotBotData, Token, TokenPayload } from "./App";
+import { otaFlash, OtaProgress } from "./otaFlash";
 
 interface CalendarPageProps {
   dotbots: Record<string, DotBotData>;
@@ -9,6 +10,8 @@ interface CalendarPageProps {
 export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [otaProgress, setOtaProgress] = useState<OtaProgress | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
 
   const toggleSelection = (id: string) => {
@@ -66,33 +69,26 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
   };
 
   const handleFlash = () => {
-    if (!token) {
-      return;
-    };
-    if (!file) {
-      return;
-    }
+    if (!token || !file) return;
 
     setLoading(true);
+    setMessage(null);
+    setOtaProgress(null);
 
     const reader = new FileReader();
-
     reader.onload = () => {
       const base64 = (reader.result as string).split(",")[1];
-
-      fetch(`${API_URL}/flash`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token.token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ firmware_b64: base64, devices: selected }),
-      })
+      otaFlash(base64, token.token, selected.length > 0 ? selected : null, setMessage, setOtaProgress)
+        .then(() => {
+          setMessage("Firmware flashed successfully");
+        })
+        .catch((err: Error) => {
+          setMessage(`Error: ${err.message}`);
+        })
         .finally(() => {
           setLoading(false);
         });
     };
-
     reader.readAsDataURL(file);
   };
 
@@ -157,6 +153,8 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
               hasFile={file !== null}
               selected={selected}
               setFile={setFile}
+              message={message}
+              otaProgress={otaProgress}
             />)}
         </div >}
     </div >
@@ -171,9 +169,11 @@ interface ActionButtonsProps {
   hasFile: boolean;
   selected: string[];
   setFile: Dispatch<SetStateAction<File | null>>;
+  message: string | null;
+  otaProgress: OtaProgress | null;
 }
 
-function ActionButtons({ handleStart, handleStop, handleFlash, loading, hasFile, selected, setFile }: ActionButtonsProps) {
+function ActionButtons({ handleStart, handleStop, handleFlash, loading, hasFile, selected, setFile, message, otaProgress }: ActionButtonsProps) {
 
   return (
     <div className="w-fit bg-white rounded-2xl shadow p-6 mt-6 flex items-center justify-center gap-4">
@@ -229,6 +229,21 @@ function ActionButtons({ handleStart, handleStop, handleFlash, loading, hasFile,
         </svg>
         <span className="sr-only">Loading...</span>
       </div>
+      {otaProgress !== null && otaProgress.total > 0 && (
+        <div className="w-48">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>OTA transfer</span>
+            <span>{otaProgress.acked} / {otaProgress.total}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div
+              className="bg-[#1E91C7] h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${Math.round(otaProgress.acked / otaProgress.total * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {message && <p className="text-sm text-gray-700">{message}</p>}
     </div>
   );
 }

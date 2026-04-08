@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { tokenActivenessType, Token, DotBotData, API_URL } from "./App";
 import { DotBotsMap } from "./BotMap";
+import { otaFlash, OtaProgress } from "./otaFlash";
 
 interface HomePageProps {
   token: Token | null;
@@ -17,6 +18,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [otaProgress, setOtaProgress] = useState<OtaProgress | null>(null);
 
   const handleStart = () => {
     if (!token) {
@@ -96,7 +98,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
     if (!token) {
       setMessage("Please fill a token first");
       return;
-    };
+    }
     if (!file) {
       setMessage("Please select a file first");
       return;
@@ -104,41 +106,22 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
 
     setLoading(true);
     setMessage(null);
+    setOtaProgress(null);
 
     const reader = new FileReader();
-
     reader.onload = () => {
       const base64 = (reader.result as string).split(",")[1];
-      setMessage("Flashing...");
-
-      fetch(`${API_URL}/flash`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token.token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ firmware_b64: base64 }),
-      })
-        .then((res) =>
-          res
-            .json()
-            .then((data) => ({ ok: res.ok, data }))
-            .catch(() => ({ ok: res.ok, data: { error: "Invalid response" } }))
-        )
-        .then(({ ok, data }) => {
-          if (ok) {
-            setMessage("File flashed successfully");
-          } else {
-            setMessage(data.detail || "Unknown error");
-          }
-          setLoading(false);
+      otaFlash(base64, token.token, null, setMessage, setOtaProgress)
+        .then(() => {
+          setMessage("Firmware flashed successfully");
         })
-        .catch((_err) => {
-          setMessage(`Error: couldn't authorize token`);
+        .catch((err: Error) => {
+          setMessage(`Error: ${err.message}`);
+        })
+        .finally(() => {
           setLoading(false);
         });
     };
-
     reader.readAsDataURL(file);
   };
   const unixToLocale = (t: number) => new Date(t * 1000).toLocaleString();
@@ -245,6 +228,20 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
         </div>
 
 
+        {otaProgress !== null && otaProgress.total > 0 && (
+          <div>
+            <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <span>OTA transfer</span>
+              <span>{otaProgress.acked} / {otaProgress.total} chunks</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                className="bg-[#1E91C7] h-2.5 rounded-full transition-all duration-300"
+                style={{ width: `${Math.round(otaProgress.acked / otaProgress.total * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
         {message && <p className="text-center text-gray-700">{message}</p>}
       </div >
     </div>
