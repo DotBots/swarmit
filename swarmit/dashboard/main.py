@@ -4,15 +4,22 @@ import webbrowser
 
 import click
 import uvicorn
+from dotbot_utils.serial_interface import get_default_port
 
 from swarmit import __version__
-from swarmit.cli.main import DEFAULTS
 from swarmit.testbed.controller import ControllerSettings
 from swarmit.testbed.helpers import load_toml_config
 from swarmit.testbed.webserver import api, init_api, mount_frontend
 
-DEFAULTS_DASHBOARD = {
-    **DEFAULTS,
+DEFAULTS = {
+    "adapter": "edge",
+    "serial_port": get_default_port(),
+    "baudrate": 1000000,
+    "mqtt_host": "localhost",
+    "mqtt_port": 1883,
+    "swarmit_network_id": "1200",
+    "mqtt_use_tls": False,
+    "verbose": False,
     "http_port": 8001,
     "map_size": "2500x2500",
 }
@@ -29,25 +36,25 @@ DEFAULTS_DASHBOARD = {
     "-p",
     "--port",
     type=str,
-    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS_DASHBOARD['serial_port']}.",
+    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS['serial_port']}.",
 )
 @click.option(
     "-b",
     "--baudrate",
     type=int,
-    help=f"Serial port baudrate. Default: {DEFAULTS_DASHBOARD['baudrate']}.",
+    help=f"Serial port baudrate. Default: {DEFAULTS['baudrate']}.",
 )
 @click.option(
     "-H",
     "--mqtt-host",
     type=str,
-    help=f"MQTT host. Default: {DEFAULTS_DASHBOARD['mqtt_host']}.",
+    help=f"MQTT host. Default: {DEFAULTS['mqtt_host']}.",
 )
 @click.option(
     "-P",
     "--mqtt-port",
     type=int,
-    help=f"MQTT port. Default: {DEFAULTS_DASHBOARD['mqtt_port']}.",
+    help=f"MQTT port. Default: {DEFAULTS['mqtt_port']}.",
 )
 @click.option(
     "-T",
@@ -59,13 +66,13 @@ DEFAULTS_DASHBOARD = {
     "-n",
     "--network-id",
     type=str,
-    help=f"Marilib network ID to use. Default: 0x{DEFAULTS_DASHBOARD['swarmit_network_id']}",
+    help=f"Marilib network ID to use. Default: 0x{DEFAULTS['swarmit_network_id']}",
 )
 @click.option(
     "-a",
     "--adapter",
     type=click.Choice(["edge", "cloud"], case_sensitive=True),
-    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS_DASHBOARD['adapter']}",
+    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS['adapter']}",
 )
 @click.option(
     "-d",
@@ -78,7 +85,7 @@ DEFAULTS_DASHBOARD = {
     "-m",
     "--map-size",
     type=str,
-    default=DEFAULTS_DASHBOARD['map_size'],
+    default=DEFAULTS['map_size'],
     help="Size of the map on the ground in mm, in the format WIDTHxHEIGHT. Default: 2500x2500.",
 )
 @click.option(
@@ -95,7 +102,7 @@ DEFAULTS_DASHBOARD = {
 @click.option(
     "--http-port",
     type=int,
-    help=f"HTTP port. Default: {DEFAULTS_DASHBOARD['adapter']}",
+    help=f"HTTP port. Default: {DEFAULTS['http_port']}",
 )
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
 def main(
@@ -130,7 +137,7 @@ def main(
 
     # Merge in order of priority: CLI > config > defaults
     final_config = {
-        **DEFAULTS_DASHBOARD,
+        **DEFAULTS,
         **{k: v for k, v in config_data.items() if v is not None},
         **{k: v for k, v in cli_args.items() if v not in (None, False)},
     }

@@ -31,7 +31,7 @@ Options:
                               WIDTHxHEIGHT. Default: 2500x2500.
   -v, --verbose               Enable verbose mode.
   --open-browser              Open the dashboard in a web browser automatically.
-  --http-port INTEGER         HTTP port. Default: edge
+  --http-port INTEGER         HTTP port. Default: 8001
   -V, --version               Show the version and exit.
   --help                      Show this message and exit.
 """
@@ -48,7 +48,6 @@ def controller_mock(monkeypatch, tmp_path, capsys):
         "swarmit.testbed.webserver.API_DB_URL",
         f"sqlite:///{tmp_path}/database.db",
     )
-    monkeypatch.setattr("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
 
     class ControllerSettingsMock(ControllerSettings):
         adapter_wait_timeout: float = 0.1

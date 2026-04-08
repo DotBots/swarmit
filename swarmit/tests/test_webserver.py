@@ -1,5 +1,6 @@
 import base64
 import datetime
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,15 +20,13 @@ def public_key_not_found():
 
 @pytest.fixture
 def client(monkeypatch, tmp_path, capsys):
-    def fake_jwt_encode(*args, **kwargs):
+    def fake_jwt_encode(*_args, **_kwargs):
         return "FAKE_TOKEN"
 
-    def fake_jwt_decode(*args, **kwargs):
+    def fake_jwt_decode(*_args, **_kwargs):
         return {"user": "ok"}
 
-    monkeypatch.setattr("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.3)
     monkeypatch.setattr("swarmit.testbed.controller.INACTIVE_TIMEOUT", 0.3)
-    monkeypatch.setattr("swarmit.testbed.controller.STATUS_TIMEOUT", 0.3)
     monkeypatch.setattr(
         "swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.3
     )
@@ -59,20 +58,29 @@ def client(monkeypatch, tmp_path, capsys):
         ),
     )
     mount_frontend(api)
-    capsys.readouterr()  # clear init_api output
-
-    test_adapter = controller.interface.mari.serial_interface
-    node1 = SwarmitNode(address=0x01, adapter=test_adapter)
-    node2 = SwarmitNode(address=0x02, adapter=test_adapter)
-    node3 = SwarmitNode(
-        address=0x03, status=StatusType.Running, adapter=test_adapter
-    )
-    nodes = [node1, node2, node3]
-    for node in nodes:
-        test_adapter.add_node(node)
+    capsys.readouterr()
 
     with TestClient(api) as c:
+        # lifespan has run: setup() was called, adapter is ready
+        test_adapter = controller.interface.mari.serial_interface
+        node1 = SwarmitNode(address=0x01, adapter=test_adapter)
+        node2 = SwarmitNode(address=0x02, adapter=test_adapter)
+        node3 = SwarmitNode(
+            address=0x03, status=StatusType.Running, adapter=test_adapter
+        )
+        for node in [node1, node2, node3]:
+            test_adapter.add_node(node)
+        time.sleep(0.5)  # let status frames propagate through asyncio loop
         yield c
+
+    # Reset OTA state between test runs
+    api.state.ota_status = "idle"
+    api.state.ota_error = None
+
+
+# ------------------------------------------------------------------
+# Status / settings
+# ------------------------------------------------------------------
 
 
 def test_status_endpoint(client):
@@ -89,6 +97,11 @@ def test_settings_endpoint(client):
         "area_height": 2500,
         "area_width": 2500,
     }
+
+
+# ------------------------------------------------------------------
+# Start
+# ------------------------------------------------------------------
 
 
 def test_start_endpoint(client):
@@ -117,7 +130,7 @@ def test_start_no_public_key(client, monkeypatch):
 def test_start_token_expired(client, monkeypatch):
     import jwt
 
-    def token_expired(*args, **kwargs):
+    def token_expired(*_args, **_kwargs):
         raise jwt.ExpiredSignatureError("Token has expired")
 
     monkeypatch.setattr("swarmit.testbed.webserver.jwt.decode", token_expired)
@@ -133,7 +146,7 @@ def test_start_token_expired(client, monkeypatch):
 def test_start_token_invalid(client, monkeypatch):
     import jwt
 
-    def token_invalid(*args, **kwargs):
+    def token_invalid(*_args, **_kwargs):
         raise jwt.InvalidTokenError("Invalid token")
 
     monkeypatch.setattr("swarmit.testbed.webserver.jwt.decode", token_invalid)
@@ -146,14 +159,14 @@ def test_start_token_invalid(client, monkeypatch):
     assert res.json()["detail"] == "Invalid token"
 
 
-def test_start_devices_none(client, capsys):
+def test_start_devices_none(client):
     res = client.post(
         "/start",
         json={"devices": None},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
-    assert "2 devices to start" in capsys.readouterr().out
+    assert res.json() == {"response": "done"}
 
 
 def test_start_devices_not_string(client):
@@ -164,7 +177,7 @@ def test_start_devices_not_string(client):
     )
     assert res.status_code == 422
     assert (
-        res.json()["detail"][0]['msg']
+        res.json()["detail"][0]["msg"]
         == "Value error, devices must be a string or list of strings"
     )
 
@@ -177,9 +190,14 @@ def test_start_devices_not_list_of_strings(client):
     )
     assert res.status_code == 422
     assert (
-        res.json()["detail"][0]['msg']
+        res.json()["detail"][0]["msg"]
         == "Value error, devices must be a list of strings"
     )
+
+
+# ------------------------------------------------------------------
+# Stop
+# ------------------------------------------------------------------
 
 
 def test_stop_endpoint(client):
@@ -205,24 +223,33 @@ def test_stop_no_public_key(client, monkeypatch):
     assert "public.pem not found" in res.json()["detail"]
 
 
-def test_flash_firmware_success(client):
-    fw = base64.b64encode(b"hello").decode()
+# ------------------------------------------------------------------
+# OTA start
+# ------------------------------------------------------------------
+
+
+def test_ota_start_success(client):
+    fw = base64.b64encode(b"hello" * 50).decode()
     res = client.post(
-        "/flash",
+        "/ota/start",
         json={"firmware_b64": fw, "devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
     assert res.status_code == 200
-    assert res.json() == {"response": "success"}
+    data = res.json()
+    assert "00000001" in data["acked"]
+    assert data["missed"] == []
+    assert data["total_chunks"] > 0
+    assert data["fw_hash"] != ""
 
 
-def test_flash_no_public_key(client, monkeypatch):
+def test_ota_start_no_public_key(client, monkeypatch):
     monkeypatch.setattr(
         "swarmit.testbed.webserver.get_public_key", public_key_not_found
     )
     fw = base64.b64encode(b"hello").decode()
     res = client.post(
-        "/flash",
+        "/ota/start",
         json={"firmware_b64": fw, "devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
@@ -230,9 +257,9 @@ def test_flash_no_public_key(client, monkeypatch):
     assert "public.pem not found" in res.json()["detail"]
 
 
-def test_flash_firmware_invalid_base64(client):
+def test_ota_start_invalid_base64(client):
     res = client.post(
-        "/flash",
+        "/ota/start",
         json={"firmware_b64": "***notbase64***"},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
@@ -240,10 +267,10 @@ def test_flash_firmware_invalid_base64(client):
     assert "invalid firmware encoding" in res.json()["detail"]
 
 
-def test_flash_when_device_not_ready(client):
+def test_ota_start_no_ready_device(client):
     fw = base64.b64encode(b"abc").decode()
     res = client.post(
-        "/flash",
+        "/ota/start",
         json={"firmware_b64": fw, "devices": ["00000003"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
@@ -251,44 +278,228 @@ def test_flash_when_device_not_ready(client):
     assert res.json()["detail"] == "no ready devices to flash"
 
 
-def test_flash_missing_start_ota(client, monkeypatch):
-    def fake_start_ota(self, fw, devices=None):
-        return {"missed": ["00000001"], "acked": []}
+def test_ota_start_missing_acks(client, monkeypatch):
+    from swarmit.testbed.controller import StartOtaData
+
+    async def fake_start_ota(_self, fw, devices=None):
+        return {"ota": StartOtaData(), "missed": ["00000001"], "acked": []}
 
     monkeypatch.setattr(
         "swarmit.testbed.controller.Controller.start_ota", fake_start_ota
     )
-
     fw = base64.b64encode(b"abc").decode()
     res = client.post(
-        "/flash",
+        "/ota/start",
         json={"firmware_b64": fw, "devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
-    assert res.status_code == 400
-    assert "acknowledgments are missing" in res.json()["detail"]
+    assert res.status_code == 200
+    data = res.json()
+    assert data["missed"] == ["00000001"]
+    assert data["acked"] == []
 
 
-def test_flash_transfer_failed(client, monkeypatch):
-    from swarmit.testbed.controller import TransferDataStatus
+# ------------------------------------------------------------------
+# OTA chunks + progress
+# ------------------------------------------------------------------
 
-    def fake_transfer(self, fw, devices=None):
-        return {
-            "00000001": TransferDataStatus(success=False),
-        }
 
+def test_ota_full_success(client):
+    fw = base64.b64encode(b"hello" * 50).decode()
+    # Step 1: negotiate start
+    res = client.post(
+        "/ota/start",
+        json={"firmware_b64": fw, "devices": ["00000001"]},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 200
+    acked = res.json()["acked"]
+
+    # Step 2: transfer chunks (background task, completes before TestClient returns)
+    res = client.post(
+        "/ota/chunks",
+        json={"devices": acked},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "started"}
+
+    # Step 3: check progress
+    prog = client.get(
+        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+    )
+    assert prog.status_code == 200
+    data = prog.json()
+    assert data["status"] == "success"
+    assert data["error"] is None
+
+
+def test_ota_chunks_already_running(client):
+    client.app.state.ota_status = "running"
+    res = client.post(
+        "/ota/chunks",
+        json={"devices": ["00000001"]},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 409
+    assert "already in progress" in res.json()["detail"]
+    client.app.state.ota_status = "idle"
+
+
+def test_ota_chunks_no_public_key(client, monkeypatch):
+    monkeypatch.setattr(
+        "swarmit.testbed.webserver.get_public_key", public_key_not_found
+    )
+    res = client.post(
+        "/ota/chunks",
+        json={"devices": ["00000001"]},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 500
+    assert "public.pem not found" in res.json()["detail"]
+
+
+def test_ota_chunks_transfer_failed(client, monkeypatch):
+    from swarmit.testbed.controller import StartOtaData, TransferDataStatus
+
+    async def fake_start_ota(_self, fw, devices=None):
+        return {"ota": StartOtaData(), "missed": [], "acked": ["00000001"]}
+
+    async def fake_transfer(_self, devices):
+        return {"00000001": TransferDataStatus(success=False)}
+
+    monkeypatch.setattr(
+        "swarmit.testbed.controller.Controller.start_ota", fake_start_ota
+    )
     monkeypatch.setattr(
         "swarmit.testbed.controller.Controller.transfer", fake_transfer
     )
 
     fw = base64.b64encode(b"abc").decode()
-    res = client.post(
-        "/flash",
+    client.post(
+        "/ota/start",
         json={"firmware_b64": fw, "devices": ["00000001"]},
         headers={"Authorization": "Bearer FAKE_TOKEN"},
     )
+    res = client.post(
+        "/ota/chunks",
+        json={"devices": ["00000001"]},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 200
+
+    prog = client.get(
+        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+    )
+    assert prog.json()["status"] == "failed"
+    assert prog.json()["error"] == "transfer failed"
+
+
+def test_ota_progress_idle(client):
+    client.app.state.ota_status = "idle"
+    client.app.state.ota_error = None
+    res = client.get(
+        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "idle"
+    assert data["error"] is None
+    assert data["total_chunks"] == 0
+
+
+def test_ota_progress_failed(client):
+    client.app.state.ota_status = "failed"
+    client.app.state.ota_error = "transfer failed"
+    res = client.get(
+        "/ota/progress", headers={"Authorization": "Bearer FAKE_TOKEN"}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "failed"
+    assert data["error"] == "transfer failed"
+
+
+def test_ota_progress_requires_token(client):
+    res = client.get("/ota/progress")
+    assert res.status_code in (401, 403)
+
+
+# ------------------------------------------------------------------
+# Reset / message
+# ------------------------------------------------------------------
+
+
+def test_reset_endpoint(client):
+    res = client.post(
+        "/reset",
+        json={"locations": {"00000001": {"pos_x": 100, "pos_y": 200}}},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"response": "done"}
+
+
+def test_reset_invalid_location(client):
+    res = client.post(
+        "/reset",
+        json={"locations": {"00000001": {"bad_key": 0}}},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
     assert res.status_code == 400
-    assert res.json()["detail"] == "transfer failed"
+    assert "invalid location data" in res.json()["detail"]
+
+
+def test_reset_no_public_key(client, monkeypatch):
+    monkeypatch.setattr(
+        "swarmit.testbed.webserver.get_public_key", public_key_not_found
+    )
+    res = client.post(
+        "/reset",
+        json={"locations": {"00000001": {"pos_x": 0, "pos_y": 0}}},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 500
+    assert "public.pem not found" in res.json()["detail"]
+
+
+def test_message_endpoint(client, capsys):
+    res = client.post(
+        "/message",
+        json={"message": "hello swarm", "devices": ["00000003"]},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"response": "done"}
+    assert "received message: hello swarm" in capsys.readouterr().out
+
+
+def test_message_broadcast(client):
+    res = client.post(
+        "/message",
+        json={"message": "broadcast", "devices": None},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"response": "done"}
+
+
+def test_message_no_public_key(client, monkeypatch):
+    monkeypatch.setattr(
+        "swarmit.testbed.webserver.get_public_key", public_key_not_found
+    )
+    res = client.post(
+        "/message",
+        json={"message": "hello"},
+        headers={"Authorization": "Bearer FAKE_TOKEN"},
+    )
+    assert res.status_code == 500
+    assert "public.pem not found" in res.json()["detail"]
+
+
+# ------------------------------------------------------------------
+# JWT management
+# ------------------------------------------------------------------
 
 
 def test_issue_jwt(client):
@@ -298,7 +509,6 @@ def test_issue_jwt(client):
     ).isoformat()
     res = client.post("/issue_jwt", json={"start": start_time})
     assert res.status_code == 200
-    assert "data" in res.json()
     assert res.json()["data"] == "FAKE_TOKEN"
 
     res = client.get("/records")
@@ -311,11 +521,7 @@ def test_issue_same_jwt_twice(client):
         datetime.datetime.now(datetime.timezone.utc)
         + datetime.timedelta(minutes=10)
     ).isoformat()
-    res = client.post("/issue_jwt", json={"start": start_time})
-    assert res.status_code == 200
-    assert "data" in res.json()
-    assert res.json()["data"] == "FAKE_TOKEN"
-
+    client.post("/issue_jwt", json={"start": start_time})
     res = client.post("/issue_jwt", json={"start": start_time})
     assert res.status_code == 400
     assert res.json()["detail"] == "Timeslot already full"
@@ -342,7 +548,6 @@ def test_issue_jwt_invalid_format(client):
 def test_public_key_success(client):
     res = client.get("/public_key")
     assert res.status_code == 200
-    assert "data" in res.json()
     assert res.json()["data"] == "PUBLIC_KEY"
 
 
@@ -356,6 +561,6 @@ def test_public_key_not_found(client, monkeypatch):
 
 
 def test_frontend_not_exists(client, capsys, monkeypatch):
-    monkeypatch.setattr("os.path.isdir", lambda path: False)
+    monkeypatch.setattr("os.path.isdir", lambda _path: False)
     mount_frontend(client.app)
     assert "Warning: dashboard directory not found" in capsys.readouterr().out

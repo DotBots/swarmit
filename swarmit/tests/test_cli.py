@@ -1,34 +1,24 @@
 import sys
-from unittest.mock import PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
 from swarmit.cli.main import main
-from swarmit.testbed.controller import (
-    ControllerSettings,
-    StartOtaData,
-    TransferDataStatus,
-)
 
 CLI_HELP_EXPECTED = """Usage: main [OPTIONS] COMMAND [ARGS]...
 
 Options:
-  -c, --config-path FILE      Path to a .toml configuration file.
-  -p, --port TEXT             Serial port to use to send the bitstream to the
-                              gateway. Default: /dev/ttyACM0.
-  -b, --baudrate INTEGER      Serial port baudrate. Default: 1000000.
-  -H, --mqtt-host TEXT        MQTT host. Default: localhost.
-  -P, --mqtt-port INTEGER     MQTT port. Default: 1883.
-  -T, --mqtt-use_tls          Use TLS with MQTT.
-  -n, --network-id TEXT       Marilib network ID to use. Default: 0x1200
-  -a, --adapter [edge|cloud]  Choose the adapter to communicate with the
-                              gateway. Default: edge
-  -d, --devices TEXT          Subset list of device addresses to interact with,
-                              separated with ,
-  -v, --verbose               Enable verbose mode.
-  -V, --version               Show the version and exit.
-  -h, --help                  Show this message and exit.
+  -c, --config-path FILE  Path to a .toml configuration file.
+  --api-url TEXT          Base URL of the SwarmIT dashboard REST API.  [default:
+                          http://localhost:8001]
+  --token TEXT            JWT authentication token. Also readable from
+                          SWARMIT_TOKEN env var.
+  -d, --devices TEXT      Subset list of device addresses to interact with,
+                          separated with ,
+  -v, --verbose           Enable verbose mode.
+  -V, --version           Show the version and exit.
+  -h, --help              Show this message and exit.
 
 Commands:
   flash    Flash a firmware to the robots.
@@ -40,6 +30,42 @@ Commands:
   stop     Stop the user application.
 """
 
+OTA_START_OK = {
+    "acked": ["00000001"],
+    "missed": [],
+    "total_chunks": 1,
+    "fw_hash": "ABCDEF1234",
+}
+
+OTA_PROGRESS_SUCCESS = {
+    "status": "success",
+    "error": None,
+    "total_chunks": 1,
+    "devices": {
+        "00000001": {
+            "chunks_acked": 1,
+            "total_chunks": 1,
+            "success": True,
+        }
+    },
+}
+
+OTA_PROGRESS_FAILED = {
+    "status": "failed",
+    "error": "transfer failed",
+    "total_chunks": 1,
+    "devices": {},
+}
+
+
+def make_response(status_code=200, json_data=None):
+    """Build a mock httpx response."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_data if json_data is not None else {}
+    resp.raise_for_status = MagicMock()
+    return resp
+
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Serial port is different")
 def test_main_help():
@@ -49,121 +75,76 @@ def test_main_help():
     assert result.output == CLI_HELP_EXPECTED
 
 
-@patch("swarmit.cli.main.Controller")
-def test_start(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_start(httpx_mock):
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
+    # _live_status polls /status; KeyboardInterrupt exits it cleanly
+    httpx_mock.get.side_effect = KeyboardInterrupt
     runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock().return_value).ready_devices = PropertyMock(
-        return_value=["1", "2"]
-    )
-    result = runner.invoke(main, ["start"])
+    result = runner.invoke(main, ["--token", "TOK", "start"])
     assert result.exit_code == 0
-    assert not result.output.strip()
-    controller.start.assert_called_once()
-    controller.terminate.assert_called_once()
+    httpx_mock.post.assert_called_once()
+    assert "/start" in httpx_mock.post.call_args.args[0]
 
 
-@patch("swarmit.cli.main.Controller")
-def test_start_no_device(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_start_with_devices(httpx_mock):
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
+    httpx_mock.get.side_effect = KeyboardInterrupt
     runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).ready_devices = PropertyMock(
-        return_value=[]
+    result = runner.invoke(
+        main, ["--token", "TOK", "-d", "00000001,00000002", "start"]
     )
-    result = runner.invoke(main, ["start"])
     assert result.exit_code == 0
-    assert "No device to start" in result.output
-    controller.start.assert_not_called()
-    controller.terminate.assert_called_once()
+    call_kwargs = httpx_mock.post.call_args.kwargs
+    assert call_kwargs["json"]["devices"] == ["00000001", "00000002"]
 
 
-@patch("swarmit.cli.main.Controller")
-def test_stop(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_stop(httpx_mock):
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
+    httpx_mock.get.side_effect = KeyboardInterrupt
     runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).running_devices = PropertyMock(
-        return_value=["1", "2"]
-    )
-    result = runner.invoke(main, ["stop"])
+    result = runner.invoke(main, ["--token", "TOK", "stop"])
     assert result.exit_code == 0
-    assert not result.output.strip()
-    controller.stop.assert_called_once()
-    controller.terminate.assert_called_once()
+    httpx_mock.post.assert_called_once()
+    assert "/stop" in httpx_mock.post.call_args.args[0]
 
 
-@patch("swarmit.cli.main.Controller")
-def test_stop_no_device(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_reset(httpx_mock):
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
     runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).running_devices = PropertyMock(
-        return_value=[]
-    )
-    type(controller_mock.return_value).resetting_devices = PropertyMock(
-        return_value=[]
-    )
-    result = runner.invoke(main, ["stop"])
+    result = runner.invoke(main, ["--token", "TOK", "reset", "AABB:10,20"])
     assert result.exit_code == 0
-    assert "No device to stop" in result.output
-    controller.stop.assert_not_called()
-    controller.terminate.assert_called_once()
+    httpx_mock.post.assert_called_once()
+    call_args = httpx_mock.post.call_args
+    assert "/reset" in call_args.args[0]
+    locations = call_args.kwargs["json"]["locations"]
+    assert locations["AABB"] == {"pos_x": 10, "pos_y": 20}
 
 
-@patch("swarmit.cli.main.Controller")
-def test_reset(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_reset_multiple_devices(httpx_mock):
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
     runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).settings = PropertyMock(
-        return_value=ControllerSettings(devices=[1])
+    result = runner.invoke(
+        main, ["--token", "TOK", "reset", "AABB:10,20-CCDD:30,40"]
     )
-    result = runner.invoke(main, ["reset", "1:0.5,0.5"])
     assert result.exit_code == 0
-    controller.reset.assert_called_once()
-    controller.terminate.assert_called_once()
-
-
-@patch("swarmit.cli.main.Controller")
-def test_reset_no_match(controller_mock):
-    runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).settings = PropertyMock(
-        return_value=ControllerSettings(devices=[1])
-    )
-    result = runner.invoke(main, ["reset", "2:0.5,0.5"])
-    assert result.exit_code == 0
-    assert "Selected devices and reset locations do not match" in result.output
-    controller.reset.assert_not_called()
-    controller.terminate.assert_called_once()
-
-
-@patch("swarmit.cli.main.Controller")
-def test_reset_no_device_selected(controller_mock):
-    runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).settings = PropertyMock(
-        return_value=ControllerSettings(devices=[])
-    )
-    result = runner.invoke(main, ["reset", "1:0.5,0.5"])
-    assert result.exit_code == 0
-    assert "No device selected" in result.output
-    controller.reset.assert_not_called()
-    controller.terminate.assert_called_once()
-
-
-@patch("swarmit.cli.main.Controller")
-def test_reset_no_device_ready(controller_mock):
-    runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).settings = PropertyMock(
-        return_value=ControllerSettings(devices=[1])
-    )
-    type(controller_mock.return_value).ready_devices = PropertyMock(
-        return_value=[]
-    )
-    result = runner.invoke(main, ["reset", "1:0.5,0.5"])
-    assert result.exit_code == 0
-    assert "No device to reset" in result.output
-    controller.reset.assert_not_called()
-    controller.terminate.assert_called_once()
+    locations = httpx_mock.post.call_args.kwargs["json"]["locations"]
+    assert locations["AABB"] == {"pos_x": 10, "pos_y": 20}
+    assert locations["CCDD"] == {"pos_x": 30, "pos_y": 40}
 
 
 @pytest.fixture
@@ -173,191 +154,217 @@ def fw(tmp_path):
     return fw_path
 
 
-@patch("swarmit.cli.main.Controller")
-def test_flash_missing_firmware(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_flash_missing_firmware(httpx_mock):
     runner = CliRunner()
-    controller = controller_mock()
     result = runner.invoke(main, ["flash"])
     assert result.exit_code == 1
     assert "Missing firmware file" in result.output
-    controller.start_ota.assert_not_called()
-    controller.transfer.assert_not_called()
+    httpx_mock.post.assert_not_called()
 
 
-@patch("swarmit.cli.main.Controller")
-def test_flash_no_device_ready(controller_mock, fw):
+@patch("swarmit.cli.main.httpx")
+def test_flash_user_abort(httpx_mock, fw):
     runner = CliRunner()
-    controller = controller_mock()
-    type(controller_mock.return_value).ready_devices = PropertyMock(
-        return_value=[]
-    )
-    result = runner.invoke(main, ["flash", str(fw)])
-    assert result.exit_code == 1
-    assert "No ready device found. Exiting" in result.output
-    controller.start_ota.assert_not_called()
-    controller.transfer.assert_not_called()
-
-
-@patch("swarmit.cli.main.Controller")
-def test_flash_user_abort(controller_mock, fw):
-    runner = CliRunner()
-    controller = controller_mock()
     result = runner.invoke(main, ["flash", str(fw)], input="n\n")
     assert "Do you want to continue?" in result.output
     assert "Abort" in result.output
     assert result.exit_code == 1
-    controller.start_ota.assert_not_called()
-    controller.transfer.assert_not_called()
+    httpx_mock.post.assert_not_called()
 
 
-@patch("swarmit.cli.main.Controller")
-def test_flash_missing_ota_ack(controller_mock, fw):
+@patch("swarmit.cli.main.httpx")
+def test_flash_api_error(httpx_mock, fw):
+    # /ota/start returns 400
+    httpx_mock.post.return_value = make_response(
+        status_code=400, json_data={"detail": "no ready devices to flash"}
+    )
     runner = CliRunner()
-    controller = controller_mock()
-    result = runner.invoke(main, ["flash", str(fw)], input="y\n")
-    assert "acknowledgments are missing" in result.output
+    result = runner.invoke(
+        main, ["--token", "TOK", "flash", str(fw)], input="y\n"
+    )
     assert result.exit_code == 1
-    controller.start_ota.assert_called_with(fw.read_bytes())
-    controller.stop.assert_called_once()
-    controller.terminate.assert_called_once()
-    controller.transfer.assert_not_called()
+    assert "no ready devices to flash" in result.output
 
 
-@patch("swarmit.cli.main.Controller")
-def test_flash_transfer_failed(controller_mock, fw):
+@patch("swarmit.cli.main.httpx")
+def test_flash_missing_acks(httpx_mock, fw):
+    # /ota/start succeeds but some devices missed
+    httpx_mock.post.return_value = make_response(
+        json_data={
+            "acked": ["00000001"],
+            "missed": ["00000002"],
+            "total_chunks": 1,
+            "fw_hash": "ABCDEF",
+        }
+    )
     runner = CliRunner()
-    controller = controller_mock()
-    controller.start_ota.return_value = {
-        "missed": [],
-        "acked": ["1"],
-        "ota": StartOtaData(),
-    }
-    controller.transfer.return_value = {
-        "1": TransferDataStatus(success=False),
-    }
-    result = runner.invoke(main, ["flash", str(fw)], input="y\n")
+    result = runner.invoke(
+        main, ["--token", "TOK", "flash", str(fw)], input="y\n"
+    )
     assert result.exit_code == 1
-    controller.start_ota.assert_called_with(fw.read_bytes())
-    controller.stop.assert_not_called()
-    controller.terminate.assert_called_once()
-    controller.transfer.assert_called_with(
-        fw.read_bytes(), controller_mock().start_ota.return_value["acked"]
-    )
+    assert "acknowledgment" in result.output
 
 
-@patch("swarmit.cli.main.Controller")
-def test_flash_transfer_success_no_start(controller_mock, fw):
+@patch("swarmit.cli.main.httpx")
+def test_flash_already_running(httpx_mock, fw):
+    # /ota/start succeeds, /ota/chunks returns 409
+    httpx_mock.post.side_effect = [
+        make_response(json_data=OTA_START_OK),
+        make_response(
+            status_code=409, json_data={"detail": "OTA already in progress"}
+        ),
+    ]
     runner = CliRunner()
-    controller = controller_mock()
-    controller.start_ota.return_value = {
-        "missed": [],
-        "acked": ["1"],
-        "ota": StartOtaData(),
-    }
-    controller.transfer.return_value = {
-        "1": TransferDataStatus(success=True),
-    }
-    result = runner.invoke(main, ["flash", str(fw)], input="y\n")
+    result = runner.invoke(
+        main, ["--token", "TOK", "flash", str(fw)], input="y\n"
+    )
+    assert result.exit_code == 1
+    assert "OTA transfer already in progress" in result.output
+
+
+@patch("swarmit.cli.main.httpx")
+def test_flash_success(httpx_mock, fw):
+    httpx_mock.post.side_effect = [
+        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "started"}),
+    ]
+    httpx_mock.get.return_value = make_response(json_data=OTA_PROGRESS_SUCCESS)
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--token", "TOK", "flash", str(fw)], input="y\n"
+    )
     assert result.exit_code == 0
-    controller.start_ota.assert_called_with(fw.read_bytes())
-    controller.stop.assert_not_called()
-    controller.terminate.assert_called_once()
-    controller.transfer.assert_called_with(
-        fw.read_bytes(), controller_mock().start_ota.return_value["acked"]
-    )
+    assert "Flash successful" in result.output
+    assert httpx_mock.post.call_count == 2
+    assert "/ota/start" in httpx_mock.post.call_args_list[0].args[0]
+    assert "/ota/chunks" in httpx_mock.post.call_args_list[1].args[0]
 
 
-@patch("swarmit.cli.main.Controller")
-def test_flash_transfer_success_with_start(controller_mock, fw):
+@patch("swarmit.cli.main.httpx")
+def test_flash_success_with_start(httpx_mock, fw):
+    httpx_mock.post.side_effect = [
+        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "started"}),
+        make_response(json_data={"response": "done"}),
+    ]
+    httpx_mock.get.return_value = make_response(json_data=OTA_PROGRESS_SUCCESS)
     runner = CliRunner()
-    controller = controller_mock()
-    controller.start_ota.return_value = {
-        "missed": [],
-        "acked": ["1"],
-        "ota": StartOtaData(),
-    }
-    controller.transfer.return_value = {
-        "1": TransferDataStatus(success=True),
-    }
-    result = runner.invoke(main, ["flash", str(fw), "--start"], input="y\n")
+    result = runner.invoke(
+        main, ["--token", "TOK", "flash", "--start", str(fw)], input="y\n"
+    )
     assert result.exit_code == 0
-    controller.start_ota.assert_called_with(fw.read_bytes())
-    controller.stop.assert_not_called()
-    controller.terminate.assert_called_once()
-    controller.transfer.assert_called_with(
-        fw.read_bytes(), controller_mock().start_ota.return_value["acked"]
-    )
-    controller.start.assert_called_once()
+    assert "Flash successful" in result.output
+    # /ota/start, /ota/chunks, /start
+    assert httpx_mock.post.call_count == 3
+    assert "/start" in httpx_mock.post.call_args_list[2].args[0]
 
 
-@patch("swarmit.cli.main.Controller")
-def test_monitor(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_flash_failed(httpx_mock, fw):
+    httpx_mock.post.side_effect = [
+        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "started"}),
+    ]
+    httpx_mock.get.return_value = make_response(json_data=OTA_PROGRESS_FAILED)
     runner = CliRunner()
-    controller = controller_mock()
+    result = runner.invoke(
+        main, ["--token", "TOK", "flash", str(fw)], input="y\n"
+    )
+    assert result.exit_code == 1
+    assert "Flash failed" in result.output
+
+
+@patch("swarmit.cli.main.httpx")
+def test_flash_no_confirm_needed_with_yes(httpx_mock, fw):
+    httpx_mock.post.side_effect = [
+        make_response(json_data=OTA_START_OK),
+        make_response(json_data={"status": "started"}),
+    ]
+    httpx_mock.get.return_value = make_response(
+        json_data={
+            "status": "success",
+            "error": None,
+            "total_chunks": 0,
+            "devices": {},
+        }
+    )
+    runner = CliRunner()
+    result = runner.invoke(main, ["--token", "TOK", "flash", "-y", str(fw)])
+    assert result.exit_code == 0
+    assert "Do you want to continue?" not in result.output
+
+
+@patch("swarmit.cli.main.httpx")
+def test_monitor_keyboard_interrupt(httpx_mock):
+    httpx_mock.get.side_effect = [
+        make_response(json_data={"response": {}}),
+        KeyboardInterrupt,
+    ]
+    runner = CliRunner()
     result = runner.invoke(main, ["monitor"])
     assert result.exit_code == 0
-    controller.monitor.assert_called_once()
-    controller.terminate.assert_called_once()
+    assert "Stopping monitor" in result.output
 
 
-@patch("swarmit.cli.main.Controller")
-def test_monitor_keyboard_interrupt(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_status(httpx_mock):
+    httpx_mock.get.return_value = make_response(json_data={"response": {}})
     runner = CliRunner()
-    controller = controller_mock()
-    controller.monitor.side_effect = KeyboardInterrupt
-    result = runner.invoke(main, ["monitor"])
-    assert result.exit_code == 0
-    controller.terminate.assert_called_once()
-
-
-@patch("swarmit.cli.main.Controller")
-def test_status(controller_mock):
-    runner = CliRunner()
-    controller = controller_mock()
     result = runner.invoke(main, ["status"])
     assert result.exit_code == 0
-    controller.status.assert_called_once()
-    controller.terminate.assert_called_once()
+    httpx_mock.get.assert_called_once()
+    assert "/status" in httpx_mock.get.call_args.args[0]
 
 
-@patch("swarmit.cli.main.Controller")
-def test_status_watch(controller_mock):
+@patch("swarmit.cli.main.httpx")
+def test_status_watch(httpx_mock):
+    httpx_mock.get.side_effect = [
+        make_response(json_data={"response": {}}),
+        KeyboardInterrupt,
+    ]
     runner = CliRunner()
-    controller = controller_mock()
     result = runner.invoke(main, ["status", "-w"])
     assert result.exit_code == 0
-    controller.status.assert_called_with(watch=True)
-    controller.terminate.assert_called_once()
+    assert httpx_mock.get.call_count >= 1
 
 
-TEST_CONFIG_TOML = """
-adapter = "edge"
-serial_port = "/dev/ttyACM0"
-baudrate = 1000000
-devices = ""
-"""
-
-
-@patch("swarmit.cli.main.Controller")
-def test_status_with_config(controller_mock, tmp_path):
-    # Smoke test to verify config file is loaded
-    cfg_path = tmp_path / "cfg.toml"
-    cfg_path.write_text(TEST_CONFIG_TOML)
-
+@patch("swarmit.cli.main.httpx")
+def test_message(httpx_mock):
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
     runner = CliRunner()
-    controller = controller_mock()
-    result = runner.invoke(main, ["-c", str(cfg_path), "status"])
-    assert result.exit_code == 0
-    controller.status.assert_called_once()
-    controller.terminate.assert_called_once()
-
-
-@patch("swarmit.cli.main.Controller")
-def test_message(controller_mock):
-    runner = CliRunner()
-    controller = controller_mock()
     msg = "Hello swarm"
-    result = runner.invoke(main, ["message", msg])
+    result = runner.invoke(main, ["--token", "TOK", "message", msg])
     assert result.exit_code == 0
-    controller.send_message.assert_called_with(msg)
-    controller.terminate.assert_called_once()
+    call_args = httpx_mock.post.call_args
+    assert "/message" in call_args.args[0]
+    assert call_args.kwargs["json"]["message"] == msg
+
+
+@patch("swarmit.cli.main.httpx")
+def test_token_from_env(httpx_mock, monkeypatch):
+    monkeypatch.setenv("SWARMIT_TOKEN", "ENV_TOKEN")
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
+    httpx_mock.get.side_effect = KeyboardInterrupt
+    runner = CliRunner()
+    result = runner.invoke(main, ["start"])
+    assert result.exit_code == 0
+    headers = httpx_mock.post.call_args.kwargs["headers"]
+    assert headers == {"Authorization": "Bearer ENV_TOKEN"}
+
+
+@patch("swarmit.cli.main.httpx")
+def test_no_token_no_auth_header(httpx_mock):
+    httpx_mock.post.return_value = make_response(
+        json_data={"response": "done"}
+    )
+    httpx_mock.get.side_effect = KeyboardInterrupt
+    runner = CliRunner()
+    result = runner.invoke(main, ["start"])
+    assert result.exit_code == 0
+    headers = httpx_mock.post.call_args.kwargs["headers"]
+    assert headers == {}

@@ -1,40 +1,99 @@
 #!/usr/bin/env python
 
+import base64
 import time
 
 import click
-from dotbot_utils.serial_interface import (
-    get_default_port,
-)
+import httpx
 from rich import print
-from rich.console import Console
-from rich.pretty import pprint
+from rich.console import Console, Group
+from rich.live import Live
+from rich.table import Table
+from rich.text import Text
+from tqdm import tqdm
 
 from swarmit import __version__
-from swarmit.testbed.controller import (
-    CHUNK_SIZE,
-    OTA_ACK_TIMEOUT_DEFAULT,
-    OTA_MAX_RETRIES_DEFAULT,
-    Controller,
-    ControllerSettings,
-    ResetLocation,
-    print_transfer_status,
-)
-from swarmit.testbed.helpers import load_toml_config
 from swarmit.testbed.logger import setup_logging
+from swarmit.testbed.protocol import StatusType
 
 DEFAULTS = {
-    "adapter": "edge",
-    "serial_port": get_default_port(),
-    "baudrate": 1000000,
-    "mqtt_host": "localhost",
-    "mqtt_port": 1883,
-    # Default network ID for SwarmIT tests is 0x12**
-    # See https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
-    "swarmit_network_id": "1200",
-    "mqtt_use_tls": False,
+    "api_url": "http://localhost:8001",
     "verbose": False,
 }
+
+
+def _auth_headers(ctx):
+    token = ctx.obj.get("token")
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
+def _battery_color(level: int) -> str:
+    if level > 2900:
+        return "cyan"
+    if level > 1500:
+        return "green"
+    return "red"
+
+
+def generate_status_from_dict(data: dict, devices=[], status_message="found"):
+    """Generate a Rich renderable from the /status JSON response dict."""
+    filtered = {
+        addr: info
+        for addr, info in data.items()
+        if (devices and addr in devices) or (not devices)
+    }
+    if not filtered:
+        return Group(Text(f"\nNo device {status_message}\n"))
+
+    header = Text(
+        f"\n{len(filtered)} device{'s' if len(filtered) > 1 else ''} {status_message}\n"
+    )
+    table = Table()
+    table.add_column("Device Addr", style="magenta", no_wrap=True)
+    table.add_column("Type", style="cyan", justify="center")
+    table.add_column("Battery", style="cyan", justify="center")
+    table.add_column("Position", style="cyan", justify="center")
+    table.add_column(
+        "Status",
+        style="green",
+        justify="center",
+        width=max(len(m) for m in StatusType.__members__),
+    )
+    for addr, info in sorted(filtered.items()):
+        status_name = info.get("status", "")
+        device_name = info.get("device", "")
+        battery = info.get("battery", 0)
+        pos_x = info.get("pos_x", 0)
+        pos_y = info.get("pos_y", 0)
+        color = "[bold cyan]" if status_name == "Running" else "[bold green]"
+        table.add_row(
+            addr,
+            device_name,
+            f"[{_battery_color(battery)}]{battery / 1000:.2f}V"
+            f" ({int(battery / 3000 * 100)}%)",
+            f"({pos_x}, {pos_y})",
+            f"{color}{status_name}",
+        )
+    return Group(header, table)
+
+
+def _live_status(url, devices, timeout=5.0, message="found"):
+    """Poll /status and display a live Rich table for *timeout* seconds."""
+    deadline = time.time() + timeout
+    try:
+        with Live(refresh_per_second=4) as live:
+            while time.time() < deadline:
+                resp = httpx.get(f"{url}/status")
+                if resp.status_code == 200:
+                    data = resp.json().get("response", {})
+                    live.update(
+                        generate_status_from_dict(data, devices, message)
+                    )
+                time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass
 
 
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
@@ -45,46 +104,18 @@ DEFAULTS = {
     help="Path to a .toml configuration file.",
 )
 @click.option(
-    "-p",
-    "--port",
+    "--api-url",
     type=str,
-    help=f"Serial port to use to send the bitstream to the gateway. Default: {DEFAULTS['serial_port']}.",
+    default=DEFAULTS["api_url"],
+    show_default=True,
+    help="Base URL of the SwarmIT dashboard REST API.",
 )
 @click.option(
-    "-b",
-    "--baudrate",
-    type=int,
-    help=f"Serial port baudrate. Default: {DEFAULTS['baudrate']}.",
-)
-@click.option(
-    "-H",
-    "--mqtt-host",
+    "--token",
     type=str,
-    help=f"MQTT host. Default: {DEFAULTS['mqtt_host']}.",
-)
-@click.option(
-    "-P",
-    "--mqtt-port",
-    type=int,
-    help=f"MQTT port. Default: {DEFAULTS['mqtt_port']}.",
-)
-@click.option(
-    "-T",
-    "--mqtt-use_tls",
-    is_flag=True,
-    help="Use TLS with MQTT.",
-)
-@click.option(
-    "-n",
-    "--network-id",
-    type=str,
-    help=f"Marilib network ID to use. Default: 0x{DEFAULTS['swarmit_network_id']}",
-)
-@click.option(
-    "-a",
-    "--adapter",
-    type=click.Choice(["edge", "cloud"], case_sensitive=True),
-    help=f"Choose the adapter to communicate with the gateway. Default: {DEFAULTS['adapter']}",
+    default=None,
+    envvar="SWARMIT_TOKEN",
+    help="JWT authentication token. Also readable from SWARMIT_TOKEN env var.",
 )
 @click.option(
     "-d",
@@ -101,113 +132,69 @@ DEFAULTS = {
 )
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
 @click.pass_context
-def main(
-    ctx,
-    config_path,
-    port,
-    baudrate,
-    mqtt_host,
-    mqtt_port,
-    mqtt_use_tls,
-    network_id,
-    adapter,
-    devices,
-    verbose,
-):
-    config_data = load_toml_config(config_path)
-    cli_args = {
-        "adapter": adapter,
-        "serial_port": port,
-        "baudrate": baudrate,
-        "mqtt_host": mqtt_host,
-        "mqtt_port": mqtt_port,
-        "mqtt_use_tls": mqtt_use_tls,
-        "swarmit_network_id": network_id,
-        "devices": devices,
-        "verbose": verbose,
-    }
-
-    # Merge in order of priority: CLI > config > defaults
-    final_config = {
-        **DEFAULTS,
-        **{k: v for k, v in config_data.items() if v is not None},
-        **{k: v for k, v in cli_args.items() if v not in (None, False)},
-    }
-
+def main(ctx, config_path, api_url, token, devices, verbose):
     setup_logging()
     ctx.ensure_object(dict)
-    ctx.obj["settings"] = ControllerSettings(
-        serial_port=final_config["serial_port"],
-        serial_baudrate=final_config["baudrate"],
-        mqtt_host=final_config["mqtt_host"],
-        mqtt_port=final_config["mqtt_port"],
-        mqtt_use_tls=final_config["mqtt_use_tls"],
-        network_id=int(final_config["swarmit_network_id"], 16),
-        adapter=final_config["adapter"],
-        devices=[d for d in final_config["devices"].split(",") if d],
-        verbose=final_config["verbose"],
-    )
+    ctx.obj["api_url"] = api_url
+    ctx.obj["token"] = token
+    ctx.obj["devices"] = [d for d in devices.split(",") if d]
+    ctx.obj["verbose"] = verbose
 
 
 @main.command()
 @click.pass_context
 def start(ctx):
     """Start the user application."""
-    controller = Controller(ctx.obj["settings"])
-    if controller.ready_devices:
-        controller.start()
-    else:
-        print("No device to start")
-    controller.terminate()
+    url = ctx.obj["api_url"]
+    devices = ctx.obj["devices"]
+    resp = httpx.post(
+        f"{url}/start",
+        json={"devices": devices or None},
+        headers=_auth_headers(ctx),
+    )
+    resp.raise_for_status()
+    _live_status(url, devices, timeout=5.0, message="to start")
 
 
 @main.command()
 @click.pass_context
 def stop(ctx):
     """Stop the user application."""
-    controller = Controller(ctx.obj["settings"])
-    if controller.running_devices or controller.resetting_devices:
-        controller.stop()
-    else:
-        print("[bold]No device to stop[/]")
-    controller.terminate()
+    url = ctx.obj["api_url"]
+    devices = ctx.obj["devices"]
+    resp = httpx.post(
+        f"{url}/stop",
+        json={"devices": devices or None},
+        headers=_auth_headers(ctx),
+    )
+    resp.raise_for_status()
+    _live_status(url, devices, timeout=5.0, message="to stop")
 
 
 @main.command()
-@click.argument(
-    "locations",
-    type=str,
-)
+@click.argument("locations", type=str)
 @click.pass_context
 def reset(ctx, locations):
     """Reset robots locations.
 
     Locations are provided as '<device_addr>:<x>,<y>-<device_addr>:<x>,<y>|...'
     """
-    controller = Controller(ctx.obj["settings"])
-    devices = controller.settings.devices
-    print(devices)
-    if not devices:
-        print("No device selected.")
-        controller.terminate()
-        return
-    locations = {
-        int(location.split(":")[0], 16): ResetLocation(
-            pos_x=int(float(location.split(":")[1].split(",")[0])),
-            pos_y=int(float(location.split(":")[1].split(",")[1])),
-        )
-        for location in locations.split("-")
-    }
-    if sorted(devices) and sorted(locations.keys()) != sorted(devices):
-        print("Selected devices and reset locations do not match.")
-        controller.terminate()
-        return
-    if not controller.ready_devices:
-        print("No device to reset.")
-        controller.terminate()
-        return
-    controller.reset(locations)
-    controller.terminate()
+    url = ctx.obj["api_url"]
+    parsed = {}
+    for entry in locations.split("-"):
+        addr, coords = entry.split(":")
+        x_str, y_str = coords.split(",")
+        parsed[addr] = {
+            "pos_x": int(float(x_str)),
+            "pos_y": int(float(y_str)),
+        }
+    resp = httpx.post(
+        f"{url}/reset",
+        json={"locations": parsed},
+        headers=_auth_headers(ctx),
+    )
+    resp.raise_for_status()
+    print(resp.json())
 
 
 @main.command()
@@ -220,104 +207,144 @@ def reset(ctx, locations):
 @click.option(
     "-s",
     "--start",
+    "start_after",
     is_flag=True,
     help="Start the firmware once flashed.",
 )
-@click.option(
-    "-t",
-    "--ota-timeout",
-    type=float,
-    default=OTA_ACK_TIMEOUT_DEFAULT,
-    show_default=True,
-    help="Timeout in seconds for each OTA ACK message.",
-)
-@click.option(
-    "-r",
-    "--ota-max-retries",
-    type=int,
-    default=OTA_MAX_RETRIES_DEFAULT,
-    show_default=True,
-    help="Number of retries for each OTA message (start or chunk) transfer.",
-)
 @click.argument("firmware", type=click.File(mode="rb"), required=False)
 @click.pass_context
-def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
+def flash(ctx, yes, start_after, firmware):
     """Flash a firmware to the robots."""
     console = Console()
     if firmware is None:
         console.print("[bold red]Error:[/] Missing firmware file. Exiting.")
         raise click.Abort()
 
-    ctx.obj["settings"].ota_timeout = ota_timeout
-    ctx.obj["settings"].ota_max_retries = ota_max_retries
-    fw = bytearray(firmware.read())
-    controller = Controller(ctx.obj["settings"])
-    if not controller.ready_devices:
-        console.print("[bold red]Error:[/] No ready device found. Exiting.")
-        controller.terminate()
-        raise click.Abort()
+    url = ctx.obj["api_url"]
+    devices = ctx.obj["devices"]
+    fw_b64 = base64.b64encode(firmware.read()).decode()
 
-    print(
-        f"Devices to flash ([bold white]{len(controller.ready_devices)}):[/]"
-    )
-    pprint(controller.ready_devices, expand_all=True)
-    if yes is False:
+    if not yes:
         click.confirm("Do you want to continue?", default=True, abort=True)
 
-    start_data = controller.start_ota(fw)
-    if controller.settings.verbose:
-        print("\n[b]Start OTA response:[/]")
-        pprint(start_data, indent_guides=False, expand_all=True)
-    if start_data["missed"]:
-        console = Console()
+    # Step 1 – negotiate OTA start (blocks until all ACKs received)
+    resp = httpx.post(
+        f"{url}/ota/start",
+        json={"firmware_b64": fw_b64, "devices": devices or None},
+        headers=_auth_headers(ctx),
+    )
+    if resp.status_code != 200:
         console.print(
-            f"[bold red]Error:[/] {len(start_data['missed'])} acknowledgments "
-            f"are missing ({', '.join(sorted(set(start_data['missed'])))}). "
-            "Aborting."
+            f"[bold red]Error:[/] {resp.json().get('detail', resp.text)}"
         )
-        controller.stop()
-        controller.terminate()
         raise click.Abort()
 
-    print()
-    print(f"Image size: [bold cyan]{len(fw)}B[/]")
-    print(
-        f"Image hash: [bold cyan]{start_data['ota'].fw_hash.hex().upper()}[/]"
+    data = resp.json()
+    acked = data["acked"]
+    missed = data["missed"]
+    total_chunks = data["total_chunks"]
+    fw_hash = data["fw_hash"]
+
+    console.print(
+        f"Image hash: [bold cyan]{fw_hash}[/]"
+        f"  chunks: [bold]{total_chunks}[/]"
+        f"  acked: [bold green]{len(acked)}[/]"
+        + (f"  [bold red]missed: {', '.join(missed)}[/]" if missed else "")
     )
-    print(
-        f"Radio chunks ([bold]{CHUNK_SIZE}B[/bold]): {start_data['ota'].chunks}"
-    )
-    start_time = time.time()
-    data = controller.transfer(fw, start_data["acked"])
-    print(f"Elapsed: [bold cyan]{time.time() - start_time:.3f}s[/bold cyan]")
-    print_transfer_status(data, start_data["ota"])
-    if controller.settings.verbose:
-        print("\n[b]Transfer data:[/]")
-        pprint(data, indent_guides=False, expand_all=True)
-    if all([device.success for device in data.values()]) is False:
-        controller.terminate()
-        console = Console()
-        console.print("[bold red]Error:[/] Transfer failed.")
+
+    if missed:
+        console.print(
+            f"[bold red]Error:[/] {len(missed)} acknowledgment(s) missing "
+            f"({', '.join(sorted(missed))}). Aborting."
+        )
         raise click.Abort()
 
-    if start is True:
-        time.sleep(1)
-        controller.start()
+    # Step 2 – start background chunk transfer
+    resp = httpx.post(
+        f"{url}/ota/chunks",
+        json={"devices": acked},
+        headers=_auth_headers(ctx),
+    )
+    if resp.status_code == 409:
+        console.print("[bold red]Error:[/] OTA transfer already in progress.")
+        raise click.Abort()
+    if resp.status_code != 200:
+        console.print(
+            f"[bold red]Error:[/] {resp.json().get('detail', resp.text)}"
+        )
+        raise click.Abort()
 
-    controller.terminate()
+    # Step 3 – poll progress with a tqdm bar
+    pbar = None
+    last_n = 0
+
+    while True:
+        prog_resp = httpx.get(
+            f"{url}/ota/progress", headers=_auth_headers(ctx)
+        )
+        prog_resp.raise_for_status()
+        prog = prog_resp.json()
+        ota_status = prog["status"]
+
+        if pbar is None and prog["total_chunks"] > 0:
+            pbar = tqdm(
+                total=prog["total_chunks"],
+                unit="chunk",
+                colour="green",
+                ncols=100,
+            )
+            pbar.set_description("Flashing firmware")
+
+        if pbar is not None and prog["devices"]:
+            min_acked = min(
+                d["chunks_acked"] for d in prog["devices"].values()
+            )
+            if min_acked > last_n:
+                pbar.update(min_acked - last_n)
+                last_n = min_acked
+
+        if ota_status == "success":
+            if pbar:
+                pbar.close()
+            console.print("[bold green]Flash successful.[/]")
+            break
+        if ota_status == "failed":
+            if pbar:
+                pbar.close()
+            console.print(
+                f"[bold red]Error:[/] Flash failed: {prog.get('error')}"
+            )
+            raise click.Abort()
+
+        time.sleep(0.5)
+
+    if start_after:
+        resp = httpx.post(
+            f"{url}/start",
+            json={"devices": devices or None},
+            headers=_auth_headers(ctx),
+        )
+        resp.raise_for_status()
 
 
 @main.command()
 @click.pass_context
 def monitor(ctx):
     """Monitor running applications."""
+    url = ctx.obj["api_url"]
+    devices = ctx.obj["devices"]
     try:
-        controller = Controller(ctx.obj["settings"])
-        controller.monitor()
+        with Live(refresh_per_second=4) as live:
+            while True:
+                resp = httpx.get(f"{url}/status")
+                if resp.status_code == 200:
+                    data = resp.json().get("response", {})
+                    live.update(
+                        generate_status_from_dict(data, devices, "found")
+                    )
+                time.sleep(0.25)
     except KeyboardInterrupt:
         print("Stopping monitor.")
-    finally:
-        controller.terminate()
 
 
 @main.command()
@@ -330,9 +357,27 @@ def monitor(ctx):
 @click.pass_context
 def status(ctx, watch):
     """Print current status of the robots."""
-    controller = Controller(ctx.obj["settings"])
-    controller.status(watch=watch)
-    controller.terminate()
+    url = ctx.obj["api_url"]
+    devices = ctx.obj["devices"]
+
+    def _fetch():
+        resp = httpx.get(f"{url}/status")
+        resp.raise_for_status()
+        return generate_status_from_dict(
+            resp.json().get("response", {}), devices, "found"
+        )
+
+    if not watch:
+        print(_fetch())
+        return
+
+    try:
+        with Live(refresh_per_second=4) as live:
+            while True:
+                live.update(_fetch())
+                time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass
 
 
 @main.command()
@@ -340,9 +385,15 @@ def status(ctx, watch):
 @click.pass_context
 def message(ctx, message):
     """Send a custom text message to the robots."""
-    controller = Controller(ctx.obj["settings"])
-    controller.send_message(message)
-    controller.terminate()
+    url = ctx.obj["api_url"]
+    devices = ctx.obj["devices"]
+    resp = httpx.post(
+        f"{url}/message",
+        json={"message": message, "devices": devices or None},
+        headers=_auth_headers(ctx),
+    )
+    resp.raise_for_status()
+    print(resp.json())
 
 
 if __name__ == "__main__":

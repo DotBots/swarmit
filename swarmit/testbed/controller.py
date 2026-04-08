@@ -1,20 +1,14 @@
 """Module containing the swarmit controller class."""
 
+import asyncio
 import dataclasses
-import threading
 import time
 from binascii import hexlify
 from dataclasses import dataclass
 
 from cryptography.hazmat.primitives import hashes
-from dotbot_utils.protocol import Packet, Payload
+from dotbot_utils.protocol import Payload
 from dotbot_utils.serial_interface import get_default_port
-from rich import print
-from rich.console import Group
-from rich.live import Live
-from rich.table import Table
-from rich.text import Text
-from tqdm import tqdm
 
 from swarmit.testbed.adapter import (
     GatewayAdapterBase,
@@ -35,17 +29,13 @@ from swarmit.testbed.protocol import (
 )
 
 CHUNK_SIZE = 128
-COMMAND_TIMEOUT = 6
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
 INACTIVE_TIMEOUT = 3  # s
-STATUS_TIMEOUT = 5
-MONITOR_TIMEOUT = 60  # s
 OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 0.7
 SERIAL_PORT_DEFAULT = get_default_port()
 BROADCAST_ADDRESS = 0xFFFFFFFFFFFFFFFF
-VOLTAGE_MAX = 3000  # mV
 VOLTAGE_FULL = 2900  # mV
 VOLTAGE_WARNING = 1500  # mV
 
@@ -77,6 +67,7 @@ class StartOtaData:
     """Class that holds start ota data."""
 
     chunks: int = 0
+    fw_length: int = 0
     fw_hash: bytes = b""
     addrs: list[str] = dataclasses.field(default_factory=lambda: [])
     retries: int = 0
@@ -119,94 +110,6 @@ def addr_to_hex(addr: int) -> str:
     return hexlify(addr.to_bytes(8, "big")).decode().upper()
 
 
-def battery_level_color(level: int):
-    if level > VOLTAGE_FULL:
-        return "cyan"
-    if level > VOLTAGE_WARNING:
-        return "green"
-    return "red"
-
-
-def generate_status(status_data, devices=[], status_message="found"):
-    data = {
-        addr: device_data
-        for addr, device_data in status_data.items()
-        if (devices and addr in devices) or (not devices)
-    }
-    if not data:
-        return Group(Text(f"\nNo device {status_message}\n"))
-
-    header = Text(
-        f"\n{len(data)} device{'s' if len(data) > 1 else ''} {status_message}\n"
-    )
-
-    table = Table()
-    table.add_column("Device Addr", style="magenta", no_wrap=True)
-    table.add_column(
-        "Type",
-        style="cyan",
-        justify="center",
-    )
-    table.add_column(
-        "Battery",
-        style="cyan",
-        justify="center",
-    )
-    table.add_column(
-        "Position",
-        style="cyan",
-        justify="center",
-    )
-    table.add_column(
-        "Status",
-        style="green",
-        justify="center",
-        width=max([len(m) for m in StatusType.__members__]),
-    )
-    for device_addr, device_data in sorted(data.items()):
-
-        table.add_row(
-            f"{device_addr}",
-            f"{device_data.device.name}",
-            f"[{battery_level_color(device_data.battery)}]{device_data.battery / 1000:.2f}V ({int(device_data.battery / 3000 * 100)}%)",
-            f"({device_data.pos_x}, {device_data.pos_y})",
-            f"{'[bold cyan]' if device_data.status == StatusType.Running else '[bold green]'}{device_data.status.name}",
-        )
-    return Group(header, table)
-
-
-def print_transfer_status(
-    status: dict[str, TransferDataStatus], start_data: int
-) -> None:
-    """Print the transfer status."""
-    print()
-    print("[bold]Transfer status:[/]")
-    transfer_status_table = Table()
-    transfer_status_table.add_column(
-        "Device Addr", style="magenta", no_wrap=True
-    )
-    transfer_status_table.add_column(
-        "Chunks acked", style="green", justify="center"
-    )
-
-    with Live(transfer_status_table, refresh_per_second=4) as live:
-        live.update(transfer_status_table)
-        for device_addr, status in sorted(status.items()):
-            chunks_col_color = "[green]" if status.success else "[bold red]"
-            transfer_status_table.add_row(
-                f"{device_addr}",
-                f"{chunks_col_color}{len([chunk for chunk in status.chunks if bool(chunk.acked)])}/{start_data.chunks}",
-            )
-
-
-def wait_for_done(timeout):
-    """Wait for the condition to be met."""
-    while timeout > 0:
-        timeout -= 0.01
-        time.sleep(0.01)
-    return False
-
-
 @dataclass
 class ControllerSettings:
     """Class that holds controller settings."""
@@ -237,11 +140,18 @@ class Controller:
         self.chunks: list[DataChunk] = []
         self.start_ota_data: StartOtaData = StartOtaData()
         self.transfer_data: dict[str, TransferDataStatus] = {}
-        self._known_devices: dict[str, StatusType] = {}
-        self._stop_event = threading.Event()
-        self._cleanup_thread = threading.Thread(
-            target=self._cleanup_loop, daemon=True
-        )
+        # Initialised in setup():
+        self._loop: asyncio.AbstractEventLoop = None
+        self._frame_queue: asyncio.Queue = None
+        self._stop_event: asyncio.Event = None
+        self._frame_task: asyncio.Task = None
+        self._cleanup_task: asyncio.Task = None
+
+    async def setup(self):
+        """Initialise async primitives, adapter and background tasks."""
+        self._loop = asyncio.get_running_loop()
+        self._frame_queue = asyncio.Queue()
+        self._stop_event = asyncio.Event()
         if self.settings.adapter == "cloud":
             self._interface = MarilibCloudAdapter(
                 self.settings.mqtt_host,
@@ -258,108 +168,86 @@ class Controller:
                 verbose=self.settings.verbose,
                 busy_wait_timeout=self.settings.adapter_wait_timeout,
             )
-        self._interface.init(self.on_frame_received)
-        self._cleanup_thread.start()
+        self._interface.init(self._on_frame_received)
+        self._frame_task = asyncio.create_task(self._process_frames())
+        self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
     @property
-    def known_devices(self) -> dict[str, StatusType]:
-        """Return the known devices."""
-        if not self._known_devices:
-            wait_for_done(COMMAND_TIMEOUT)
-            self._known_devices = self.status_data
-        return self._known_devices
+    def interface(self) -> GatewayAdapterBase:
+        """Return the gateway adapter interface."""
+        return self._interface
 
     @property
     def running_devices(self) -> list[str]:
         """Return the running devices."""
         return [
             addr
-            for addr, node in self.known_devices.items()
-            if (
-                (
-                    node.status == StatusType.Running
-                    or node.status == StatusType.Programming
-                )
-                and (
-                    not self.settings.devices or addr in self.settings.devices
-                )
-            )
+            for addr, node in self.status_data.items()
+            if node.status in (StatusType.Running, StatusType.Programming)
+            and (not self.settings.devices or addr in self.settings.devices)
         ]
 
     @property
     def resetting_devices(self) -> list[str]:
         """Return the resetting devices."""
         return [
-            device_addr
-            for device_addr, node in self.known_devices.items()
-            if (
-                node.status == StatusType.Resetting
-                and (
-                    not self.settings.devices
-                    or device_addr in self.settings.devices
-                )
-            )
+            addr
+            for addr, node in self.status_data.items()
+            if node.status == StatusType.Resetting
+            and (not self.settings.devices or addr in self.settings.devices)
         ]
 
     @property
     def ready_devices(self) -> list[str]:
-        """Return the ready devices."""
+        """Return the ready (bootloader) devices."""
         return [
-            device_addr
-            for device_addr, node in self.known_devices.items()
-            if (
-                node.status == StatusType.Bootloader
-                and (
-                    not self.settings.devices
-                    or device_addr in self.settings.devices
-                )
-            )
-        ]
-
-    @property
-    def interface(self) -> GatewayAdapterBase:
-        """Return the interface."""
-        return self._interface
-
-    def _cleanup_loop(self):
-        while not self._stop_event.is_set():
-            self.cleanup_inactive(INACTIVE_TIMEOUT)
-            time.sleep(1)
-
-    def cleanup_inactive(self, timeout):
-        now = time.time()
-        inactive = [
             addr
-            for addr, status in self.status_data.items()
-            if now - status.last_updated_at > timeout
+            for addr, node in self.status_data.items()
+            if node.status == StatusType.Bootloader
+            and (not self.settings.devices or addr in self.settings.devices)
         ]
-        for addr in inactive:
-            del self.status_data[addr]
 
-    def terminate(self):
-        """Terminate the controller."""
-        self._stop_event.set()
-        self._cleanup_thread.join()
-        self.interface.close()
+    # ------------------------------------------------------------------
+    # Internal frame bridge (called from marilib's thread)
+    # ------------------------------------------------------------------
 
-    def send_payload(self, destination: int, payload: Payload):
-        """Send a frame to the devices."""
-        self.interface.send_payload(destination, payload)
+    def _on_frame_received(self, header, packet):
+        """Bridge marilib's thread callback into the asyncio queue."""
+        try:
+            self._loop.call_soon_threadsafe(
+                self._frame_queue.put_nowait, (header, packet)
+            )
+        except RuntimeError:
+            pass  # loop already closed
 
-    def on_frame_received(self, header, packet: Packet):
-        """Handle the received frame."""
+    # ------------------------------------------------------------------
+    # Background tasks
+    # ------------------------------------------------------------------
+
+    async def _process_frames(self):
+        while not self._stop_event.is_set():
+            try:
+                header, packet = await asyncio.wait_for(
+                    self._frame_queue.get(), timeout=0.1
+                )
+                await self._handle_frame(header, packet)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+
+    async def _handle_frame(self, header, packet):
+        """Process a single received frame."""
         device_addr = f"{header.source:08X}"
         if packet.payload_type == PayloadType.SWARMIT_STATUS:
-            now = time.time()
-            status = NodeStatus(
+            self.status_data[device_addr] = NodeStatus(
                 device=DeviceType(packet.payload.device),
                 status=StatusType(packet.payload.status),
                 battery=packet.payload.battery,
                 pos_x=packet.payload.pos_x,
                 pos_y=packet.payload.pos_y,
-                last_updated_at=now,
+                last_updated_at=time.time(),
             )
-            self.status_data.update({device_addr: status})
         elif (
             packet.payload_type == PayloadType.SWARMIT_OTA_START_ACK
             and device_addr not in self.start_ota_data.addrs
@@ -379,7 +267,7 @@ class Controller:
                     chunk_index=packet.payload.index,
                 )
                 return
-            if acked is False:
+            if not acked:
                 self.transfer_data[device_addr].chunks[
                     packet.payload.index
                 ].acked = 1
@@ -389,40 +277,63 @@ class Controller:
                 and device_addr not in self.settings.devices
             ):
                 return
-            logger = self.logger.bind(
+            self.logger.bind(
                 device_addr=device_addr,
                 notification=PayloadType(packet.payload_type).name,
                 timestamp=packet.payload.timestamp,
                 data_size=packet.payload.count,
                 data=packet.payload.data,
-            )
-            logger.info("LOG event")
+            ).info("LOG event")
 
-    def _live_status(self, timeout, devices=[], message="found", watch=False):
-        """Request the live status of the testbed."""
-        with Live(
-            generate_status(self.status_data, devices, status_message=message),
-            refresh_per_second=4,
-        ) as live:
-            while watch is True or timeout > 0:
-                live.update(
-                    generate_status(
-                        self.status_data, devices, status_message=message
-                    )
-                )
-                timeout -= 0.01
-                time.sleep(0.01)
+    async def _cleanup_loop(self):
+        while not self._stop_event.is_set():
+            self.cleanup_inactive(INACTIVE_TIMEOUT)
+            try:
+                await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                break
 
-    def status(self, timeout=STATUS_TIMEOUT, watch=False):
-        """Request the status of the testbed."""
-        self._live_status(timeout, devices=self.settings.devices, watch=watch)
+    def cleanup_inactive(self, timeout):
+        """Remove devices that haven't sent a status frame recently."""
+        now = time.time()
+        inactive = [
+            addr
+            for addr, status in self.status_data.items()
+            if now - status.last_updated_at > timeout
+        ]
+        for addr in inactive:
+            del self.status_data[addr]
 
-    def _send_start(self, device_addr: str):
-        payload = PayloadStart()
-        self.send_payload(int(device_addr, 16), payload)
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
 
-    def start(self, devices=None, timeout=COMMAND_TIMEOUT):
-        """Start the application."""
+    async def terminate(self):
+        """Cancel background tasks and close the adapter."""
+        self._stop_event.set()
+        for task in (self._cleanup_task, self._frame_task):
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._interface.close()
+
+    # ------------------------------------------------------------------
+    # Low-level send helpers (synchronous – marilib API is sync)
+    # ------------------------------------------------------------------
+
+    def send_payload(self, destination: int, payload: Payload):
+        """Send a frame to the devices."""
+        self._interface.send_payload(destination, payload)
+
+    # ------------------------------------------------------------------
+    # Commands
+    # ------------------------------------------------------------------
+
+    async def start(self, devices=None):
+        """Send start commands and wait for acknowledgement."""
         if devices is None:
             devices = self.settings.devices or []
         ready_devices = self.ready_devices
@@ -438,119 +349,116 @@ class Controller:
             for addr in devices_to_start
         ):
             if not devices:
-                self._send_start(addr_to_hex(BROADCAST_ADDRESS))
+                self.send_payload(BROADCAST_ADDRESS, PayloadStart())
             else:
-                for device_addr in devices_to_start:
-                    self._send_start(device_addr)
+                for addr in devices_to_start:
+                    self.send_payload(int(addr, 16), PayloadStart())
             attempts += 1
-            time.sleep(COMMAND_ATTEMPT_DELAY)
-        self._live_status(
-            timeout, devices=devices_to_start, message="to start"
-        )
+            await asyncio.sleep(COMMAND_ATTEMPT_DELAY)
 
-    def stop(self, devices=None, timeout=COMMAND_TIMEOUT):
-        """Stop the application."""
+    async def stop(self, devices=None):
+        """Send stop commands and wait for acknowledgement."""
         if devices is None:
             devices = self.settings.devices or []
-        stoppable_devices = self.running_devices + self.resetting_devices
+        stoppable = self.running_devices + self.resetting_devices
         devices_to_stop = (
-            stoppable_devices
+            stoppable
             if not devices
-            else [d for d in devices if d in stoppable_devices]
+            else [d for d in devices if d in stoppable]
         )
-
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
             self.status_data[addr].status
-            in [StatusType.Stopping, StatusType.Bootloader]
+            in (StatusType.Stopping, StatusType.Bootloader)
             for addr in devices_to_stop
         ):
             if not devices:
                 self.send_payload(BROADCAST_ADDRESS, PayloadStop())
             else:
-                for device_addr in devices_to_stop:
-                    self.send_payload(int(device_addr, 16), PayloadStop())
+                for addr in devices_to_stop:
+                    self.send_payload(int(addr, 16), PayloadStop())
             attempts += 1
-            time.sleep(COMMAND_ATTEMPT_DELAY)
-        self._live_status(timeout, devices=devices_to_stop, message="to stop")
+            await asyncio.sleep(COMMAND_ATTEMPT_DELAY)
 
-    def _send_reset(self, device_addr: int, location: ResetLocation):
-        payload = PayloadReset(
-            pos_x=location.pos_x,
-            pos_y=location.pos_y,
-        )
-        self.send_payload(device_addr, payload)
-
-    def reset(self, locations: dict[str, ResetLocation]):
-        """Reset the application."""
+    async def reset(self, locations: dict[str, ResetLocation]):
+        """Send reset commands to ready devices in *locations*."""
         ready_devices = self.ready_devices
-        for device_addr in self.settings.devices:
+        for device_addr, location in locations.items():
             if device_addr not in ready_devices:
                 continue
-            print(
-                f"Resetting device {device_addr} with location {locations[device_addr]}"
+            print(f"Resetting device {device_addr} with location {location}")
+            self.send_payload(
+                int(device_addr, 16),
+                PayloadReset(pos_x=location.pos_x, pos_y=location.pos_y),
             )
-            self._send_reset(int(device_addr, 16), locations[device_addr])
+        await asyncio.sleep(0)
 
-    def monitor(
-        self, timeout: float = MONITOR_TIMEOUT, run_forever: bool = True
-    ):
-        """Monitor the testbed."""
-        self.logger.info("Monitoring testbed")
-        while timeout > 0 or run_forever:
-            time.sleep(0.01)
-            timeout -= 0.01
-
-    def _send_message(self, device_addr: int, message: str):
-        payload = PayloadMessage(
-            count=len(message),
-            message=message.encode(),
-        )
-        self.send_payload(device_addr, payload)
-
-    def send_message(self, message):
-        """Send a message to the devices."""
+    async def send_message(self, message, devices=None):
+        """Send a text message to devices."""
+        if devices is None:
+            devices = self.settings.devices or []
         running_devices = self.running_devices
-        if not self.settings.devices:
-            self._send_message(BROADCAST_ADDRESS, message)
+        if not devices:
+            self.send_payload(
+                BROADCAST_ADDRESS,
+                PayloadMessage(count=len(message), message=message.encode()),
+            )
         else:
-            for addr in self.settings.devices:
+            for addr in devices:
                 if addr not in running_devices:
                     continue
-                self._send_message(int(addr, 16), message)
+                self.send_payload(
+                    int(addr, 16),
+                    PayloadMessage(
+                        count=len(message), message=message.encode()
+                    ),
+                )
+        await asyncio.sleep(0)
 
-    def _send_start_ota(
-        self, device_addr: str, devices_to_flash: set[str], firmware: bytes
+    # ------------------------------------------------------------------
+    # OTA
+    # ------------------------------------------------------------------
+
+    async def _send_start_ota(
+        self,
+        device_addr: str,
+        devices_to_flash: list[str],
+        ota_timeout: float,
+        ota_max_retries: int,
     ):
-        def is_start_ota_acknowledged():
+        def is_acked():
             if int(device_addr, 16) == BROADCAST_ADDRESS:
                 return sorted(self.start_ota_data.addrs) == sorted(
                     devices_to_flash
                 )
-            else:
-                return device_addr in self.start_ota_data.addrs
+            return device_addr in self.start_ota_data.addrs
 
         payload = PayloadOTAStart(
-            fw_length=len(firmware),
+            fw_length=self.start_ota_data.fw_length,
             fw_chunk_count=len(self.chunks),
         )
         send_time = time.time()
         send = True
         while (
-            not is_start_ota_acknowledged()
-            and self.start_ota_data.retries <= self.settings.ota_max_retries
+            not is_acked() and self.start_ota_data.retries <= ota_max_retries
         ):
-            if send is True:
+            if send:
                 self.send_payload(int(device_addr, 16), payload)
                 send_time = time.time()
                 self.start_ota_data.retries += 1
-            time.sleep(0.001)
-            send = time.time() - send_time > self.settings.ota_timeout
+            await asyncio.sleep(0)  # yield so _process_frames can run
+            send = time.time() - send_time > ota_timeout
 
-    def start_ota(self, firmware, devices=None) -> dict:
-        """Start the OTA process."""
+    async def start_ota(self, firmware, devices=None) -> dict:
+        """Prepare firmware chunks and negotiate OTA start with devices.
+
+        Returns a dict with keys: ``ota``, ``acked``, ``missed``.
+        """
         if devices is None:
             devices = self.settings.devices or []
+        ota_timeout = self.settings.ota_timeout
+        ota_max_retries = self.settings.ota_max_retries
+
         self.start_ota_data = StartOtaData()
         self.chunks = []
         digest = hashes.Hash(hashes.SHA256())
@@ -576,25 +484,29 @@ class Controller:
                 DataChunk(
                     index=chunk_idx,
                     size=chunk_size,
-                    sha=chunk_sha.finalize()[
-                        :8
-                    ],  # the first 8 bytes should be enough
+                    sha=chunk_sha.finalize()[:8],
                     data=data,
                 )
             )
         self.start_ota_data.fw_hash = digest.finalize()
+        self.start_ota_data.fw_length = len(firmware)
         self.start_ota_data.chunks = len(self.chunks)
         devices_to_flash = self.ready_devices
         if not devices:
             print("Broadcast start ota notification...")
-            self._send_start_ota(
-                addr_to_hex(BROADCAST_ADDRESS), devices_to_flash, firmware
+            await self._send_start_ota(
+                addr_to_hex(BROADCAST_ADDRESS),
+                devices_to_flash,
+                ota_timeout,
+                ota_max_retries,
             )
         else:
             for addr in devices:
                 print(f"Sending start ota notification to {addr}...")
-                self._send_start_ota(addr, devices, firmware)
-                time.sleep(0.2)
+                await self._send_start_ota(
+                    addr, devices, ota_timeout, ota_max_retries
+                )
+                await asyncio.sleep(0.2)
         return {
             "ota": self.start_ota_data,
             "acked": sorted(self.start_ota_data.addrs),
@@ -603,29 +515,28 @@ class Controller:
             ),
         }
 
-    def send_chunk(
+    async def send_chunk(
         self,
         chunk: DataChunk,
         device_addr: str,
-        devices_to_flash: set[str],
+        devices_to_flash: list[str],
     ):
+        """Send a single OTA chunk and wait for all ACKs."""
+        ota_timeout = self.settings.ota_timeout
+        ota_max_retries = self.settings.ota_max_retries
+
         def is_chunk_acknowledged():
             if int(device_addr, 16) == BROADCAST_ADDRESS:
                 return sorted(self.transfer_data.keys()) == sorted(
                     devices_to_flash
                 ) and all(
-                    [
-                        status.chunks[chunk.index].acked
-                        for status in self.transfer_data.values()
-                    ]
+                    s.chunks[chunk.index].acked
+                    for s in self.transfer_data.values()
                 )
-            else:
-                return (
-                    device_addr in self.transfer_data.keys()
-                    and self.transfer_data[device_addr]
-                    .chunks[chunk.index]
-                    .acked
-                )
+            return (
+                device_addr in self.transfer_data
+                and self.transfer_data[device_addr].chunks[chunk.index].acked
+            )
 
         payload = PayloadOTAChunk(
             index=chunk.index,
@@ -636,25 +547,22 @@ class Controller:
         send_time = time.time()
         send = True
         retries_count = 0
-        while (
-            not is_chunk_acknowledged()
-            and retries_count <= self.settings.ota_max_retries
-        ):
-            if send is True:
+        while not is_chunk_acknowledged() and retries_count <= ota_max_retries:
+            if send:
                 self.send_payload(int(device_addr, 16), payload)
                 if self.settings.verbose:
-                    missing_acks = [
-                        addr
-                        for addr in devices_to_flash
-                        if addr not in self.transfer_data
-                        or not self.transfer_data[addr]
-                        .chunks[chunk.index]
-                        .acked
+                    missing = [
+                        a
+                        for a in devices_to_flash
+                        if a not in self.transfer_data
+                        or not self.transfer_data[a].chunks[chunk.index].acked
                     ]
                     print(
-                        f"Transferring chunk {chunk.index + 1}/{self.start_ota_data.chunks} to {device_addr} "
+                        f"Transferring chunk {chunk.index + 1}/"
+                        f"{self.start_ota_data.chunks} to {device_addr} "
                         f"- {retries_count} retries "
-                        f"- {len(missing_acks)} missing acks: {', '.join(missing_acks) if missing_acks else 'none'}"
+                        f"- {len(missing)} missing acks: "
+                        f"{', '.join(missing) if missing else 'none'}"
                     )
                 if int(device_addr, 16) == BROADCAST_ADDRESS:
                     for addr in devices_to_flash:
@@ -667,59 +575,48 @@ class Controller:
                     ].retries = retries_count
                 send_time = time.time()
                 retries_count += 1
-            time.sleep(0.001)
-            send = time.time() - send_time > self.settings.ota_timeout
+            await asyncio.sleep(0)  # yield so _process_frames can run
+            send = time.time() - send_time > ota_timeout
 
-    def transfer(self, firmware, devices) -> dict[str, TransferDataStatus]:
-        """Transfer the firmware to the devices."""
-        data_size = len(firmware)
-        use_progress_bar = not self.settings.verbose
-        if use_progress_bar:
-            progress = tqdm(
-                range(0, data_size),
-                unit="B",
-                unit_scale=False,
-                colour="green",
-                ncols=100,
-            )
-            progress.set_description(
-                f"Loading firmware ({int(data_size / 1024)}kB)"
-            )
+    async def transfer(
+        self, devices: list[str]
+    ) -> dict[str, TransferDataStatus]:
+        """Transfer all firmware chunks to *devices*.
+
+        ``start_ota()`` must be called first to populate ``self.chunks``.
+        """
         self.transfer_data = {}
-        for _addr in devices:
-            self.transfer_data[_addr] = TransferDataStatus()
-            self.transfer_data[_addr].chunks = [
-                Chunk(index=f"{i:03d}", size=f"{self.chunks[i].size:03d}B")
-                for i in range(len(self.chunks))
-            ]
+        for addr in devices:
+            self.transfer_data[addr] = TransferDataStatus(
+                chunks=[
+                    Chunk(
+                        index=f"{i:03d}",
+                        size=f"{self.chunks[i].size:03d}B",
+                    )
+                    for i in range(len(self.chunks))
+                ]
+            )
         for chunk in self.chunks:
-            if not self.settings.devices:
-                self.send_chunk(
-                    chunk,
-                    addr_to_hex(BROADCAST_ADDRESS),
-                    devices,
+            if not devices:
+                await self.send_chunk(
+                    chunk, addr_to_hex(BROADCAST_ADDRESS), devices
                 )
             else:
-                for _addr in devices:
-                    self.send_chunk(chunk, _addr, devices)
-            if use_progress_bar:
-                progress.update(chunk.size)
+                for addr in devices:
+                    await self.send_chunk(chunk, addr, devices)
         if self.settings.verbose:
             retries_count = sum(
-                self.transfer_data[_addr].chunks[_chunk].retries
-                for _chunk in range(len(self.chunks))
-                for _addr in devices
+                self.transfer_data[addr].chunks[i].retries
+                for i in range(len(self.chunks))
+                for addr in devices
             )
             if not self.settings.devices:
-                retries_count = int(retries_count / len(devices))
-            print(f"Transfer completed with {retries_count} retries")
-        if use_progress_bar:
-            progress.close()
-        for device in devices:
-            device_data = self.transfer_data.get(device)
-            if device_data:
-                device_data.success = all(
-                    chunk.acked for chunk in device_data.chunks
+                retries_count = (
+                    int(retries_count / len(devices)) if devices else 0
                 )
-                self.transfer_data[device] = device_data
+            print(f"Transfer completed with {retries_count} retries")
+        for addr in devices:
+            device_data = self.transfer_data.get(addr)
+            if device_data:
+                device_data.success = all(c.acked for c in device_data.chunks)
         return self.transfer_data

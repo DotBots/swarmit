@@ -10,13 +10,13 @@ from typing import List, Optional, Union
 
 import jwt
 from fastapi import (
+    BackgroundTasks,
     Depends,
     FastAPI,
     HTTPException,
     Request,
 )
 from fastapi import status as fastapi_status
-from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -27,7 +27,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from swarmit import __version__
-from swarmit.testbed.controller import Controller, ControllerSettings
+from swarmit.testbed.controller import (
+    Controller,
+    ControllerSettings,
+    ResetLocation,
+)
 from swarmit.testbed.model import (
     Base,
     JWTRecord,
@@ -116,29 +120,29 @@ def init_api(api: FastAPI, settings: ControllerSettings):
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         global SessionLocal
-        # Create engine + session factory
         engine = create_db_engine(API_DB_URL)
         SessionLocal = create_session_factory(engine)
-
-        # Initialize DB schema
         Base.metadata.create_all(bind=engine)
-
-        # Create triggers
         with engine.connect() as conn:
             create_prevent_overlap_trigger(conn)
 
-        # Run on startup
+        await controller.setup()
         app.state.controller = controller
+        app.state.ota_status = "idle"
+        app.state.ota_error = None
 
         yield
 
-        # Run on shutdown
-        controller.terminate()
+        await controller.terminate()
         engine.dispose()
 
     api.router.lifespan_context = lifespan
-
     return controller
+
+
+# ------------------------------------------------------------------
+# Pydantic models
+# ------------------------------------------------------------------
 
 
 class DeviceList(BaseModel):
@@ -151,63 +155,181 @@ class DeviceList(BaseModel):
         if isinstance(v, str):
             return [v]
         if isinstance(v, list):
-            # ensure list of strings
             if not all(isinstance(item, str) for item in v):
                 raise ValueError("devices must be a list of strings")
             return v
         raise ValueError("devices must be a string or list of strings")
 
 
-class FlashRequest(BaseModel):
+class OtaStartRequest(BaseModel):
     firmware_b64: str
     devices: Optional[Union[str, List[str]]] = None
 
+    @field_validator("devices", mode="before")
+    def validate_devices(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            if not all(isinstance(item, str) for item in v):
+                raise ValueError("devices must be a list of strings")
+            return v
+        raise ValueError("devices must be a string or list of strings")
 
-@api.post("/flash", dependencies=[Depends(verify_jwt)])
-async def flash_firmware(payload: FlashRequest, request: Request):
+
+class OtaChunksRequest(BaseModel):
+    devices: List[str]
+
+
+class ResetRequest(BaseModel):
+    locations: dict  # addr_str -> {"pos_x": int, "pos_y": int}
+
+
+class MessageRequest(BaseModel):
+    message: str
+    devices: Optional[Union[str, List[str]]] = None
+
+    @field_validator("devices", mode="before")
+    def validate_devices(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            if not all(isinstance(item, str) for item in v):
+                raise ValueError("devices must be a list of strings")
+            return v
+        raise ValueError("devices must be a string or list of strings")
+
+
+# ------------------------------------------------------------------
+# OTA background task
+# ------------------------------------------------------------------
+
+
+async def _chunks_background(app: FastAPI, devices: list[str]):
+    """Transfer OTA chunks to *devices* in a background task."""
+    controller: Controller = app.state.controller
+    try:
+        async with controller_lock:
+            data = await controller.transfer(devices)
+        if all(d.success for d in data.values()):
+            app.state.ota_status = "success"
+            app.state.ota_error = None
+        else:
+            app.state.ota_status = "failed"
+            app.state.ota_error = "transfer failed"
+    except Exception as exc:
+        app.state.ota_status = "failed"
+        app.state.ota_error = str(exc)
+
+
+# ------------------------------------------------------------------
+# OTA endpoints
+# ------------------------------------------------------------------
+
+
+@api.post("/ota/start", dependencies=[Depends(verify_jwt)])
+async def ota_start(payload: OtaStartRequest, request: Request):
+    """Negotiate OTA start with devices and return ACK summary.
+
+    This call blocks until all OTA-start ACKs have been received (or
+    the retry budget is exhausted).  The caller should inspect
+    ``missed`` before proceeding to ``POST /ota/chunks``.
+    """
     controller: Controller = request.app.state.controller
 
     try:
-        fw_bytes = base64.b64decode(payload.firmware_b64)
-        fw = bytearray(fw_bytes)
-    except Exception as e:
+        fw = bytearray(base64.b64decode(payload.firmware_b64))
+    except Exception as exc:
         raise HTTPException(
-            status_code=400, detail=f"invalid firmware encoding: {e}"
+            status_code=400, detail=f"invalid firmware encoding: {exc}"
         )
 
-    # Normalize devices
     devices = payload.devices
-    if all(
-        controller.status_data[device].status != StatusType.Bootloader
-        for device in devices
-    ):
-        raise HTTPException(
-            status_code=400, detail="no ready devices to flash"
-        )
-
-    async with controller_lock:
-
-        start_data = (
-            await run_in_threadpool(controller.start_ota, fw, devices)
-            if devices
-            else await run_in_threadpool(controller.start_ota, fw)
-        )
-
-        if start_data["missed"]:
+    if devices:
+        ready = [
+            d
+            for d in devices
+            if d in controller.status_data
+            and controller.status_data[d].status == StatusType.Bootloader
+        ]
+        if not ready:
             raise HTTPException(
-                status_code=400,
-                detail=f"{len(start_data['missed'])} acknowledgments are missing "
-                f"({', '.join(sorted(set(start_data['missed'])))})",
+                status_code=400, detail="no ready devices to flash"
+            )
+    else:
+        if not controller.ready_devices:
+            raise HTTPException(
+                status_code=400, detail="no ready devices to flash"
             )
 
-        data = await run_in_threadpool(
-            controller.transfer, fw, start_data["acked"]
+    async with controller_lock:
+        result = (
+            await controller.start_ota(fw, devices)
+            if devices
+            else await controller.start_ota(fw)
         )
 
-    if all(device.success for device in data.values()) is False:
-        raise HTTPException(status_code=400, detail="transfer failed")
+    return JSONResponse(
+        content={
+            "acked": result["acked"],
+            "missed": result["missed"],
+            "total_chunks": result["ota"].chunks,
+            "fw_hash": result["ota"].fw_hash.hex().upper(),
+        }
+    )
 
-    return JSONResponse(content={"response": "success"})
+
+@api.post("/ota/chunks", dependencies=[Depends(verify_jwt)])
+async def ota_chunks(
+    payload: OtaChunksRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """Start the OTA chunk transfer in the background.
+
+    ``POST /ota/start`` must have been called first.  Poll
+    ``GET /ota/progress`` to track completion.
+    """
+    if request.app.state.ota_status == "running":
+        raise HTTPException(
+            status_code=409, detail="OTA transfer already in progress"
+        )
+
+    request.app.state.ota_status = "running"
+    request.app.state.ota_error = None
+    background_tasks.add_task(_chunks_background, request.app, payload.devices)
+    return JSONResponse(content={"status": "started"})
+
+
+@api.get("/ota/progress", dependencies=[Depends(verify_jwt)])
+async def ota_progress(request: Request):
+    """Return the current OTA transfer progress."""
+    controller: Controller = request.app.state.controller
+    total_chunks = controller.start_ota_data.chunks
+    devices_progress = {
+        addr: {
+            "chunks_acked": sum(1 for c in status.chunks if c.acked),
+            "total_chunks": total_chunks,
+            "success": status.success,
+        }
+        for addr, status in controller.transfer_data.items()
+    }
+    return JSONResponse(
+        content={
+            "status": request.app.state.ota_status,
+            "error": request.app.state.ota_error,
+            "total_chunks": total_chunks,
+            "devices": devices_progress,
+        }
+    )
+
+
+# ------------------------------------------------------------------
+# Device status / settings
+# ------------------------------------------------------------------
 
 
 @api.get("/status")
@@ -234,7 +356,7 @@ class SettingsResponse(BaseModel):
 async def settings(request: Request):
     controller: Controller = request.app.state.controller
     map_size = controller.settings.map_size
-    width_str, height_str = map_size.lower().split('x')
+    width_str, height_str = map_size.lower().split("x")
     return SettingsResponse(
         network_id=controller.settings.network_id,
         area_width=int(width_str),
@@ -242,14 +364,20 @@ async def settings(request: Request):
     )
 
 
+# ------------------------------------------------------------------
+# Command endpoints
+# ------------------------------------------------------------------
+
+
 @api.post("/start")
 async def start(
-    request: Request, payload: DeviceList, _token_payload=Depends(verify_jwt)
+    request: Request,
+    payload: DeviceList,
+    _token_payload=Depends(verify_jwt),
 ):
     controller: Controller = request.app.state.controller
     async with controller_lock:
-        await run_in_threadpool(controller.start, devices=payload.devices)
-
+        await controller.start(devices=payload.devices)
     return JSONResponse(content={"response": "done"})
 
 
@@ -257,9 +385,41 @@ async def start(
 async def stop(request: Request, payload: DeviceList):
     controller: Controller = request.app.state.controller
     async with controller_lock:
-        await run_in_threadpool(controller.stop, devices=payload.devices)
-
+        await controller.stop(devices=payload.devices)
     return JSONResponse(content={"response": "done"})
+
+
+@api.post("/reset", dependencies=[Depends(verify_jwt)])
+async def reset(request: Request, payload: ResetRequest):
+    controller: Controller = request.app.state.controller
+    try:
+        locations = {
+            addr: ResetLocation(
+                pos_x=int(loc["pos_x"]),
+                pos_y=int(loc["pos_y"]),
+            )
+            for addr, loc in payload.locations.items()
+        }
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"invalid location data: {exc}"
+        )
+    async with controller_lock:
+        await controller.reset(locations)
+    return JSONResponse(content={"response": "done"})
+
+
+@api.post("/message", dependencies=[Depends(verify_jwt)])
+async def message(request: Request, payload: MessageRequest):
+    controller: Controller = request.app.state.controller
+    async with controller_lock:
+        await controller.send_message(payload.message, payload.devices)
+    return JSONResponse(content={"response": "done"})
+
+
+# ------------------------------------------------------------------
+# JWT management
+# ------------------------------------------------------------------
 
 
 class IssueRequest(BaseModel):
@@ -309,23 +469,20 @@ def issue_token(req: IssueRequest, db: Session = Depends(get_db)):
 def public_key():
     """Expose the public key (frontend can use this to verify JWT signatures)."""
     try:
-        public_key = get_public_key()
+        key = get_public_key()
     except FileNotFoundError:
         raise HTTPException(
             status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="public.pem not found; public key unavailable",
         )
-
-    return JSONResponse(content={"data": public_key})
+    return JSONResponse(content={"data": key})
 
 
 class JWTRecordOut(BaseModel):
     date_start: datetime.datetime
     date_end: datetime.datetime
 
-    model_config = {
-        "from_attributes": True  # Enable Pydantic conversion from ORM objects
-    }
+    model_config = {"from_attributes": True}
 
 
 @api.get("/records", response_model=list[JWTRecordOut])
@@ -345,7 +502,11 @@ def list_records(db: Session = Depends(get_db)):
     return records
 
 
-# Mount static files after all routes are defined
+# ------------------------------------------------------------------
+# Static frontend
+# ------------------------------------------------------------------
+
+
 def mount_frontend(api):
     dashboard_dir = os.path.join(
         os.path.dirname(__file__), "..", "dashboard", "frontend", "build"
