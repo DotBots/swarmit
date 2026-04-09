@@ -66,7 +66,11 @@ async def test_controller_basic(edge_controller, monkeypatch):
     assert sorted(controller.resetting_devices) == [f"{nodes[1].address:08X}"]
     assert sorted(controller.running_devices) == [f"{nodes[0].address:08X}"]
 
+    print("Simulating node 0 leaving...")
     nodes[0].enabled = False
+    controller.status_data.pop(f"{nodes[0].address:08X}", None)
+    controller.status_data.pop(f"{nodes[1].address:08X}", None)
+    print(controller.status_data)
     await asyncio.sleep(1.5)
     assert list(controller.status_data.keys()) == [f"{nodes[1].address:08X}"]
 

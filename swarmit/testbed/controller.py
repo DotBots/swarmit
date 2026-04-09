@@ -243,7 +243,7 @@ class Controller:
         """Process a single received frame."""
         device_addr = f"{header.source:08X}"
         if packet.payload_type == PayloadType.SWARMIT_STATUS:
-            self.status_data[device_addr] = NodeStatus(
+            status = NodeStatus(
                 device=DeviceType(packet.payload.device),
                 status=StatusType(packet.payload.status),
                 battery=packet.payload.battery,
@@ -251,6 +251,8 @@ class Controller:
                 pos_y=packet.payload.pos_y,
                 last_updated_at=time.time(),
             )
+            print(device_addr, status)
+            self.status_data[device_addr] = status
         elif (
             packet.payload_type == PayloadType.SWARMIT_OTA_START_ACK
             and device_addr not in self.start_ota_data.addrs

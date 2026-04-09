@@ -251,7 +251,7 @@ def flash(ctx, yes, start_after, firmware):
         time.sleep(0.25)
 
     acked = start_data["acked"]
-    missed = start_data["missed"]
+    missed = start_data.get("missed", [])
     total_chunks = start_data["total_chunks"]
     fw_hash = start_data["fw_hash"]
 
