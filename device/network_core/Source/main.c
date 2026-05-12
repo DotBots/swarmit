@@ -180,17 +180,19 @@ static void _commit_config_and_reboot(void) {
     nvmc_write((const uint32_t *)SWARMIT_NET_CONFIG_START_ADDRESS, &_app_vars.config, sizeof(_app_vars.config));
     mr_gpio_clear(&_debug1);
 
-    puts("Calibration/config committed to flash, rebooting netcore");
-    NVIC_SystemReset();
-    while (1) {}
+    // Ask the application core to perform a system-wide reset. App-core
+    // NVIC_SystemReset is a system reset on nRF5340 — both cores come back
+    // up fresh, picking up the new calibration on boot. A net-core-local
+    // NVIC_SystemReset would only reset this domain and leave the app core
+    // with stale Mari / localization state.
+    puts("Calibration/config committed to flash, requesting system reset");
+    NRF_IPC_NS->TASKS_SEND[IPC_CHAN_APPLICATION_RESET] = 1;
+    while (1) { __WFE(); }
 }
 
 //=========================== main ==============================================
 
 int main(void) {
-    bool self_reboot = (NRF_RESET_NS->RESETREAS & RESET_RESETREAS_LSREQ_Msk) != 0;
-    NRF_RESET_NS->RESETREAS = RESET_RESETREAS_LSREQ_Msk;
-
     _app_vars.device_id = _deviceid();
     _load_config();
 
@@ -198,7 +200,7 @@ int main(void) {
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_RADIO_RX]          = 1 << IPC_CHAN_RADIO_RX;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_START] = 1 << IPC_CHAN_APPLICATION_START;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_STOP]  = 1 << IPC_CHAN_APPLICATION_STOP;
-    //NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_RESET] = 1 << IPC_CHAN_APPLICATION_RESET;
+    NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_RESET] = 1 << IPC_CHAN_APPLICATION_RESET;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_START]         = 1 << IPC_CHAN_OTA_START;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_CHUNK]         = 1 << IPC_CHAN_OTA_CHUNK;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_CALIBRATION_DATA]  = 1 << IPC_CHAN_CALIBRATION_DATA;
@@ -221,13 +223,6 @@ int main(void) {
 
     // Network core must remain on
     ipc_shared_data.net_ready = true;
-
-    // If reboot was self-triggered after calibration commit, bring Mari back automatically
-    if (self_reboot) {
-        puts("Self-reboot detected, auto-initialize Mari");
-        mari_init(MARI_NODE, _app_vars.mari_net_id, &schedule_tiny, &mari_event_callback);
-        _app_vars.mari_initialized = true;
-    }
 
     while (1) {
         __WFE();
