@@ -68,9 +68,13 @@ interface DotBotsMapProps {
     width: number;
     height: number;
   };
+  // LH2 calibration distance in mm (the -d value passed to dotbot-calibration).
+  // Used to place the 4 reference points at (2d..3d, 2d..3d) in arena coords.
+  // 0 means "unknown" → don't render the reference points.
+  calibrationDistance: number;
 }
 
-export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize }: DotBotsMapProps) => {
+export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calibrationDistance }: DotBotsMapProps) => {
   // Pixel size of the SVG canvas. 700px keeps a reasonable amount of
   // detail visible without dominating the viewport when only one or two
   // bots are present.
@@ -131,6 +135,26 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize }: Dot
               stroke="#9ca3af"
               strokeWidth={1.5}
             />
+
+            {/* LH2 calibration reference points: + marks at (2d, 2d),
+                (3d, 2d), (2d, 3d), (3d, 3d) in arena (mm) coordinates.
+                These positions are fixed by REFERENCE_POINTS_DEFAULT in
+                dotbot_lh2_calibration/lighthouse2.py and are independent of
+                LH count — even in multi-LH setups every LH is calibrated
+                against the same 4 physical points within LH0's coverage. */}
+            {calibrationDistance > 0 &&
+              [
+                [2, 2], [3, 2], [2, 3], [3, 3],
+              ].map(([fx, fy]) => {
+                const x = (fx * calibrationDistance * mapSize) / areaSize.width;
+                const y = (fy * calibrationDistance * mapSize) / areaSize.width;
+                return (
+                  <g key={`${fx}-${fy}`} pointerEvents="none">
+                    <line x1={x - 5} y1={y} x2={x + 5} y2={y} stroke="#6b7280" strokeWidth={1.5} />
+                    <line x1={x} y1={y - 5} x2={x} y2={y + 5} stroke="#6b7280" strokeWidth={1.5} />
+                  </g>
+                );
+              })}
 
             {Object.entries(dotbots)
               .map(([address, dotbot]) => (

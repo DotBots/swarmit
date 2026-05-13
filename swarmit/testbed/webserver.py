@@ -228,6 +228,7 @@ class SettingsResponse(BaseModel):
     network_id: int
     area_width: int
     area_height: int
+    calibration_distance: int  # mm; the -d value used by dotbot-calibration
 
 
 @api.get("/settings", response_model=SettingsResponse)
@@ -235,10 +236,17 @@ async def settings(request: Request):
     controller: Controller = request.app.state.controller
     map_size = controller.settings.map_size
     width_str, height_str = map_size.lower().split('x')
+    width, height = int(width_str), int(height_str)
+    # If the operator didn't pass --calibration-distance explicitly, infer it
+    # from the arena: single-LH calibration produces a 5d × 5d arena, so
+    # d = min(w, h) / 5. For multi-LH arenas where the arena extends beyond
+    # the first LH's coverage, the operator must pass the real value.
+    cd = controller.settings.calibration_distance or (min(width, height) // 5)
     return SettingsResponse(
         network_id=controller.settings.network_id,
-        area_width=int(width_str),
-        area_height=int(height_str),
+        area_width=width,
+        area_height=height,
+        calibration_distance=cd,
     )
 
 

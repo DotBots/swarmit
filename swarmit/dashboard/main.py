@@ -82,6 +82,14 @@ DEFAULTS_DASHBOARD = {
     help="Size of the map on the ground in mm, in the format WIDTHxHEIGHT. Default: 2500x2500.",
 )
 @click.option(
+    "--calibration-distance",
+    type=int,
+    default=0,
+    help="LH2 calibration distance in mm (the -d value used with dotbot-calibration). "
+         "Used to place the 4 reference points on the map. Default: inferred from --map-size "
+         "as min(width, height)/5 (correct for single-LH arenas; pass explicitly for multi-LH).",
+)
+@click.option(
     "-v",
     "--verbose",
     is_flag=True,
@@ -110,6 +118,7 @@ def main(
     adapter,
     devices,
     map_size,
+    calibration_distance,
     verbose,
     open_browser,
 ):
@@ -124,6 +133,7 @@ def main(
         "swarmit_network_id": network_id,
         "devices": devices,
         "map_size": map_size,
+        "calibration_distance": calibration_distance,
         "verbose": verbose,
         "http_port": http_port,
     }
@@ -145,6 +155,7 @@ def main(
         adapter=final_config["adapter"],
         devices=[d for d in final_config["devices"].split(",") if d],
         map_size=final_config["map_size"],
+        calibration_distance=final_config.get("calibration_distance", 0) or 0,
         verbose=final_config["verbose"],
     )
 

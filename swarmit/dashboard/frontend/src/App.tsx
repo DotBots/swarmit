@@ -41,6 +41,7 @@ export type DotBotData = {
 
 type SettingsType = {
   network_id: string;
+  calibration_distance: number;
 };
 
 export type tokenActivenessType =
@@ -74,6 +75,7 @@ export interface SettingsResponse {
   network_id: number;
   area_width: number;
   area_height: number;
+  calibration_distance: number;
 }
 
 
@@ -95,6 +97,7 @@ export default function MainDashboard() {
         const json = await res.json();
         const settings: SettingsType = {
           network_id: json.network_id.toString(16),
+          calibration_distance: json.calibration_distance,
         };
         setSettings(settings);
         setAreaSize({width: json.area_width, height: json.area_height});
@@ -217,7 +220,7 @@ export default function MainDashboard() {
 
         <main className="flex-1 p-8 overflow-y-auto">
           {page === 1 && (
-            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} areaSize={areaSize} />
+            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} areaSize={areaSize} calibrationDistance={settings?.calibration_distance ?? 0} />
           )}
 
           {page === 2 && (

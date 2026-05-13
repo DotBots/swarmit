@@ -10,10 +10,11 @@ interface HomePageProps {
     width: number;
     height: number;
   };
+  calibrationDistance: number;
 }
 
 
-export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: HomePageProps) {
+export default function HomePage({ token, tokenActiveness, dotbots, areaSize, calibrationDistance }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -145,7 +146,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
 
   return (
     <div>
-      <DotBotsMap dotbots={dotbots} areaSize={areaSize} />
+      <DotBotsMap dotbots={dotbots} areaSize={areaSize} calibrationDistance={calibrationDistance} />
       <div className="max-w-xl mx-auto p-6 space-y-6 bg-white rounded-2xl shadow mt-6 animate-fadeIn">
         {token?.payload && <div className="border p-4 rounded-lg bg-gray-50">
           <h3 className="font-semibold mb-2">Token Info</h3>

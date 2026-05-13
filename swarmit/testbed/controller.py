@@ -220,6 +220,7 @@ class ControllerSettings:
     adapter: str = "serial"  # or "mqtt", "marilib-edge", "marilib-cloud"
     devices: list[str] = dataclasses.field(default_factory=lambda: [])
     map_size: str = "2500x2500"
+    calibration_distance: int = 0  # in mm; 0 = infer from map_size (min(w,h)/5)
     ota_max_retries: int = OTA_MAX_RETRIES_DEFAULT
     ota_timeout: float = OTA_ACK_TIMEOUT_DEFAULT
     adapter_wait_timeout: float = 3
