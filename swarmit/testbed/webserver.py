@@ -82,10 +82,22 @@ def get_public_key() -> str:
 
 
 ALGORITHM = "EdDSA"
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+# Module-level auth toggle. The dashboard (init_api with default auth_mode)
+# leaves this True. The daemon (auth_mode="none") flips it to False, which
+# makes verify_jwt a no-op and skips DB initialization (JWT records DB).
+AUTH_ENABLED = True
 
 
 def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not AUTH_ENABLED:
+        return None
+    if credentials is None:
+        raise HTTPException(
+            status_code=fastapi_status.HTTP_403_FORBIDDEN,
+            detail="Not authenticated",
+        )
     try:
         public_key = get_public_key()
     except FileNotFoundError:
@@ -110,22 +122,40 @@ def verify_jwt(credentials: HTTPAuthorizationCredentials = Depends(security)):
         )
 
 
-def init_api(api: FastAPI, settings: ControllerSettings):
+def init_api(
+    api: FastAPI,
+    settings: ControllerSettings,
+    auth_mode: str = "jwt",
+):
+    """Wire up the FastAPI app with a Controller and a lifespan.
+
+    auth_mode:
+      - "jwt" (default): JWT auth on write endpoints; JWT records DB enabled.
+        Used by the dashboard.
+      - "none": auth disabled (verify_jwt no-ops); DB not initialized.
+        Used by the daemon when bound to localhost.
+    """
+    global AUTH_ENABLED
+    AUTH_ENABLED = auth_mode != "none"
+    db_enabled = auth_mode != "none"
+
     controller = Controller(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        global SessionLocal
-        # Create engine + session factory
-        engine = create_db_engine(API_DB_URL)
-        SessionLocal = create_session_factory(engine)
+        engine = None
+        if db_enabled:
+            global SessionLocal
+            # Create engine + session factory
+            engine = create_db_engine(API_DB_URL)
+            SessionLocal = create_session_factory(engine)
 
-        # Initialize DB schema
-        Base.metadata.create_all(bind=engine)
+            # Initialize DB schema
+            Base.metadata.create_all(bind=engine)
 
-        # Create triggers
-        with engine.connect() as conn:
-            create_prevent_overlap_trigger(conn)
+            # Create triggers
+            with engine.connect() as conn:
+                create_prevent_overlap_trigger(conn)
 
         # Run on startup
         app.state.controller = controller
@@ -134,7 +164,8 @@ def init_api(api: FastAPI, settings: ControllerSettings):
 
         # Run on shutdown
         controller.terminate()
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
     api.router.lifespan_context = lifespan
 
