@@ -17,6 +17,7 @@ typedef struct {
 } localization_data_t;
 
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
+static bool _calibration_loaded = false;
 
 float _distance(position_2d_t *reference, position_2d_t *current) {
     float dx = ((float)current->x - (float)reference->x);
@@ -39,6 +40,7 @@ void localization_init(int32_t homographies[][3][3], uint32_t homography_count) 
         }
         db_lh2_store_homography(&_localization_data.lh2, lh_index, homographies[lh_index]);
     }
+    _calibration_loaded = (homography_count > 0);
 }
 
 bool localization_process_data(void) {
@@ -52,7 +54,7 @@ bool localization_process_data(void) {
 }
 
 bool localization_get_position(position_2d_t *position) {
-    if (LH2_CALIBRATION_IS_VALID) {
+    if (_calibration_loaded) {
         db_lh2_stop();
         for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT; lh_index++) {
             if (_localization_data.lh2.data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE) {
