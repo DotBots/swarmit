@@ -71,26 +71,23 @@ CI: matrix builds for 3 hardware targets × Debug/Release via Docker; multi-OS P
 - Commits in last 90 days: 5 (cadence dropped sharply)
 - Branches:
   - `add-blink-status-led` — 12 months stale, 370 ahead/1 behind. Likely abandoned.
-  - `config-net-id-via-flash` — 4 months stale, 24 ahead/19 behind. Possibly stalled in-flight; investigate before deleting.
+  - `config-net-id-via-flash` — its commits are already on `main`; the branch itself can be deleted.
 - TODO/FIXME/XXX/HACK: 6
 
 ## Hot spots and known gaps
 
 - **Two parallel bootloaders**: `device/bootloader/` and `device/bootloader-single-core/` plus per-board `.emProject` files at the repo root. Strong consolidation target if board variants converge.
 - **Tight coupling to `mari`**: submodule + Python package. `swarmit` and `mari` should likely be released/versioned together.
-- **`config-net-id-via-flash` branch** has 24 unmerged commits from January 2026 — that's where most recent work happened. Decide: rebase-and-merge, salvage individual commits, or close.
 - Heavy reliance on Mari being available (no fallback transport).
 
 ## Branch policy
 
 - Default: `main`
-- Investigate `config-net-id-via-flash` before any rebase work near it.
 - New work: feature branches off `main`, PRs even for solo work.
 
 ## Agent-task ideas
 
-- **Audit and resolve `config-net-id-via-flash`**: 24 ahead — rebase-and-merge or extract useful commits.
-- **Delete `add-blink-status-led`** (12 months stale, 370 commits diverged).
+- **Delete `add-blink-status-led`** (12 months stale, 370 commits diverged) and `config-net-id-via-flash` (already on `main`).
 - **Consolidate two bootloaders** if board variants allow.
 - **Add dashboard frontend tests** (vitest is set up via Vite but no tests authored).
 - **Document the Control Tower API** (FastAPI auto-generates schema; expose it as a stable contract).
