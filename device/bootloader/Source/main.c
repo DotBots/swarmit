@@ -295,6 +295,14 @@ int main(void) {
     // Start the network core
     release_network_core();
 
+    // Wait for the net core to finish its init (including _load_config()) before
+    // reading anything net-core-populated from ipc_shared_data. Otherwise the
+    // USER_IMAGE boot path below races _load_config and may read zeroed
+    // lh2_calibration / stale net_id.
+    while (!ipc_shared_data.net_ready) {
+        __WFE();
+    }
+
     mari_init();
 
     battery_level_init();
