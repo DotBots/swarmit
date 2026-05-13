@@ -446,22 +446,27 @@ def test_controller_send_lh2_calibration_from_file_bytes():
     matrix_1 = bytes(range(36, 72))
     calibration_file = bytes([2]) + matrix_0 + matrix_1
 
-    with (
-        patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]),
-        patch.object(controller, "send_payload") as send_payload_mock,
+    with patch.object(
+        type(controller),
+        "ready_devices",
+        new_callable=PropertyMock,
+        return_value=["00000001"],
     ):
-        controller.send_lh2_calibration(calibration_file)
+        with patch.object(controller, "send_payload") as send_payload_mock:
+            controller.send_lh2_calibration(calibration_file)
 
     assert send_payload_mock.call_count == 2
     first_call = send_payload_mock.call_args_list[0].args
     second_call = send_payload_mock.call_args_list[1].args
 
-    assert first_call[0] == 0xFFFFFFFFFFFFFFFF
+    # ready_devices is set so the controller sends unicast to each device,
+    # not broadcast. "00000001" → 0x1.
+    assert first_call[0] == 0x1
     assert first_call[1].homography_count == 2
     assert first_call[1].homography_index == 0
     assert first_call[1].homography == matrix_0
 
-    assert second_call[0] == 0xFFFFFFFFFFFFFFFF
+    assert second_call[0] == 0x1
     assert second_call[1].homography_count == 2
     assert second_call[1].homography_index == 1
     assert second_call[1].homography == matrix_1
@@ -477,15 +482,19 @@ def test_controller_send_lh2_calibration_from_legacy_out_format():
     matrix = bytes(range(36))
     calibration_file = bytes([1]) + matrix
 
-    with (
-        patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]),
-        patch.object(controller, "send_payload") as send_payload_mock,
+    with patch.object(
+        type(controller),
+        "ready_devices",
+        new_callable=PropertyMock,
+        return_value=["00000001"],
     ):
-        controller.send_lh2_calibration(calibration_file)
+        with patch.object(controller, "send_payload") as send_payload_mock:
+            controller.send_lh2_calibration(calibration_file)
 
     assert send_payload_mock.call_count == 1
     call = send_payload_mock.call_args_list[0].args
-    assert call[0] == 0xFFFFFFFFFFFFFFFF
+    # ready_devices is set → unicast to "00000001" → 0x1.
+    assert call[0] == 0x1
     assert call[1].homography_count == 1
     assert call[1].homography_index == 0
     assert call[1].homography == matrix
@@ -498,7 +507,12 @@ def test_controller_send_lh2_calibration_from_legacy_out_format():
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
 def test_controller_send_lh2_calibration_invalid_size():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
-    with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
+    with patch.object(
+        type(controller),
+        "ready_devices",
+        new_callable=PropertyMock,
+        return_value=["00000001"],
+    ):
         with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
             controller.send_lh2_calibration(b"\x00" * 35)
     controller.terminate()
@@ -511,7 +525,12 @@ def test_controller_send_lh2_calibration_invalid_size():
 def test_controller_send_lh2_calibration_legacy_count_mismatch():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     calibration_file = bytes([2]) + bytes(range(36))
-    with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
+    with patch.object(
+        type(controller),
+        "ready_devices",
+        new_callable=PropertyMock,
+        return_value=["00000001"],
+    ):
         with pytest.raises(ValueError, match="count byte does not match"):
             controller.send_lh2_calibration(calibration_file)
     controller.terminate()
@@ -524,7 +543,12 @@ def test_controller_send_lh2_calibration_legacy_count_mismatch():
 def test_controller_send_lh2_calibration_raw_format_rejected():
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     raw_matrix_only = bytes(range(36))
-    with patch.object(type(controller), "ready_devices", new_callable=PropertyMock, return_value=["00000001"]):
+    with patch.object(
+        type(controller),
+        "ready_devices",
+        new_callable=PropertyMock,
+        return_value=["00000001"],
+    ):
         with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
             controller.send_lh2_calibration(raw_matrix_only)
     controller.terminate()

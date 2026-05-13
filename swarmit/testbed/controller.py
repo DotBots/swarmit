@@ -526,7 +526,10 @@ class Controller:
             raise ValueError("Calibration file is empty")
 
         # Supported format: 1-byte count + N * 36 bytes
-        if len(calibration_file) < 1 or (len(calibration_file) - 1) % matrix_size != 0:
+        if (
+            len(calibration_file) < 1
+            or (len(calibration_file) - 1) % matrix_size != 0
+        ):
             raise ValueError(
                 f"Invalid calibration file size: expected 1+N*{matrix_size} bytes (count byte + matrices)"
             )
@@ -539,7 +542,9 @@ class Controller:
                 "Invalid calibration file: count byte does not match matrix payload length"
             )
         if homography_count == 0:
-            raise ValueError("Invalid calibration file: homography count cannot be zero")
+            raise ValueError(
+                "Invalid calibration file: homography count cannot be zero"
+            )
 
         if homography_count > 16:
             raise ValueError(
@@ -548,9 +553,13 @@ class Controller:
 
         ready_devices = self.ready_devices
         if not ready_devices:
-            print(f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}...")
+            print(
+                f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}..."
+            )
         else:
-            print(f"Sending {homography_count} calibration matrix/matrices to {len(ready_devices)} devices: {str(ready_devices)}...")
+            print(
+                f"Sending {homography_count} calibration matrix/matrices to {len(ready_devices)} devices: {str(ready_devices)}..."
+            )
 
         for homography_index in range(homography_count):
             print(f"Sending calibration matrix {homography_index}...")
@@ -571,7 +580,9 @@ class Controller:
                 else:
                     for device_addr in ready_devices:
                         self.send_payload(int(device_addr, 16), payload)
-                time.sleep(0.1) # give the device some time to process the payload
+                time.sleep(
+                    0.1
+                )  # give the device some time to process the payload
 
     def _send_start_ota(
         self, device_addr: str, devices_to_flash: set[str], firmware: bytes

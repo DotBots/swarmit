@@ -160,15 +160,25 @@ class PayloadCalibrationData(Payload):
 
     metadata: list[PayloadFieldMetadata] = dataclasses.field(
         default_factory=lambda: [
-            PayloadFieldMetadata(name="homography_count", disp="count", length=4),
-            PayloadFieldMetadata(name="homography_index", disp="idx", length=4),
-            PayloadFieldMetadata(name="homography", type_=bytes, length=3*3*4),
+            PayloadFieldMetadata(
+                name="homography_count", disp="count", length=4
+            ),
+            PayloadFieldMetadata(
+                name="homography_index", disp="idx", length=4
+            ),
+            PayloadFieldMetadata(
+                name="homography", type_=bytes, length=3 * 3 * 4
+            ),
         ]
     )
 
-    homography_count: int = 0 # number of homography matrices used for localization
-    homography_index: int = 0 # index of the homography matrix to be sent
-    homography: bytes = dataclasses.field(default_factory=lambda: bytearray) # 9x4 bytes of the homography matrix
+    homography_count: int = (
+        0  # number of homography matrices used for localization
+    )
+    homography_index: int = 0  # index of the homography matrix to be sent
+    homography: bytes = dataclasses.field(
+        default_factory=lambda: bytearray
+    )  # 9x4 bytes of the homography matrix
 
 
 @dataclass

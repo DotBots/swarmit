@@ -31,13 +31,14 @@ Options:
   -h, --help                  Show this message and exit.
 
 Commands:
-  flash    Flash a firmware to the robots.
-  message  Send a custom text message to the robots.
-  monitor  Monitor running applications.
-  reset    Reset robots locations.
-  start    Start the user application.
-  status   Print current status of the robots.
-  stop     Stop the user application.
+  calibrate-lh2  Send LH2 calibration data to the robots.
+  flash          Flash a firmware to the robots.
+  message        Send a custom text message to the robots.
+  monitor        Monitor running applications.
+  reset          Reset robots locations.
+  start          Start the user application.
+  status         Print current status of the robots.
+  stop           Stop the user application.
 """
 
 
