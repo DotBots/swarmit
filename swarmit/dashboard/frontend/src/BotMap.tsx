@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DotBotData, StatusType } from "./App";
 
 interface DotBotsMapPointProps {
@@ -75,19 +75,37 @@ interface DotBotsMapProps {
 }
 
 export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calibrationDistance }: DotBotsMapProps) => {
-  // Pixel size of the SVG canvas. 700px keeps a reasonable amount of
-  // detail visible without dominating the viewport when only one or two
-  // bots are present.
-  const mapSize = 700;
+  // Auto-scale the SVG so a tall arena (e.g. 1000x1800 from two stacked
+  // LHs) still fits between the header and the controls card. Recompute on
+  // window resize so the map stays sized after the user adjusts the window.
+  const [viewportH, setViewportH] = useState<number>(
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
+  useEffect(() => {
+    const onResize = () => setViewportH(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const aspect = areaSize.height / areaSize.width;
+  const maxW = 700;
+  // Reserve room for the header (~64), main padding (64), and the controls
+  // card below the map (~360). Floor keeps the map usable on short windows.
+  const maxH = Math.max(280, viewportH - 320);
+  const mapSize = aspect * maxW > maxH ? Math.floor(maxH / aspect) : maxW;
   const gridWidth = `${mapSize + 1}px`;
-  const gridHeight = `${mapSize * areaSize.height / areaSize.width + 1}px`;
+  const gridHeight = `${mapSize * aspect + 1}px`;
   const isEmpty = Object.keys(dotbots).length === 0;
 
-  // Graph-paper grid: minor lines every 100 mm in light gray, major lines
-  // every 500 mm in mid gray. The major pattern fills its background with
-  // the minor pattern, so a single fill on the canvas-rect draws both layers.
-  const px100 = (100 * mapSize) / areaSize.width;
-  const px500 = (500 * mapSize) / areaSize.width;
+  // Graph-paper grid: minor lines every d (one calibration step) in light
+  // gray, major lines every 5d (one LH2 coverage square) in mid gray. So
+  // each major square has 5x5 minor cells. The major pattern fills its
+  // background with the minor pattern, so a single fill on the canvas-rect
+  // draws both layers.
+  const minorMm = calibrationDistance > 0 ? calibrationDistance : 100;
+  const majorMm = calibrationDistance > 0 ? 5 * calibrationDistance : 500;
+  const pxMinor = (minorMm * mapSize) / areaSize.width;
+  const pxMajor = (majorMm * mapSize) / areaSize.width;
 
   return (
     <div className="flex justify-center">
@@ -97,12 +115,12 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calib
             <defs>
               <pattern
                 id={`minorGrid${mapSize}`}
-                width={px100}
-                height={px100}
+                width={pxMinor}
+                height={pxMinor}
                 patternUnits="userSpaceOnUse"
               >
                 <path
-                  d={`M ${px100} 0 L 0 0 0 ${px100}`}
+                  d={`M ${pxMinor} 0 L 0 0 0 ${pxMinor}`}
                   fill="none"
                   stroke="#bec0c4"
                   strokeWidth="1"
@@ -110,17 +128,17 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calib
               </pattern>
               <pattern
                 id={`majorGrid${mapSize}`}
-                width={px500}
-                height={px500}
+                width={pxMajor}
+                height={pxMajor}
                 patternUnits="userSpaceOnUse"
               >
                 <rect
-                  width={px500}
-                  height={px500}
+                  width={pxMajor}
+                  height={pxMajor}
                   fill={`url(#minorGrid${mapSize})`}
                 />
                 <path
-                  d={`M ${px500} 0 L 0 0 0 ${px500}`}
+                  d={`M ${pxMajor} 0 L 0 0 0 ${pxMajor}`}
                   fill="none"
                   stroke="#787d86"
                   strokeWidth="1.5"
