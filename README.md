@@ -67,6 +67,11 @@ dotbot-calibration-exporter device/bootloader/Source
 
 Rebuild and reflash the bootloader for the new calibration to take effect.
 
+For **already-flashed** robots there's no need to rebuild — push the new
+calibration over the air with `swarmit calibrate-lh2`, see
+[Pushing an LH2 calibration over the air](#pushing-an-lh2-calibration-over-the-air)
+below.
+
 ### Gateway
 
 The communication between the computer and the swarm devices is performed via a
@@ -99,30 +104,49 @@ Print usage using `swarmit --help`:
 Usage: swarmit [OPTIONS] COMMAND [ARGS]...
 
 Options:
-  -p, --port TEXT                 Serial port to use to send the bitstream to
-                                  the gateway. Default: /dev/ttyACM0.
-  -b, --baudrate INTEGER          Serial port baudrate. Default: 1000000.
-  -H, --mqtt-host TEXT            MQTT host. Default: localhost.
-  -P, --mqtt-port INTEGER         MQTT port. Default: 1883.
-  -T, --mqtt-use_tls              Use TLS with MQTT.
-  -n, --network-id INTEGER        Marilib network ID to use. Default: 1
-  -a, --adapter [edge|cloud]
-                                  Choose the adapter to communicate with the
-                                  gateway.  [default: edge]
-  -d, --devices TEXT              Subset list of devices to interact with,
-                                  separated with ,
-  -v, --verbose                   Enable verbose mode.
-  -V, --version                   Show the version and exit.
-  -h, --help                      Show this message and exit.
+  -c, --config-path FILE      Path to a .toml configuration file.
+  -p, --port TEXT             Serial port to use to send the bitstream to the
+                              gateway. Default: /dev/ttyACM0.
+  -b, --baudrate INTEGER      Serial port baudrate. Default: 1000000.
+  -H, --mqtt-host TEXT        MQTT host. Default: localhost.
+  -P, --mqtt-port INTEGER     MQTT port. Default: 1883.
+  -T, --mqtt-use_tls          Use TLS with MQTT.
+  -n, --network-id TEXT       Marilib network ID to use. Default: 0x1200
+  -a, --adapter [edge|cloud]  Choose the adapter to communicate with the
+                              gateway. Default: edge
+  -d, --devices TEXT          Subset list of device addresses to interact with,
+                              separated with ,
+  -v, --verbose               Enable verbose mode.
+  -V, --version               Show the version and exit.
+  -h, --help                  Show this message and exit.
 
 Commands:
-  flash    Flash a firmware to the robots.
-  message  Send a custom text message to the robots.
-  monitor  Monitor running applications.
-  reset    Reset robots locations.
-  start    Start the user application.
-  status   Print current status of the robots.
-  stop     Stop the user application.
+  calibrate-lh2  Send LH2 calibration data to the robots.
+  flash          Flash a firmware to the robots.
+  message        Send a custom text message to the robots.
+  monitor        Monitor running applications.
+  reset          Reset robots locations.
+  start          Start the user application.
+  status         Print current status of the robots.
+  stop           Stop the user application.
+```
+
+#### Pushing an LH2 calibration over the air
+
+Once a robot is flashed and connected to the Mari network, you can update its
+Lighthouse v2 homography without re-flashing the bootloader. The CLI pushes a
+calibration file produced by
+[`dotbot-lh2-calibration`](https://github.com/DotBots/dotbot-lh2-calibration)
+(default location `~/.dotbot/calibration.out`) over Mari; the network core
+writes it to the config page in flash and the SoC resets so the bootloader
+loads the new homographies on the next boot.
+
+```bash
+# Push the most recent calibration to every ready device on network 0xA000
+swarmit -n 0xA000 calibrate-lh2 ~/.dotbot/calibration.out
+
+# Or target a subset (-d takes a comma-separated list of device addresses)
+swarmit -n 0xA000 -d BC3D3C8A2A6F8E68 calibrate-lh2 ~/.dotbot/calibration.out
 ```
 
 ## Control Tower Dashboard
