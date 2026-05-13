@@ -164,10 +164,15 @@ export default function MainDashboard() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#1E91C7]/10 to-white">
-      <header className="bg-gradient-to-r from-[#1E91C7] to-[#187AA3] text-white py-4 px-8 shadow-lg flex items-center justify-between border-b border-[#135C7B]/30">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-[#1E91C7]/10 to-white overflow-hidden">
+      <header className="shrink-0 bg-gradient-to-r from-[#1E91C7] to-[#187AA3] text-white py-4 px-8 shadow-lg flex items-center justify-between border-b border-[#135C7B]/30">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-semibold tracking-wide">OpenSwarm Testbed</h1>
+          <h1 className="text-2xl font-semibold tracking-wide">DotBot Testbed</h1>
+          {settings?.network_id && (
+            <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-white/15 opacity-90">
+              0x{settings.network_id.toUpperCase()}
+            </span>
+          )}
           <span
             className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-xs font-medium tabular-nums"
             title={`${Object.keys(dotbots).length} device(s) currently visible`}
@@ -176,11 +181,6 @@ export default function MainDashboard() {
             {Object.keys(dotbots).length} {Object.keys(dotbots).length === 1 ? "device" : "devices"}
           </span>
         </div>
-        {settings?.network_id && (
-          <span className="text-sm font-medium tracking-wide font-mono opacity-90">
-            Network 0x{settings?.network_id.toUpperCase()}
-          </span>
-        )}
         <button
           onClick={() => setOpenLoginPopup(true)}
           className="text-sm px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 transition"
@@ -190,8 +190,8 @@ export default function MainDashboard() {
       </header>
 
       <LoginModal open={openLoginPopup} setOpen={setOpenLoginPopup} token={token} setToken={setToken} />
-      <div className="flex flex-1">
-        <aside className="w-56 bg-white/70 backdrop-blur-md border-r border-gray-200 shadow-sm flex flex-col p-4 space-y-3">
+      <div className="flex flex-1 min-h-0">
+        <aside className="shrink-0 w-56 bg-white/70 backdrop-blur-md border-r border-gray-200 shadow-sm flex flex-col p-4 space-y-3 overflow-y-auto">
           {["Home", "Reservations", "DotBots Info"].map((label, i) => (
             <button
               key={label}
@@ -204,9 +204,18 @@ export default function MainDashboard() {
               {label}
             </button>
           ))}
+          {/* mt-auto pushes the logo to the bottom of the flex column. */}
+          <div className="mt-auto pt-4 flex justify-center">
+            <img
+              src="/logo.png"
+              alt=""
+              className="max-w-full max-h-24 opacity-90"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          </div>
         </aside>
 
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-8 overflow-y-auto">
           {page === 1 && (
             < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} areaSize={areaSize} />
           )}

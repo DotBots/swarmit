@@ -79,24 +79,57 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize }: Dot
   const gridHeight = `${mapSize * areaSize.height / areaSize.width + 1}px`;
   const isEmpty = Object.keys(dotbots).length === 0;
 
+  // Graph-paper grid: minor lines every 100 mm in light gray, major lines
+  // every 500 mm in mid gray. The major pattern fills its background with
+  // the minor pattern, so a single fill on the canvas-rect draws both layers.
+  const px100 = (100 * mapSize) / areaSize.width;
+  const px500 = (500 * mapSize) / areaSize.width;
+
   return (
     <div className="flex justify-center">
       <div className="relative bg-white rounded-2xl shadow p-4">
         <div style={{ height: gridHeight, width: gridWidth }}>
           <svg style={{ height: gridHeight, width: gridWidth }}>
             <defs>
-              <pattern id={`grid${mapSize}`} width={`${500 * mapSize / areaSize!.width}`} height={`${500 * mapSize / areaSize!.width}`} patternUnits="userSpaceOnUse">
-                <rect width={`${500 * mapSize / areaSize.width}`} height={`${500 * mapSize / areaSize!.width}`} fill={`url(#smallGrid${mapSize})`}/>
-                <path d={`M ${500 * mapSize / areaSize!.width} 0 L 0 0 0 ${500 * mapSize / areaSize!.width}`} fill="none" stroke="gray" strokeWidth="1"/>
+              <pattern
+                id={`minorGrid${mapSize}`}
+                width={px100}
+                height={px100}
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  d={`M ${px100} 0 L 0 0 0 ${px100}`}
+                  fill="none"
+                  stroke="#bec0c4"
+                  strokeWidth="1"
+                />
+              </pattern>
+              <pattern
+                id={`majorGrid${mapSize}`}
+                width={px500}
+                height={px500}
+                patternUnits="userSpaceOnUse"
+              >
+                <rect
+                  width={px500}
+                  height={px500}
+                  fill={`url(#minorGrid${mapSize})`}
+                />
+                <path
+                  d={`M ${px500} 0 L 0 0 0 ${px500}`}
+                  fill="none"
+                  stroke="#787d86"
+                  strokeWidth="1.5"
+                />
               </pattern>
             </defs>
 
             <rect
               width="100%"
               height="100%"
-              fill={`url(#grid${mapSize})`}
-              stroke="gray"
-              strokeWidth={1}
+              fill={`url(#majorGrid${mapSize})`}
+              stroke="#9ca3af"
+              strokeWidth={1.5}
             />
 
             {Object.entries(dotbots)
