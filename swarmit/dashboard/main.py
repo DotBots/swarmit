@@ -86,8 +86,8 @@ DEFAULTS_DASHBOARD = {
     type=int,
     default=0,
     help="LH2 calibration distance in mm (the -d value used with dotbot-calibration). "
-         "Used to place the 4 reference points on the map. Default: inferred from --map-size "
-         "as min(width, height)/5 (correct for single-LH arenas; pass explicitly for multi-LH).",
+    "Used to place the 4 reference points on the map. Default: inferred from --map-size "
+    "as min(width, height)/5 (correct for single-LH arenas; pass explicitly for multi-LH).",
 )
 @click.option(
     "-v",

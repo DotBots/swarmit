@@ -161,6 +161,19 @@ Access the dashboard at [https://localhost:8080](https://localhost:8080)
 
 > **__NOTE:__** Your dashboard CLI options may differ depending on your example or environment.
 
+The map view draws a graph-paper grid (minor cells every `d` mm, major
+squares every `5d` mm — one Lighthouse v2 coverage area) and marks the four
+LH2 reference points used by `dotbot-calibration`. For a single-LH arena
+the grid auto-infers `d` from `--map-size` (`min(width, height) / 5`). For
+multi-LH arenas where the arena extends past LH0's coverage, pass it
+explicitly:
+
+```bash
+# Two stacked LHs (d=200 mm), arena 1000x1800 mm with 200 mm overlap
+python3 -m swarmit.dashboard.main \
+    --map-size 1000x1800 --calibration-distance 200
+```
+
 
 [ci-badge]: https://github.com/DotBots/swarmit/workflows/CI/badge.svg
 [ci-link]: https://github.com/DotBots/swarmit/actions?query=workflow%3ACI+branch%3Amain
