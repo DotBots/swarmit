@@ -16,7 +16,14 @@ export type RecordType = {
 };
 
 export default function CalendarPage({ token, setToken }: CalendarPageProps) {
-  const [dateTime, setDateTime] = useState<Date>(new Date(new Date().setHours(0, 0, 0, 0)));
+  // Default to "now, rounded down to the nearest 30-minute slot" so the form
+  // is pre-filled with the next plausible reservation start (e.g. 13:40 → 13:30,
+  // 14:05 → 14:00). Lambda form so it only runs once on first render.
+  const [dateTime, setDateTime] = useState<Date>(() => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() < 30 ? 0 : 30, 0, 0);
+    return now;
+  });
 
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
