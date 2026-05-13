@@ -165,10 +165,28 @@ export default function MainDashboard() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#1E91C7]/10 to-white">
-      <header className="bg-[#1E91C7] text-white py-4 px-8 shadow-md flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-wide">OpenSwarm Testbed</h1>
-        {settings?.network_id && <h1 className="text-m font-semibold tracking-wide">Network ID: 0x{settings?.network_id.toUpperCase()}</h1>}
-        <div onClick={() => setOpenLoginPopup(true)} className="text-sm opacity-80">{loginLabel[tokenActiveness]}</div>
+      <header className="bg-gradient-to-r from-[#1E91C7] to-[#187AA3] text-white py-4 px-8 shadow-lg flex items-center justify-between border-b border-[#135C7B]/30">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-semibold tracking-wide">OpenSwarm Testbed</h1>
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-xs font-medium tabular-nums"
+            title={`${Object.keys(dotbots).length} device(s) currently visible`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${Object.keys(dotbots).length > 0 ? "bg-green-300 animate-pulse" : "bg-gray-300"}`} />
+            {Object.keys(dotbots).length} {Object.keys(dotbots).length === 1 ? "device" : "devices"}
+          </span>
+        </div>
+        {settings?.network_id && (
+          <span className="text-sm font-medium tracking-wide font-mono opacity-90">
+            Network 0x{settings?.network_id.toUpperCase()}
+          </span>
+        )}
+        <button
+          onClick={() => setOpenLoginPopup(true)}
+          className="text-sm px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 transition"
+        >
+          {loginLabel[tokenActiveness]}
+        </button>
       </header>
 
       <LoginModal open={openLoginPopup} setOpen={setOpenLoginPopup} token={token} setToken={setToken} />

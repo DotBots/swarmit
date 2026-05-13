@@ -71,13 +71,17 @@ interface DotBotsMapProps {
 }
 
 export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize }: DotBotsMapProps) => {
-  const mapSize = 1000;
+  // Pixel size of the SVG canvas. 700px keeps a reasonable amount of
+  // detail visible without dominating the viewport when only one or two
+  // bots are present.
+  const mapSize = 700;
   const gridWidth = `${mapSize + 1}px`;
   const gridHeight = `${mapSize * areaSize.height / areaSize.width + 1}px`;
+  const isEmpty = Object.keys(dotbots).length === 0;
 
   return (
-    <div className={`${Object.keys(dotbots).length > 0 ? "visible" : "invisible"}`}>
-      <div className="flex justify-center">
+    <div className="flex justify-center">
+      <div className="relative bg-white rounded-2xl shadow p-4">
         <div style={{ height: gridHeight, width: gridWidth }}>
           <svg style={{ height: gridHeight, width: gridWidth }}>
             <defs>
@@ -101,6 +105,13 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize }: Dot
               ))}
           </svg>
         </div>
+        {isEmpty && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="bg-white/80 backdrop-blur-sm rounded-lg px-4 py-2 text-sm text-gray-500 shadow-sm">
+              No devices detected yet
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -221,8 +221,14 @@ export default function CalendarPage({ token, setToken }: CalendarPageProps) {
           )}
 
           {result && (
-            <div className="mt-6 bg-gray-100 p-3 rounded-lg text-sm font-mono text-gray-800 whitespace-pre-wrap">
-              {result}
+            <div
+              role="alert"
+              className="mt-6 flex items-start gap-3 bg-red-50 border border-red-200 p-3 rounded-lg text-sm text-red-800"
+            >
+              <span aria-hidden="true" className="mt-0.5 text-red-500">⚠</span>
+              <pre className="whitespace-pre-wrap font-mono text-xs flex-1 break-all">
+                {result}
+              </pre>
             </div>
           )}
         </div>

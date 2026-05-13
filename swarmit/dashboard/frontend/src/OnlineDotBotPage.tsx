@@ -1,5 +1,44 @@
 import { Dispatch, SetStateAction, useState } from "react";
-import { API_URL, checkTokenActiveness, DotBotData, Token, TokenPayload } from "./App";
+import { API_URL, checkTokenActiveness, DotBotData, StatusType, Token } from "./App";
+
+// Pill-style status badges so the table reads at a glance. Colors mirror
+// the status colors used by the SVG dots on the map (BotMap.tsx).
+const STATUS_BADGE_CLASSES: Record<StatusType, string> = {
+  Bootloader: "bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-300",
+  Running: "bg-green-100 text-green-800 ring-1 ring-inset ring-green-300",
+  Programming: "bg-orange-100 text-orange-800 ring-1 ring-inset ring-orange-300",
+  Stopping: "bg-red-100 text-red-800 ring-1 ring-inset ring-red-300",
+  Resetting: "bg-purple-100 text-purple-800 ring-1 ring-inset ring-purple-300",
+};
+
+function StatusBadge({ status }: { status: StatusType }) {
+  const cls = STATUS_BADGE_CLASSES[status] ??
+    "bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-300";
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
+function BatteryCell({ voltage }: { voltage: number }) {
+  // voltage already converted to volts in App.tsx (mV / 1000).
+  // Rough nRF53/Li-ion thresholds: <1.5V critical, <2.9V warning, else healthy.
+  const tone =
+    voltage < 1.5
+      ? "text-red-700"
+      : voltage < 2.9
+        ? "text-amber-700"
+        : "text-green-700";
+  const dot =
+    voltage < 1.5 ? "bg-red-500" : voltage < 2.9 ? "bg-amber-500" : "bg-green-500";
+  return (
+    <span className={`inline-flex items-center gap-2 font-mono text-sm ${tone}`}>
+      <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot}`} />
+      {voltage.toFixed(2)} V
+    </span>
+  );
+}
 
 interface CalendarPageProps {
   dotbots: Record<string, DotBotData>;
@@ -126,11 +165,11 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
                 className={`hover:bg-[#1E91C7]/5 transition-colors ${i % 2 === 0 ? "bg-gray-50" : "bg-white"
                   }`}
               >
-                <td className="py-3 px-4 border-t">{id}</td>
+                <td className="py-3 px-4 border-t font-mono text-sm">{id}</td>
                 <td className="py-3 px-4 border-t">{bot.device}</td>
-                <td className="py-3 px-4 border-t">{bot.status}</td>
-                <td className="py-3 px-4 border-t">{`${bot.battery}V`}</td>
-                <td className="py-3 px-4 border-t">{`(${bot.pos_x}, ${bot.pos_y})`}</td>
+                <td className="py-3 px-4 border-t"><StatusBadge status={bot.status} /></td>
+                <td className="py-3 px-4 border-t"><BatteryCell voltage={bot.battery} /></td>
+                <td className="py-3 px-4 border-t font-mono text-sm">{`(${Math.round(bot.pos_x)}, ${Math.round(bot.pos_y)})`}</td>
                 {isActive && (
                   <>
                     <td className="py-3 px-4 border-t">
@@ -181,7 +220,7 @@ function ActionButtons({ handleStart, handleStop, handleFlash, loading, hasFile,
         <button
           className="w-min py-2 px-4 bg-green-600 text-white rounded-lg
                hover:bg-green-700 transition disabled:cursor-not-allowed
-               disabled:bg-green-900"
+               disabled:bg-gray-300 disabled:text-gray-500"
           onClick={() => handleStart()}
           disabled={loading || selected.length === 0}
         >
@@ -192,7 +231,7 @@ function ActionButtons({ handleStart, handleStop, handleFlash, loading, hasFile,
         <button
           className="w-min py-2 px-4 bg-red-600 text-white rounded-lg
                hover:bg-red-700 transition disabled:cursor-not-allowed
-               disabled:bg-red-900"
+               disabled:bg-gray-300 disabled:text-gray-500"
           onClick={() => handleStop()}
           disabled={loading || selected.length === 0}
         >
@@ -203,7 +242,7 @@ function ActionButtons({ handleStart, handleStop, handleFlash, loading, hasFile,
         <button
           className="w-min py-2 px-4 bg-[#1E91C7] text-white rounded-lg
                hover:bg-[#187AA3] transition disabled:cursor-not-allowed
-               disabled:bg-[#135C7B]"
+               disabled:bg-gray-300 disabled:text-gray-500"
           onClick={() => handleFlash()}
           disabled={loading || !hasFile || selected.length === 0}
         >
