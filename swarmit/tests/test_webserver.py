@@ -88,6 +88,7 @@ def test_settings_endpoint(client):
         "network_id": 999,
         "area_height": 2500,
         "area_width": 2500,
+        "calibration_distance": 500,
     }
 
 
