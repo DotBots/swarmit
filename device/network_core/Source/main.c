@@ -135,7 +135,9 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
 }
 
 static void _load_config(void) {
-    // load config into RAM
+    // load config into RAM. On virgin flash every field reads back as 0xFFFFFFFFu;
+    // the has_net_id != 1 check below and the homography_count bounds check
+    // (0 < count <= LH2_BASESTATION_COUNT_MAX) filter that case implicitly.
     const swarmit_config_t *cfg_flash = (const swarmit_config_t *)SWARMIT_NET_CONFIG_START_ADDRESS;
     memcpy(&_app_vars.config, cfg_flash, sizeof(_app_vars.config));
 

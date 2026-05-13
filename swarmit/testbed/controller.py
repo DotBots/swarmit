@@ -581,7 +581,7 @@ class Controller:
                     for device_addr in ready_devices:
                         self.send_payload(int(device_addr, 16), payload)
                 time.sleep(
-                    0.1
+                    0.3
                 )  # give the device some time to process the payload
 
     def _send_start_ota(
