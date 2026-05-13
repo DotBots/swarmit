@@ -3,10 +3,11 @@
 import asyncio
 import base64
 import datetime
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import jwt
 from fastapi import (
@@ -18,7 +19,7 @@ from fastapi import (
 from fastapi import status as fastapi_status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
@@ -27,7 +28,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from swarmit import __version__
-from swarmit.testbed.controller import Controller, ControllerSettings
+from swarmit.testbed.controller import Controller, ControllerSettings, ResetLocation
 from swarmit.testbed.model import (
     Base,
     JWTRecord,
@@ -194,6 +195,36 @@ class FlashRequest(BaseModel):
     devices: Optional[Union[str, List[str]]] = None
 
 
+class MessageRequest(BaseModel):
+    message: str
+
+
+class ResetLocationModel(BaseModel):
+    pos_x: int
+    pos_y: int
+
+
+class ResetRequest(BaseModel):
+    """Reset robot locations.
+
+    `locations` maps hex device address (e.g. "BC3D3C8A2A6F8E68") to its new
+    (pos_x, pos_y). The keys must match `settings.devices`; mismatch is a 400.
+    """
+
+    locations: Dict[str, ResetLocationModel]
+
+
+class Lh2CalibrationRequest(BaseModel):
+    """Send LH2 calibration data to the swarm.
+
+    `calibration_b64` is the base64-encoded blob in the format expected by
+    Controller.send_lh2_calibration: 1-byte count followed by N × 36-byte
+    homography matrices (3×3 int32_t each).
+    """
+
+    calibration_b64: str
+
+
 @api.post("/flash", dependencies=[Depends(verify_jwt)])
 async def flash_firmware(payload: FlashRequest, request: Request):
     controller: Controller = request.app.state.controller
@@ -306,6 +337,90 @@ async def stop(
         await run_in_threadpool(controller.stop, devices=devices)
 
     return JSONResponse(content={"response": "done"})
+
+
+@api.post("/message", dependencies=[Depends(verify_jwt)])
+async def message(request: Request, payload: MessageRequest):
+    controller: Controller = request.app.state.controller
+    async with controller_lock:
+        await run_in_threadpool(controller.send_message, payload.message)
+    return JSONResponse(content={"response": "done"})
+
+
+@api.post("/reset", dependencies=[Depends(verify_jwt)])
+async def reset(request: Request, payload: ResetRequest):
+    controller: Controller = request.app.state.controller
+    if not payload.locations:
+        raise HTTPException(status_code=400, detail="no locations provided")
+
+    # Controller.reset iterates over controller.settings.devices and indexes
+    # the supplied locations dict by hex-string address. Build the dict in
+    # that shape; the existing CLI's int-keyed dict is a separate bug.
+    locations = {
+        addr.upper(): ResetLocation(pos_x=loc.pos_x, pos_y=loc.pos_y)
+        for addr, loc in payload.locations.items()
+    }
+    async with controller_lock:
+        await run_in_threadpool(controller.reset, locations)
+    return JSONResponse(content={"response": "done"})
+
+
+@api.post("/lh2_calibration", dependencies=[Depends(verify_jwt)])
+async def lh2_calibration(request: Request, payload: Lh2CalibrationRequest):
+    controller: Controller = request.app.state.controller
+    try:
+        blob = base64.b64decode(payload.calibration_b64)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"invalid base64: {exc}"
+        )
+    async with controller_lock:
+        try:
+            await run_in_threadpool(
+                controller.send_lh2_calibration, bytearray(blob)
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    return JSONResponse(content={"response": "done"})
+
+
+@api.get("/events")
+async def events(request: Request):
+    """Server-Sent Events: periodic status snapshots, one event every ~500 ms.
+
+    Connect with `curl -N http://127.0.0.1:8001/events` or any SSE client.
+    Disconnect cleanly via the underlying TCP close — the generator detects
+    it via `request.is_disconnected()` and exits.
+    """
+    controller: Controller = request.app.state.controller
+
+    async def _snapshot() -> dict:
+        return {
+            addr: {
+                **asdict(node),
+                "device": node.device.name,
+                "status": node.status.name,
+            }
+            for addr, node in controller.status_data.items()
+        }
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                payload = json.dumps(
+                    {"type": "status", "devices": await _snapshot()}
+                )
+                yield f"data: {payload}\n\n"
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+    )
 
 
 class IssueRequest(BaseModel):
