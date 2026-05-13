@@ -283,20 +283,27 @@ async def settings(request: Request):
 
 @api.post("/start")
 async def start(
-    request: Request, payload: DeviceList, _token_payload=Depends(verify_jwt)
+    request: Request,
+    payload: Optional[DeviceList] = None,
+    _token_payload=Depends(verify_jwt),
 ):
     controller: Controller = request.app.state.controller
+    devices = payload.devices if payload is not None else None
     async with controller_lock:
-        await run_in_threadpool(controller.start, devices=payload.devices)
+        await run_in_threadpool(controller.start, devices=devices)
 
     return JSONResponse(content={"response": "done"})
 
 
 @api.post("/stop", dependencies=[Depends(verify_jwt)])
-async def stop(request: Request, payload: DeviceList):
+async def stop(
+    request: Request,
+    payload: Optional[DeviceList] = None,
+):
     controller: Controller = request.app.state.controller
+    devices = payload.devices if payload is not None else None
     async with controller_lock:
-        await run_in_threadpool(controller.stop, devices=payload.devices)
+        await run_in_threadpool(controller.stop, devices=devices)
 
     return JSONResponse(content={"response": "done"})
 
