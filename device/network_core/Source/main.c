@@ -188,7 +188,7 @@ static void _commit_config_and_reboot(void) {
     // NVIC_SystemReset would only reset this domain and leave the app core
     // with stale Mari / localization state.
     puts("Calibration/config committed to flash, requesting system reset");
-    NRF_IPC_NS->TASKS_SEND[IPC_CHAN_APPLICATION_RESET] = 1;
+    NRF_IPC_NS->TASKS_SEND[IPC_CHAN_SOC_RESET] = 1;
     while (1) { __WFE(); }
 }
 
@@ -202,7 +202,7 @@ int main(void) {
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_RADIO_RX]          = 1 << IPC_CHAN_RADIO_RX;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_START] = 1 << IPC_CHAN_APPLICATION_START;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_STOP]  = 1 << IPC_CHAN_APPLICATION_STOP;
-    NRF_IPC_NS->SEND_CNF[IPC_CHAN_APPLICATION_RESET] = 1 << IPC_CHAN_APPLICATION_RESET;
+    NRF_IPC_NS->SEND_CNF[IPC_CHAN_SOC_RESET]         = 1 << IPC_CHAN_SOC_RESET;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_START]         = 1 << IPC_CHAN_OTA_START;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_CHUNK]         = 1 << IPC_CHAN_OTA_CHUNK;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_CALIBRATION_DATA]  = 1 << IPC_CHAN_CALIBRATION_DATA;
@@ -273,7 +273,7 @@ int main(void) {
                     memcpy((uint8_t *)&ipc_shared_data.target_position, req->data, sizeof(position_2d_t));
                     puts("Reset request received");
                     ipc_shared_data.status = SWRMT_APPLICATION_RESETTING;
-                    //NRF_IPC_NS->TASKS_SEND[IPC_CHAN_APPLICATION_RESET] = 1;
+                    //NRF_IPC_NS->TASKS_SEND[IPC_CHAN_SOC_RESET] = 1;
                     break;
                 case SWRMT_MSG_OTA_START:
                 {

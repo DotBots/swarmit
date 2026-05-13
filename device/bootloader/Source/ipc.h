@@ -34,7 +34,7 @@ typedef enum {
     IPC_CHAN_RADIO_RX           = 1,    ///< Channel used for radio RX events
     IPC_CHAN_APPLICATION_START  = 2,    ///< Channel used for starting the application
     IPC_CHAN_APPLICATION_STOP   = 3,    ///< Channel used for stopping the application
-    IPC_CHAN_APPLICATION_RESET  = 4,    ///< Channel used for resetting the application
+    IPC_CHAN_SOC_RESET          = 4,    ///< Channel used to request a full SoC reset (e.g. after calibration commit)
     IPC_CHAN_LOG_EVENT          = 5,    ///< Channel used for logging events
     IPC_CHAN_OTA_START          = 6,    ///< Channel used for starting an OTA process
     IPC_CHAN_OTA_CHUNK          = 7,    ///< Channel used for writing a non secure image chunk

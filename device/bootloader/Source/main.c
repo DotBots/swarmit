@@ -260,7 +260,7 @@ int main(void) {
                             1 << IPC_CHAN_OTA_START |
                             1 << IPC_CHAN_OTA_CHUNK |
                             1 << IPC_CHAN_APPLICATION_START |
-                            1 << IPC_CHAN_APPLICATION_RESET |
+                            1 << IPC_CHAN_SOC_RESET |
                             1 << IPC_CHAN_CALIBRATION_DATA
                         );
     NRF_IPC_S->SEND_CNF[IPC_CHAN_REQ]                   = 1 << IPC_CHAN_REQ;
@@ -268,7 +268,7 @@ int main(void) {
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_RADIO_RX]           = 1 << IPC_CHAN_RADIO_RX;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_APPLICATION_START]  = 1 << IPC_CHAN_APPLICATION_START;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_APPLICATION_STOP]   = 1 << IPC_CHAN_APPLICATION_STOP;
-    NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_APPLICATION_RESET]  = 1 << IPC_CHAN_APPLICATION_RESET;
+    NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_SOC_RESET]          = 1 << IPC_CHAN_SOC_RESET;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_START]          = 1 << IPC_CHAN_OTA_START;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_CHUNK]          = 1 << IPC_CHAN_OTA_CHUNK;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_CALIBRATION_DATA]   = 1 << IPC_CHAN_CALIBRATION_DATA;
@@ -494,8 +494,8 @@ void IPC_IRQHandler(void) {
         _bootloader_vars.start_application = true;
     }
 
-    if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_APPLICATION_RESET]) {
-        NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_APPLICATION_RESET] = 0;
+    if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_SOC_RESET]) {
+        NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_SOC_RESET] = 0;
         _bootloader_vars.system_reset_requested = true;
     }
 
