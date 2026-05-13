@@ -354,7 +354,13 @@ int main(void) {
                         break;
                     }
 
-                    /* Keep receiving matrices in RAM and commit once on the last index. */
+                    /* Keep receiving matrices in RAM and commit once on the last index.
+                       On the first packet of a new calibration session, zero the
+                       array so any unrecovered slot from the previous session
+                       does not silently survive into the flash commit. */
+                    if (pkt->homography_index == 0) {
+                        memset(_app_vars.config.homographies, 0, sizeof(_app_vars.config.homographies));
+                    }
                     _app_vars.config.homography_count = pkt->homography_count;
                     memcpy(_app_vars.config.homographies[pkt->homography_index], pkt->homography, sizeof(_app_vars.config.homographies[0]));
 
