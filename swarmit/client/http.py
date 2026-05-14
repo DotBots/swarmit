@@ -13,6 +13,15 @@ from swarmit.testbed.controller import NodeStatus, ResetLocation
 from swarmit.testbed.protocol import DeviceType, StatusType
 
 
+class SwarmitAuthError(RuntimeError):
+    """Daemon returned 401 (token rejected) or 403 (token missing).
+
+    Daemon in localhost-only mode doesn't require auth; this normally
+    surfaces when talking to a daemon configured with auth_mode='jwt'
+    (e.g. a future cross-machine deployment) without a valid token.
+    """
+
+
 class HTTPSwarmitClient:
     """Make HTTP requests against the daemon's REST surface."""
 
@@ -42,6 +51,11 @@ class HTTPSwarmitClient:
             time.sleep(interval)
 
     # ---- write ----
+
+    # NOTE on devices=[]: `if devices` is False for both None and an empty
+    # list, so both collapse to "no body" → daemon interprets as "all
+    # devices". No current caller passes [] meaning "literally no devices",
+    # but if one ever needs that semantic we'll need to distinguish here.
 
     def start(self, devices: Optional[list[str]] = None) -> None:
         self._request("POST", "/start", body={"devices": devices} if devices else None)
@@ -105,6 +119,10 @@ class HTTPSwarmitClient:
                 return json.loads(raw)
         except HTTPError as e:
             detail = e.read().decode("utf-8", errors="replace")
+            if e.code in (401, 403):
+                raise SwarmitAuthError(
+                    f"daemon returned HTTP {e.code} on {method} {path}: {detail}"
+                ) from e
             raise RuntimeError(
                 f"daemon returned HTTP {e.code} on {method} {path}: {detail}"
             ) from e
