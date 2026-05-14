@@ -224,35 +224,33 @@ def reset(ctx, locations):
 
     Locations are provided as '<device_addr>:<x>,<y>-<device_addr>:<x>,<y>|...'
     """
-    controller = Controller(ctx.obj["settings"])
-    devices = controller.settings.devices
+    settings = ctx.obj["settings"]
+    devices = settings.devices
     print(devices)
     if not devices:
         print("No device selected.")
-        controller.terminate()
         return
-    # Controller.reset() iterates settings.devices (hex strings) and
-    # indexes this dict by the same string addresses. Previously the
-    # keys were ints, so every lookup KeyError'd and reset silently
-    # no-op'd. Keep keys as uppercase hex strings to match the device
-    # address format used everywhere else.
-    locations = {
+    # Keys are uppercase hex strings (matching settings.devices and
+    # everything else in the codebase) — Controller.reset indexes by
+    # string address, not int.
+    parsed_locations = {
         location.split(":")[0].upper(): ResetLocation(
             pos_x=int(float(location.split(":")[1].split(",")[0])),
             pos_y=int(float(location.split(":")[1].split(",")[1])),
         )
         for location in locations.split("-")
     }
-    if sorted(devices) and sorted(locations.keys()) != sorted(devices):
+    if sorted(devices) != sorted(parsed_locations.keys()):
         print("Selected devices and reset locations do not match.")
-        controller.terminate()
         return
-    if not controller.ready_devices:
-        print("No device to reset.")
-        controller.terminate()
-        return
-    controller.reset(locations)
-    controller.terminate()
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        ready = _filter_by_status(
+            client.status(), settings.devices, StatusType.Bootloader
+        )
+        if not ready:
+            print("No device to reset.")
+            return
+        client.reset(parsed_locations)
 
 
 @main.command()
@@ -287,7 +285,15 @@ def reset(ctx, locations):
 @click.argument("firmware", type=click.File(mode="rb"), required=False)
 @click.pass_context
 def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
-    """Flash a firmware to the robots."""
+    """Flash a firmware to the robots.
+
+    NOTE: still on the in-process Controller path, NOT routed through
+    build_client. Routing it would block the CLI for minutes with no
+    progress bar in daemon mode — worse UX than today. The daemon-mode
+    flash needs per-chunk events streamed over /events (SSE) before
+    this can switch over. Tracked as Phase E in
+    plans/swarmit-cli-stateful-service.md.
+    """
     console = Console()
     if firmware is None:
         console.print("[bold red]Error:[/] Missing firmware file. Exiting.")
@@ -355,14 +361,20 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
 @main.command()
 @click.pass_context
 def monitor(ctx):
-    """Monitor running applications."""
-    try:
-        controller = Controller(ctx.obj["settings"])
-        controller.monitor()
-    except KeyboardInterrupt:
-        print("Stopping monitor.")
-    finally:
-        controller.terminate()
+    """Monitor the testbed — live device status until Ctrl-C."""
+    settings = ctx.obj["settings"]
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        from rich.live import Live
+
+        with Live(
+            generate_status(client.status(), settings.devices),
+            refresh_per_second=4,
+        ) as live:
+            try:
+                for snapshot in client.watch_status(interval=0.25):
+                    live.update(generate_status(snapshot, settings.devices))
+            except KeyboardInterrupt:
+                print("Stopping monitor.")
 
 
 @main.command()
@@ -410,9 +422,9 @@ def message(ctx, message):
 @click.pass_context
 def calibrate_lh2(ctx, lh2_calibration_file):
     """Send LH2 calibration data to the robots."""
-    controller = Controller(ctx.obj["settings"])
-    controller.send_lh2_calibration(bytearray(lh2_calibration_file.read()))
-    controller.terminate()
+    settings = ctx.obj["settings"]
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        client.send_lh2_calibration(lh2_calibration_file.read())
 
 
 if __name__ == "__main__":
