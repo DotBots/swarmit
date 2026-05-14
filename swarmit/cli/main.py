@@ -11,17 +11,39 @@ from rich.console import Console
 from rich.pretty import pprint
 
 from swarmit import __version__
+from swarmit.client import build_client
 from swarmit.testbed.controller import (
     CHUNK_SIZE,
     OTA_ACK_TIMEOUT_DEFAULT,
     OTA_MAX_RETRIES_DEFAULT,
     Controller,
     ControllerSettings,
+    NodeStatus,
     ResetLocation,
+    generate_status,
     print_transfer_status,
 )
 from swarmit.testbed.helpers import load_toml_config
 from swarmit.testbed.logger import setup_logging
+from swarmit.testbed.protocol import StatusType
+
+
+def _filter_by_status(
+    status_map: dict[str, NodeStatus],
+    devices_filter: list[str],
+    *target_statuses: StatusType,
+) -> list[str]:
+    """Return the device addresses in `status_map` matching any of
+    `target_statuses` and (if `devices_filter` is non-empty) appearing
+    in `devices_filter`.
+    """
+    filter_set = set(devices_filter) if devices_filter else None
+    return [
+        addr
+        for addr, node in status_map.items()
+        if node.status in target_statuses
+        and (filter_set is None or addr in filter_set)
+    ]
 
 DEFAULTS = {
     "adapter": "edge",
@@ -99,6 +121,12 @@ DEFAULTS = {
     is_flag=True,
     help="Enable verbose mode.",
 )
+@click.option(
+    "--no-daemon",
+    is_flag=True,
+    help="Skip the daemon probe and run an in-process Controller for this "
+    "invocation (the legacy behavior).",
+)
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
 @click.pass_context
 def main(
@@ -113,6 +141,7 @@ def main(
     adapter,
     devices,
     verbose,
+    no_daemon,
 ):
     config_data = load_toml_config(config_path)
     cli_args = {
@@ -136,6 +165,7 @@ def main(
 
     setup_logging()
     ctx.ensure_object(dict)
+    ctx.obj["no_daemon"] = no_daemon
     ctx.obj["settings"] = ControllerSettings(
         serial_port=final_config["serial_port"],
         serial_baudrate=final_config["baudrate"],
@@ -153,24 +183,34 @@ def main(
 @click.pass_context
 def start(ctx):
     """Start the user application."""
-    controller = Controller(ctx.obj["settings"])
-    if controller.ready_devices:
-        controller.start()
-    else:
-        print("No device to start")
-    controller.terminate()
+    settings = ctx.obj["settings"]
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        ready = _filter_by_status(
+            client.status(), settings.devices, StatusType.Bootloader
+        )
+        if ready:
+            client.start(devices=settings.devices if settings.devices else None)
+        else:
+            print("No device to start")
 
 
 @main.command()
 @click.pass_context
 def stop(ctx):
     """Stop the user application."""
-    controller = Controller(ctx.obj["settings"])
-    if controller.running_devices or controller.resetting_devices:
-        controller.stop()
-    else:
-        print("[bold]No device to stop[/]")
-    controller.terminate()
+    settings = ctx.obj["settings"]
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        stoppable = _filter_by_status(
+            client.status(),
+            settings.devices,
+            StatusType.Running,
+            StatusType.Programming,
+            StatusType.Resetting,
+        )
+        if stoppable:
+            client.stop(devices=settings.devices if settings.devices else None)
+        else:
+            print("[bold]No device to stop[/]")
 
 
 @main.command()
@@ -330,9 +370,22 @@ def monitor(ctx):
 @click.pass_context
 def status(ctx, watch):
     """Print current status of the robots."""
-    controller = Controller(ctx.obj["settings"])
-    controller.status(watch=watch)
-    controller.terminate()
+    settings = ctx.obj["settings"]
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        if watch:
+            from rich.live import Live
+
+            with Live(
+                generate_status(client.status(), settings.devices),
+                refresh_per_second=4,
+            ) as live:
+                try:
+                    for snapshot in client.watch_status(interval=0.25):
+                        live.update(generate_status(snapshot, settings.devices))
+                except KeyboardInterrupt:
+                    pass
+        else:
+            print(generate_status(client.status(), settings.devices))
 
 
 @main.command()
@@ -340,9 +393,9 @@ def status(ctx, watch):
 @click.pass_context
 def message(ctx, message):
     """Send a custom text message to the robots."""
-    controller = Controller(ctx.obj["settings"])
-    controller.send_message(message)
-    controller.terminate()
+    settings = ctx.obj["settings"]
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        client.message(message)
 
 
 @main.command()
