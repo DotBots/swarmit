@@ -130,6 +130,21 @@ def main(
         **{k: v for k, v in cli_args.items() if v not in (None, False)},
     }
 
+    # Daemon currently always runs with auth disabled. Refuse to bind to
+    # anything other than localhost so a stray --bind-host 0.0.0.0 (or
+    # any LAN-reachable address) cannot accidentally expose unauthenticated
+    # /flash, /start, /stop, /reset, /lh2_calibration, /message endpoints.
+    # Cross-machine deployment with JWT auth is planned for Phase D.
+    SAFE_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
+    if final_config["bind_host"] not in SAFE_BIND_HOSTS:
+        click.echo(
+            f"refusing to start: --bind-host={final_config['bind_host']!r} "
+            f"would expose unauthenticated control endpoints. "
+            f"Allowed: {sorted(SAFE_BIND_HOSTS)}.",
+            err=True,
+        )
+        raise click.Abort()
+
     settings = ControllerSettings(
         serial_port=final_config["serial_port"],
         serial_baudrate=final_config["baudrate"],
