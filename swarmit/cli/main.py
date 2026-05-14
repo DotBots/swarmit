@@ -26,6 +26,44 @@ from swarmit.testbed.logger import setup_logging
 from swarmit.testbed.protocol import StatusType
 
 
+def _render_transfer_summary(device_results: list[dict], console) -> None:
+    """Render per-device flash outcomes in a wrap-friendly grid.
+
+    Each cell is one device: `ADDR acked/total r:N ✓|✗`. Rich's
+    Columns auto-wraps cells side-by-side based on terminal width,
+    so 100+ devices stay readable without 100 rows of vertical
+    space.
+    """
+    from rich.columns import Columns
+    from rich.text import Text
+
+    if not device_results:
+        return
+
+    cells = []
+    for d in sorted(device_results, key=lambda r: r["addr"]):
+        success = d.get("success", False)
+        color = "green" if success else "red"
+        marker = "✓" if success else "✗"
+        acked = d.get("chunks_acked", 0)
+        total = d.get("chunks_total", 0)
+        retries = d.get("retries", 0)
+        cells.append(
+            Text.from_markup(
+                f"[magenta]{d['addr']}[/] "
+                f"[{color}]{acked}/{total} r:{retries} {marker}[/]"
+            )
+        )
+
+    succ = sum(1 for d in device_results if d.get("success"))
+    console.print()
+    console.print(
+        f"[bold]Transfer status[/] "
+        f"([green]{succ}[/]/{len(device_results)} ok):"
+    )
+    console.print(Columns(cells, padding=(0, 2), expand=False))
+
+
 def _filter_by_status(
     status_map: dict[str, NodeStatus],
     devices_filter: list[str],
@@ -288,11 +326,8 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
     Streams per-chunk progress via the daemon's /flash/stream SSE
     endpoint when a daemon is reachable, or via in-process polling of
     the controller's transfer_data otherwise. CLI rendering is the same
-    either way.
-
-    Note: --ota-timeout and --ota-max-retries only take effect in
-    --no-daemon mode. In daemon mode the daemon's controller uses the
-    OTA params it was started with.
+    either way. `--ota-timeout` and `--ota-max-retries` are sent as
+    per-flash overrides in both modes.
     """
     console = Console()
     if firmware is None:
@@ -300,8 +335,6 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
         raise click.Abort()
 
     settings = ctx.obj["settings"]
-    settings.ota_timeout = ota_timeout
-    settings.ota_max_retries = ota_max_retries
     fw = firmware.read()
 
     with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
@@ -322,7 +355,10 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
             )
 
         events = client.flash(
-            fw, devices=settings.devices if settings.devices else None
+            fw,
+            devices=settings.devices if settings.devices else None,
+            ota_timeout=ota_timeout,
+            ota_max_retries=ota_max_retries,
         )
         progress = None
         per_device_acked: dict[str, int] = {}
@@ -362,20 +398,8 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
                     print(
                         f"Elapsed: [bold cyan]{ev['elapsed_s']:.3f}s[/]"
                     )
-                    successes = sum(
-                        1 for d in device_results if d.get("success")
-                    )
-                    print(
-                        f"Devices succeeded: [bold green]{successes}[/]/"
-                        f"{len(device_results)}"
-                    )
+                    _render_transfer_summary(device_results, console)
                     if not ev.get("all_success", False):
-                        for d in device_results:
-                            if not d.get("success"):
-                                console.print(
-                                    f"  [red]✗[/] {d['addr']} "
-                                    f"(retries: {d.get('retries', 0)})"
-                                )
                         console.print("[bold red]Error:[/] Transfer failed.")
                         raise click.Abort()
                     if start:
