@@ -52,10 +52,16 @@ class SwarmitClient(Protocol):
         self,
         firmware: bytes,
         devices: Optional[list[str]] = None,
+        ota_timeout: Optional[float] = None,
+        ota_max_retries: Optional[int] = None,
     ) -> Iterator[dict]:
         """Stream OTA progress events. See webserver.flash_stream for the
         event type vocabulary (flash_started / chunk / device_done /
         complete / error). Caller consumes until "complete" or "error".
+
+        `ota_timeout` and `ota_max_retries` override the controller's
+        defaults for the duration of this flash only (None = leave the
+        controller's current values in place).
         """
         ...
 

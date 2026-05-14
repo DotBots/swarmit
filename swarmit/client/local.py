@@ -51,6 +51,8 @@ class LocalSwarmitClient:
         self,
         firmware: bytes,
         devices: Optional[list[str]] = None,
+        ota_timeout: Optional[float] = None,
+        ota_max_retries: Optional[int] = None,
     ) -> Iterator[dict]:
         """Run an OTA and yield progress events.
 
@@ -58,6 +60,25 @@ class LocalSwarmitClient:
         /flash/stream SSE: flash_started, chunk, device_done, complete,
         error.
         """
+        # Per-flash override of OTA params on the controller's settings;
+        # restored on exit.
+        saved_timeout = self._controller.settings.ota_timeout
+        saved_retries = self._controller.settings.ota_max_retries
+        if ota_timeout is not None:
+            self._controller.settings.ota_timeout = ota_timeout
+        if ota_max_retries is not None:
+            self._controller.settings.ota_max_retries = ota_max_retries
+        try:
+            yield from self._run_flash(firmware, devices)
+        finally:
+            self._controller.settings.ota_timeout = saved_timeout
+            self._controller.settings.ota_max_retries = saved_retries
+
+    def _run_flash(
+        self,
+        firmware: bytes,
+        devices: Optional[list[str]] = None,
+    ) -> Iterator[dict]:
         fw = bytearray(firmware)
         try:
             start_data = (
@@ -128,6 +149,8 @@ class LocalSwarmitClient:
                 "addr": addr,
                 "success": td.success,
                 "retries": sum(c.retries for c in td.chunks),
+                "chunks_acked": sum(1 for c in td.chunks if c.acked),
+                "chunks_total": len(td.chunks),
             }
         yield {
             "type": "complete",

@@ -76,6 +76,8 @@ class HTTPSwarmitClient:
         self,
         firmware: bytes,
         devices: Optional[list[str]] = None,
+        ota_timeout: Optional[float] = None,
+        ota_max_retries: Optional[int] = None,
     ) -> Iterator[dict]:
         """POST /flash/stream and yield SSE events.
 
@@ -89,6 +91,8 @@ class HTTPSwarmitClient:
                     "ascii"
                 ),
                 "devices": devices,
+                "ota_timeout": ota_timeout,
+                "ota_max_retries": ota_max_retries,
             }
         ).encode("utf-8")
         req = Request(

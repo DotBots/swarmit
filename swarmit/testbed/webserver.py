@@ -193,6 +193,9 @@ class DeviceList(BaseModel):
 class FlashRequest(BaseModel):
     firmware_b64: str
     devices: Optional[Union[str, List[str]]] = None
+    # Per-flash overrides. None = use the daemon's controller defaults.
+    ota_timeout: Optional[float] = None
+    ota_max_retries: Optional[int] = None
 
 
 class MessageRequest(BaseModel):
@@ -300,90 +303,111 @@ async def flash_stream(payload: FlashRequest, request: Request):
 
     async def event_stream():
         async with controller_lock:
+            # Per-flash override of OTA params: save the controller's
+            # current values, apply the request's overrides (if any),
+            # restore on exit. Safe under controller_lock — no other
+            # flash can interleave.
+            saved_timeout = controller.settings.ota_timeout
+            saved_retries = controller.settings.ota_max_retries
+            if payload.ota_timeout is not None:
+                controller.settings.ota_timeout = payload.ota_timeout
+            if payload.ota_max_retries is not None:
+                controller.settings.ota_max_retries = payload.ota_max_retries
             try:
-                start_data = (
-                    await run_in_threadpool(controller.start_ota, fw, devices)
-                    if devices
-                    else await run_in_threadpool(controller.start_ota, fw)
-                )
-            except Exception as exc:
-                yield _sse({"type": "error", "message": f"start_ota: {exc}"})
-                return
+                async for ev in _do_flash(controller, fw, devices):
+                    yield ev
+            finally:
+                controller.settings.ota_timeout = saved_timeout
+                controller.settings.ota_max_retries = saved_retries
 
-            if start_data["missed"]:
-                yield _sse(
-                    {
-                        "type": "error",
-                        "message": (
-                            f"{len(start_data['missed'])} OTA start acks "
-                            f"missed: {sorted(set(start_data['missed']))}"
-                        ),
-                    }
-                )
-                return
+    async def _do_flash(controller, fw, devices):
+        try:
+            start_data = (
+                await run_in_threadpool(controller.start_ota, fw, devices)
+                if devices
+                else await run_in_threadpool(controller.start_ota, fw)
+            )
+        except Exception as exc:
+            yield _sse({"type": "error", "message": f"start_ota: {exc}"})
+            return
 
+        if start_data["missed"]:
             yield _sse(
                 {
-                    "type": "flash_started",
-                    "image_size": len(fw),
-                    "total_chunks": len(controller.chunks),
-                    "fw_hash": start_data["ota"].fw_hash.hex().upper(),
-                    "devices": sorted(start_data["acked"]),
-                }
-            )
-
-            transfer_task = asyncio.create_task(
-                run_in_threadpool(
-                    controller.transfer, fw, start_data["acked"]
-                )
-            )
-
-            last_acked = {addr: 0 for addr in start_data["acked"]}
-            start_ts = asyncio.get_event_loop().time()
-            while not transfer_task.done():
-                await asyncio.sleep(0.1)
-                for addr in start_data["acked"]:
-                    td = controller.transfer_data.get(addr)
-                    if td is None:
-                        continue
-                    acked = sum(1 for c in td.chunks if c.acked)
-                    if acked > last_acked[addr]:
-                        yield _sse(
-                            {
-                                "type": "chunk",
-                                "addr": addr,
-                                "acked": acked,
-                                "total": len(td.chunks),
-                            }
-                        )
-                        last_acked[addr] = acked
-
-            try:
-                transfer = await transfer_task
-            except Exception as exc:
-                yield _sse({"type": "error", "message": f"transfer: {exc}"})
-                return
-
-            for addr, td in transfer.items():
-                retries = sum(c.retries for c in td.chunks)
-                yield _sse(
-                    {
-                        "type": "device_done",
-                        "addr": addr,
-                        "success": td.success,
-                        "retries": retries,
-                    }
-                )
-
-            yield _sse(
-                {
-                    "type": "complete",
-                    "all_success": all(
-                        td.success for td in transfer.values()
+                    "type": "error",
+                    "message": (
+                        f"{len(start_data['missed'])} OTA start acks "
+                        f"missed: {sorted(set(start_data['missed']))}"
                     ),
-                    "elapsed_s": asyncio.get_event_loop().time() - start_ts,
                 }
             )
+            return
+
+        yield _sse(
+            {
+                "type": "flash_started",
+                "image_size": len(fw),
+                "total_chunks": len(controller.chunks),
+                "fw_hash": start_data["ota"].fw_hash.hex().upper(),
+                "devices": sorted(start_data["acked"]),
+            }
+        )
+
+        transfer_task = asyncio.create_task(
+            run_in_threadpool(
+                controller.transfer, fw, start_data["acked"]
+            )
+        )
+
+        last_acked = {addr: 0 for addr in start_data["acked"]}
+        start_ts = asyncio.get_event_loop().time()
+        while not transfer_task.done():
+            await asyncio.sleep(0.1)
+            for addr in start_data["acked"]:
+                td = controller.transfer_data.get(addr)
+                if td is None:
+                    continue
+                acked = sum(1 for c in td.chunks if c.acked)
+                if acked > last_acked[addr]:
+                    yield _sse(
+                        {
+                            "type": "chunk",
+                            "addr": addr,
+                            "acked": acked,
+                            "total": len(td.chunks),
+                        }
+                    )
+                    last_acked[addr] = acked
+
+        try:
+            transfer = await transfer_task
+        except Exception as exc:
+            yield _sse({"type": "error", "message": f"transfer: {exc}"})
+            return
+
+        for addr, td in transfer.items():
+            yield _sse(
+                {
+                    "type": "device_done",
+                    "addr": addr,
+                    "success": td.success,
+                    "retries": sum(c.retries for c in td.chunks),
+                    "chunks_acked": sum(
+                        1 for c in td.chunks if c.acked
+                    ),
+                    "chunks_total": len(td.chunks),
+                }
+            )
+
+        yield _sse(
+            {
+                "type": "complete",
+                "all_success": all(
+                    td.success for td in transfer.values()
+                ),
+                "elapsed_s": asyncio.get_event_loop().time() - start_ts,
+            }
+        )
 
     return StreamingResponse(
         event_stream(), media_type="text/event-stream"
