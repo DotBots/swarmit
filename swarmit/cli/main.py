@@ -231,8 +231,13 @@ def reset(ctx, locations):
         print("No device selected.")
         controller.terminate()
         return
+    # Controller.reset() iterates settings.devices (hex strings) and
+    # indexes this dict by the same string addresses. Previously the
+    # keys were ints, so every lookup KeyError'd and reset silently
+    # no-op'd. Keep keys as uppercase hex strings to match the device
+    # address format used everywhere else.
     locations = {
-        int(location.split(":")[0], 16): ResetLocation(
+        location.split(":")[0].upper(): ResetLocation(
             pos_x=int(float(location.split(":")[1].split(",")[0])),
             pos_y=int(float(location.split(":")[1].split(",")[1])),
         )
