@@ -272,6 +272,124 @@ async def flash_firmware(payload: FlashRequest, request: Request):
     return JSONResponse(content={"response": "success"})
 
 
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+@api.post("/flash/stream", dependencies=[Depends(verify_jwt)])
+async def flash_stream(payload: FlashRequest, request: Request):
+    """OTA flash with progress streamed back as Server-Sent Events.
+
+    Event types yielded in order:
+      - "flash_started":     {image_size, total_chunks, fw_hash, devices}
+      - "chunk" (repeated):  {addr, acked, total}   — cumulative acked count
+      - "device_done" (per): {addr, success, retries}
+      - "complete":          {all_success, elapsed_s}
+      - "error" (terminal):  {message}
+    """
+    controller: Controller = request.app.state.controller
+
+    try:
+        fw = bytearray(base64.b64decode(payload.firmware_b64))
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"invalid firmware encoding: {e}"
+        )
+
+    devices = payload.devices
+
+    async def event_stream():
+        async with controller_lock:
+            try:
+                start_data = (
+                    await run_in_threadpool(controller.start_ota, fw, devices)
+                    if devices
+                    else await run_in_threadpool(controller.start_ota, fw)
+                )
+            except Exception as exc:
+                yield _sse({"type": "error", "message": f"start_ota: {exc}"})
+                return
+
+            if start_data["missed"]:
+                yield _sse(
+                    {
+                        "type": "error",
+                        "message": (
+                            f"{len(start_data['missed'])} OTA start acks "
+                            f"missed: {sorted(set(start_data['missed']))}"
+                        ),
+                    }
+                )
+                return
+
+            yield _sse(
+                {
+                    "type": "flash_started",
+                    "image_size": len(fw),
+                    "total_chunks": len(controller.chunks),
+                    "fw_hash": start_data["ota"].fw_hash.hex().upper(),
+                    "devices": sorted(start_data["acked"]),
+                }
+            )
+
+            transfer_task = asyncio.create_task(
+                run_in_threadpool(
+                    controller.transfer, fw, start_data["acked"]
+                )
+            )
+
+            last_acked = {addr: 0 for addr in start_data["acked"]}
+            start_ts = asyncio.get_event_loop().time()
+            while not transfer_task.done():
+                await asyncio.sleep(0.1)
+                for addr in start_data["acked"]:
+                    td = controller.transfer_data.get(addr)
+                    if td is None:
+                        continue
+                    acked = sum(1 for c in td.chunks if c.acked)
+                    if acked > last_acked[addr]:
+                        yield _sse(
+                            {
+                                "type": "chunk",
+                                "addr": addr,
+                                "acked": acked,
+                                "total": len(td.chunks),
+                            }
+                        )
+                        last_acked[addr] = acked
+
+            try:
+                transfer = await transfer_task
+            except Exception as exc:
+                yield _sse({"type": "error", "message": f"transfer: {exc}"})
+                return
+
+            for addr, td in transfer.items():
+                retries = sum(c.retries for c in td.chunks)
+                yield _sse(
+                    {
+                        "type": "device_done",
+                        "addr": addr,
+                        "success": td.success,
+                        "retries": retries,
+                    }
+                )
+
+            yield _sse(
+                {
+                    "type": "complete",
+                    "all_success": all(
+                        td.success for td in transfer.values()
+                    ),
+                    "elapsed_s": asyncio.get_event_loop().time() - start_ts,
+                }
+            )
+
+    return StreamingResponse(
+        event_stream(), media_type="text/event-stream"
+    )
+
+
 @api.get("/status")
 async def status(request: Request):
     controller: Controller = request.app.state.controller
