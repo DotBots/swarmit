@@ -395,13 +395,17 @@ async def events(request: Request):
     controller: Controller = request.app.state.controller
 
     async def _snapshot() -> dict:
+        # Snapshot first: status_data is mutated from the marilib RX
+        # thread; iterating it directly across the sleep below would
+        # race ("dictionary changed size during iteration").
+        snapshot = dict(controller.status_data)
         return {
             addr: {
                 **asdict(node),
                 "device": node.device.name,
                 "status": node.status.name,
             }
-            for addr, node in controller.status_data.items()
+            for addr, node in snapshot.items()
         }
 
     async def event_generator():
