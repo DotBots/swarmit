@@ -76,13 +76,51 @@ class HTTPSwarmitClient:
         self,
         firmware: bytes,
         devices: Optional[list[str]] = None,
-    ) -> dict:
-        body = {
-            "firmware_b64": base64.b64encode(bytes(firmware)).decode("ascii"),
-            "devices": devices,
-        }
-        # OTA can take minutes for a full image — bump the timeout.
-        return self._request("POST", "/flash", body=body, timeout=600.0)
+    ) -> Iterator[dict]:
+        """POST /flash/stream and yield SSE events.
+
+        OTA can take minutes; the timeout is set high enough to cover a
+        full image transfer. The generator exits cleanly after the
+        terminal "complete" or "error" event.
+        """
+        body = json.dumps(
+            {
+                "firmware_b64": base64.b64encode(bytes(firmware)).decode(
+                    "ascii"
+                ),
+                "devices": devices,
+            }
+        ).encode("utf-8")
+        req = Request(
+            f"{self._base}/flash/stream",
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream",
+            },
+        )
+        try:
+            resp = urlopen(req, timeout=600.0)
+        except HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")
+            if e.code in (401, 403):
+                raise SwarmitAuthError(
+                    f"daemon returned HTTP {e.code} on /flash/stream: {detail}"
+                ) from e
+            raise RuntimeError(
+                f"daemon returned HTTP {e.code} on /flash/stream: {detail}"
+            ) from e
+        except URLError as e:
+            raise RuntimeError(
+                f"daemon unreachable on /flash/stream: {e.reason}"
+            ) from e
+
+        with resp:
+            for raw in resp:
+                line = raw.decode("utf-8").rstrip("\r\n")
+                if line.startswith("data: "):
+                    yield json.loads(line[6:])
 
     def message(self, text: str) -> None:
         self._request("POST", "/message", body={"message": text})

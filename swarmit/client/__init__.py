@@ -52,7 +52,12 @@ class SwarmitClient(Protocol):
         self,
         firmware: bytes,
         devices: Optional[list[str]] = None,
-    ) -> dict: ...
+    ) -> Iterator[dict]:
+        """Stream OTA progress events. See webserver.flash_stream for the
+        event type vocabulary (flash_started / chunk / device_done /
+        complete / error). Caller consumes until "complete" or "error".
+        """
+        ...
 
     def message(self, text: str) -> None: ...
 
