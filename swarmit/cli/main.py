@@ -16,12 +16,10 @@ from swarmit.testbed.controller import (
     CHUNK_SIZE,
     OTA_ACK_TIMEOUT_DEFAULT,
     OTA_MAX_RETRIES_DEFAULT,
-    Controller,
     ControllerSettings,
     NodeStatus,
     ResetLocation,
     generate_status,
-    print_transfer_status,
 )
 from swarmit.testbed.helpers import load_toml_config
 from swarmit.testbed.logger import setup_logging
@@ -287,75 +285,119 @@ def reset(ctx, locations):
 def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
     """Flash a firmware to the robots.
 
-    NOTE: still on the in-process Controller path, NOT routed through
-    build_client. Routing it would block the CLI for minutes with no
-    progress bar in daemon mode — worse UX than today. The daemon-mode
-    flash needs per-chunk events streamed over /events (SSE) before
-    this can switch over. Tracked as Phase E in
-    plans/swarmit-cli-stateful-service.md.
+    Streams per-chunk progress via the daemon's /flash/stream SSE
+    endpoint when a daemon is reachable, or via in-process polling of
+    the controller's transfer_data otherwise. CLI rendering is the same
+    either way.
+
+    Note: --ota-timeout and --ota-max-retries only take effect in
+    --no-daemon mode. In daemon mode the daemon's controller uses the
+    OTA params it was started with.
     """
     console = Console()
     if firmware is None:
         console.print("[bold red]Error:[/] Missing firmware file. Exiting.")
         raise click.Abort()
 
-    ctx.obj["settings"].ota_timeout = ota_timeout
-    ctx.obj["settings"].ota_max_retries = ota_max_retries
-    fw = bytearray(firmware.read())
-    controller = Controller(ctx.obj["settings"])
-    if not controller.ready_devices:
-        console.print("[bold red]Error:[/] No ready device found. Exiting.")
-        controller.terminate()
-        raise click.Abort()
+    settings = ctx.obj["settings"]
+    settings.ota_timeout = ota_timeout
+    settings.ota_max_retries = ota_max_retries
+    fw = firmware.read()
 
-    print(
-        f"Devices to flash ([bold white]{len(controller.ready_devices)}):[/]"
-    )
-    pprint(controller.ready_devices, expand_all=True)
-    if yes is False:
-        click.confirm("Do you want to continue?", default=True, abort=True)
-
-    start_data = controller.start_ota(fw)
-    if controller.settings.verbose:
-        print("\n[b]Start OTA response:[/]")
-        pprint(start_data, indent_guides=False, expand_all=True)
-    if start_data["missed"]:
-        console = Console()
-        console.print(
-            f"[bold red]Error:[/] {len(start_data['missed'])} acknowledgments "
-            f"are missing ({', '.join(sorted(set(start_data['missed'])))}). "
-            "Aborting."
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        ready = _filter_by_status(
+            client.status(), settings.devices, StatusType.Bootloader
         )
-        controller.stop()
-        controller.terminate()
-        raise click.Abort()
+        if not ready:
+            console.print(
+                "[bold red]Error:[/] No ready device found. Exiting."
+            )
+            raise click.Abort()
 
-    print()
-    print(f"Image size: [bold cyan]{len(fw)}B[/]")
-    print(
-        f"Image hash: [bold cyan]{start_data['ota'].fw_hash.hex().upper()}[/]"
-    )
-    print(
-        f"Radio chunks ([bold]{CHUNK_SIZE}B[/bold]): {start_data['ota'].chunks}"
-    )
-    start_time = time.time()
-    data = controller.transfer(fw, start_data["acked"])
-    print(f"Elapsed: [bold cyan]{time.time() - start_time:.3f}s[/bold cyan]")
-    print_transfer_status(data, start_data["ota"])
-    if controller.settings.verbose:
-        print("\n[b]Transfer data:[/]")
-        pprint(data, indent_guides=False, expand_all=True)
-    if all([device.success for device in data.values()]) is False:
-        controller.terminate()
-        console = Console()
-        console.print("[bold red]Error:[/] Transfer failed.")
-        raise click.Abort()
+        print(f"Devices to flash ([bold white]{len(ready)}):[/]")
+        pprint(ready, expand_all=True)
+        if not yes:
+            click.confirm(
+                "Do you want to continue?", default=True, abort=True
+            )
 
-    if start is True:
-        time.sleep(1)
-        controller.start()
-
-    controller.terminate()
+        events = client.flash(
+            fw, devices=settings.devices if settings.devices else None
+        )
+        progress = None
+        per_device_acked: dict[str, int] = {}
+        device_results: list[dict] = []
+        try:
+            for ev in events:
+                etype = ev.get("type")
+                if etype == "flash_started":
+                    print()
+                    print(f"Image size: [bold cyan]{ev['image_size']}B[/]")
+                    print(f"Image hash: [bold cyan]{ev['fw_hash']}[/]")
+                    print(
+                        f"Radio chunks ([bold]{CHUNK_SIZE}B[/bold]): "
+                        f"{ev['total_chunks']}"
+                    )
+                    progress = tqdm(
+                        total=ev["total_chunks"] * len(ev["devices"]),
+                        unit="chunk",
+                        unit_scale=False,
+                        colour="green",
+                        ncols=100,
+                    )
+                    progress.set_description(
+                        f"Flashing {len(ev['devices'])} bot(s)"
+                    )
+                elif etype == "chunk":
+                    if progress is None:
+                        continue
+                    prev = per_device_acked.get(ev["addr"], 0)
+                    progress.update(ev["acked"] - prev)
+                    per_device_acked[ev["addr"]] = ev["acked"]
+                elif etype == "device_done":
+                    device_results.append(ev)
+                elif etype == "complete":
+                    if progress is not None:
+                        progress.close()
+                    print(
+                        f"Elapsed: [bold cyan]{ev['elapsed_s']:.3f}s[/]"
+                    )
+                    successes = sum(
+                        1 for d in device_results if d.get("success")
+                    )
+                    print(
+                        f"Devices succeeded: [bold green]{successes}[/]/"
+                        f"{len(device_results)}"
+                    )
+                    if not ev.get("all_success", False):
+                        for d in device_results:
+                            if not d.get("success"):
+                                console.print(
+                                    f"  [red]✗[/] {d['addr']} "
+                                    f"(retries: {d.get('retries', 0)})"
+                                )
+                        console.print("[bold red]Error:[/] Transfer failed.")
+                        raise click.Abort()
+                    if start:
+                        time.sleep(1)
+                        client.start(
+                            devices=settings.devices
+                            if settings.devices
+                            else None
+                        )
+                    return
+                elif etype == "error":
+                    if progress is not None:
+                        progress.close()
+                    console.print(
+                        f"[bold red]Error:[/] {ev.get('message', 'unknown')}"
+                    )
+                    raise click.Abort()
+        except KeyboardInterrupt:
+            if progress is not None:
+                progress.close()
+            console.print("[bold yellow]Aborted by user.[/]")
+            raise click.Abort()
 
 
 @main.command()
