@@ -100,13 +100,7 @@ def build_client(
     from swarmit.client.local import LocalSwarmitClient
 
     if not no_server:
-        # SWARMIT_DAEMON_URL kept as a fallback for one release while
-        # operators migrate their shell aliases.
-        url = (
-            os.environ.get("SWARMIT_SERVER_URL")
-            or os.environ.get("SWARMIT_DAEMON_URL")
-            or SERVER_URL_DEFAULT
-        )
+        url = os.environ.get("SWARMIT_SERVER_URL", SERVER_URL_DEFAULT)
         server_settings = _fetch_server_settings(url)
         if server_settings is not None:
             _ensure_config_matches(settings, server_settings, url)

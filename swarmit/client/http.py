@@ -1,4 +1,4 @@
-"""HTTP-backed SwarmitClient — talks to a running `swarmit-daemon`."""
+"""HTTP-backed SwarmitClient — talks to a running `swarmit-server`."""
 
 from __future__ import annotations
 

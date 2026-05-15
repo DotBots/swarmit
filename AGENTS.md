@@ -32,8 +32,7 @@ git submodule update --init --recursive
 ## Entry points
 
 - `swarmit/cli/main.py` — Click CLI; the user-facing flow
-- `swarmit/server/main.py` — `swarmit-server` entry point; unified FastAPI backend. Default: shared service (JWT, bind 0.0.0.0, DB on, UI mounted). With `--local`: localhost-only, no auth, no DB — same role as the old daemon
-- `swarmit/service/main.py` — deprecated shim; forwards `swarmit-daemon` → `swarmit-server --local`
+- `swarmit/server/main.py` — `swarmit-server` entry point; unified FastAPI backend. Default: shared service (JWT, bind 0.0.0.0, DB on, UI mounted). With `--local`: localhost-only, no auth, no DB
 - `swarmit/dashboard/main.py` — deprecated shim; forwards `python -m swarmit.dashboard.main` → `swarmit-server`
 - `swarmit/client/` — unified `SwarmitClient` (Protocol + Local + HTTP backends) that every CLI subcommand goes through
 - `swarmit/testbed/controller.py` — core orchestration (OTA chunks, start/stop/status)

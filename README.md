@@ -174,7 +174,7 @@ swarmit flash sample.bin                      # streaming OTA progress (SSE)
 swarmit status -w                             # SSE-driven Rich Live table
 swarmit monitor                               # streams SWARMIT_EVENT_LOG
 
-# Override the server endpoint (SWARMIT_DAEMON_URL is a deprecated fallback):
+# Override the server endpoint:
 SWARMIT_SERVER_URL=http://127.0.0.1:9001 swarmit status
 ```
 
@@ -182,9 +182,8 @@ SWARMIT_SERVER_URL=http://127.0.0.1:9001 swarmit status
 localhost — using `--bind-host 0.0.0.0` with `--local` is rejected.
 Cross-machine deployment requires the default JWT-enabled mode.
 
-**Deprecated aliases (forwarded for one release):**
-- `swarmit-daemon` → `swarmit-server --local`
-- `python -m swarmit.dashboard.main` → `swarmit-server`
+`python -m swarmit.dashboard.main` is kept as a deprecated alias that
+forwards to `swarmit-server`.
 
 ## Control Tower Dashboard
 

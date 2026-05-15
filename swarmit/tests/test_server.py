@@ -1,7 +1,4 @@
-"""Smoke tests for the swarmit-server entry point and its deprecation shim."""
-
-import sys
-from unittest.mock import patch
+"""Smoke tests for the swarmit-server entry point."""
 
 from click.testing import CliRunner
 
@@ -31,23 +28,3 @@ def test_server_local_refuses_lan_ip_bind():
     result = runner.invoke(main, ["--local", "--bind-host", "192.168.1.5"])
     assert result.exit_code != 0
     assert "refusing to start" in result.output.lower()
-
-
-def test_daemon_shim_injects_local():
-    """`swarmit-daemon` entry should prepend --local before forwarding."""
-    from swarmit.service import main as svc_mod
-
-    captured: dict = {}
-
-    def _fake_server_main():
-        captured["argv"] = list(sys.argv)
-
-    saved_argv = sys.argv
-    sys.argv = ["swarmit-daemon", "--help"]
-    try:
-        with patch("swarmit.server.main.main", side_effect=_fake_server_main):
-            svc_mod.main()
-    finally:
-        sys.argv = saved_argv
-
-    assert captured["argv"][1] == "--local"
