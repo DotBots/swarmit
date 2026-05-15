@@ -6,14 +6,14 @@ Two backends behind a single Protocol:
   CLI has always done — ephemeral, one Controller per invocation, with
   the discovery wait that comes with it.
 
-- HTTPSwarmitClient: talks to a long-lived `swarmit-daemon` over HTTP.
-  The daemon's Controller stays subscribed continuously, so the CLI's
+- HTTPSwarmitClient: talks to a long-lived `swarmit-server` over HTTP.
+  The server's Controller stays subscribed continuously, so the CLI's
   cold-start tax disappears and stale-discovery flakes go with it.
 
-`build_client(settings, no_daemon=False)` probes the daemon at
-SWARMIT_DAEMON_URL (default `http://127.0.0.1:8001`) and returns the
+`build_client(settings, no_server=False)` probes the server at
+SWARMIT_SERVER_URL (default `http://127.0.0.1:8001`) and returns the
 right backend. The probe is `GET /settings` with a 200 ms timeout; one
-TCP connect-refused when no daemon is running, ~5 ms.
+TCP connect-refused when no server is running, ~5 ms.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from swarmit.testbed.controller import (
     ResetLocation,
 )
 
-DAEMON_URL_DEFAULT = "http://127.0.0.1:8001"
+SERVER_URL_DEFAULT = "http://127.0.0.1:8001"
 
 
 @runtime_checkable
@@ -88,29 +88,35 @@ class SwarmitClient(Protocol):
 
 def build_client(
     settings: ControllerSettings,
-    no_daemon: bool = False,
+    no_server: bool = False,
 ) -> SwarmitClient:
-    """Probe for a running daemon; return HTTPSwarmitClient if reachable
+    """Probe for a running server; return HTTPSwarmitClient if reachable
     AND its settings match the caller, else LocalSwarmitClient.
 
-    Raises RuntimeError if a daemon is running but its network_id (or
+    Raises RuntimeError if a server is running but its network_id (or
     any other field exposed via /settings) diverges from the caller's
-    settings. Bypass with `no_daemon=True`.
+    settings. Bypass with `no_server=True`.
     """
     from swarmit.client.local import LocalSwarmitClient
 
-    if not no_daemon:
-        url = os.environ.get("SWARMIT_DAEMON_URL", DAEMON_URL_DEFAULT)
-        daemon_settings = _fetch_daemon_settings(url)
-        if daemon_settings is not None:
-            _ensure_config_matches(settings, daemon_settings, url)
+    if not no_server:
+        # SWARMIT_DAEMON_URL kept as a fallback for one release while
+        # operators migrate their shell aliases.
+        url = (
+            os.environ.get("SWARMIT_SERVER_URL")
+            or os.environ.get("SWARMIT_DAEMON_URL")
+            or SERVER_URL_DEFAULT
+        )
+        server_settings = _fetch_server_settings(url)
+        if server_settings is not None:
+            _ensure_config_matches(settings, server_settings, url)
             from swarmit.client.http import HTTPSwarmitClient
 
             return HTTPSwarmitClient(url)
     return LocalSwarmitClient(settings)
 
 
-def _fetch_daemon_settings(url: str, timeout: float = 0.2) -> Optional[dict]:
+def _fetch_server_settings(url: str, timeout: float = 0.2) -> Optional[dict]:
     """GET /settings; return parsed dict if reachable, None otherwise."""
     try:
         req = Request(f"{url.rstrip('/')}/settings", method="GET")
@@ -123,17 +129,17 @@ def _fetch_daemon_settings(url: str, timeout: float = 0.2) -> Optional[dict]:
 
 
 def _ensure_config_matches(
-    local: ControllerSettings, daemon: dict, url: str
+    local: ControllerSettings, server: dict, url: str
 ) -> None:
-    """Refuse to route through a daemon that disagrees on operational config.
+    """Refuse to route through a server that disagrees on operational config.
 
     Today /settings only exposes `network_id`, so that's the only field
-    we can check. If the dashboard PR adds more fields, extend here.
+    we can check. If the dashboard adds more fields, extend here.
     """
-    daemon_net = daemon.get("network_id")
-    if daemon_net is not None and daemon_net != local.network_id:
+    server_net = server.get("network_id")
+    if server_net is not None and server_net != local.network_id:
         raise RuntimeError(
-            f"daemon at {url} is on network 0x{daemon_net:04X}, but this "
+            f"server at {url} is on network 0x{server_net:04X}, but this "
             f"invocation requested 0x{local.network_id:04X}. "
-            f"Stop the daemon or pass --no-daemon."
+            f"Stop the server or pass --no-server."
         )

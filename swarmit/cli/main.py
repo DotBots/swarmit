@@ -232,10 +232,10 @@ DEFAULTS = {
     help="Enable verbose mode.",
 )
 @click.option(
-    "--no-daemon",
+    "--no-server",
     is_flag=True,
-    help="Skip the daemon probe and run an in-process Controller for this "
-    "invocation (the legacy behavior).",
+    help="Skip the swarmit-server probe and run an in-process Controller "
+    "for this invocation (the legacy behavior).",
 )
 @click.version_option(__version__, "-V", "--version", prog_name="swarmit")
 @click.pass_context
@@ -251,7 +251,7 @@ def main(
     adapter,
     devices,
     verbose,
-    no_daemon,
+    no_server,
 ):
     config_data = load_toml_config(config_path)
     cli_args = {
@@ -275,7 +275,7 @@ def main(
 
     setup_logging()
     ctx.ensure_object(dict)
-    ctx.obj["no_daemon"] = no_daemon
+    ctx.obj["no_server"] = no_server
     ctx.obj["settings"] = ControllerSettings(
         serial_port=final_config["serial_port"],
         serial_baudrate=final_config["baudrate"],
@@ -294,7 +294,7 @@ def main(
 def start(ctx):
     """Start the user application."""
     settings = ctx.obj["settings"]
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         ready = _filter_by_status(
             client.status(), settings.devices, StatusType.Bootloader
         )
@@ -312,7 +312,7 @@ def start(ctx):
 def stop(ctx):
     """Stop the user application."""
     settings = ctx.obj["settings"]
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         stoppable = _filter_by_status(
             client.status(),
             settings.devices,
@@ -359,7 +359,7 @@ def reset(ctx, locations):
     if sorted(devices) != sorted(parsed_locations.keys()):
         print("Selected devices and reset locations do not match.")
         return
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         ready = _filter_by_status(
             client.status(), settings.devices, StatusType.Bootloader
         )
@@ -417,7 +417,7 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
     settings = ctx.obj["settings"]
     fw = firmware.read()
 
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         ready = _filter_by_status(
             client.status(), settings.devices, StatusType.Bootloader
         )
@@ -508,10 +508,10 @@ def monitor(ctx):
     Different from `status -w`: that one renders the device table;
     this one prints LOG events as bots send them. Routes through the
     unified client — daemon mode streams via the /events SSE feed,
-    --no-daemon builds an in-process Controller.
+    --no-server builds an in-process Controller.
     """
     settings = ctx.obj["settings"]
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         try:
             for event in client.watch_log_events():
                 _print_log_event(event)
@@ -530,7 +530,7 @@ def monitor(ctx):
 def status(ctx, watch):
     """Print current status of the robots."""
     settings = ctx.obj["settings"]
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         if watch:
             from rich.live import Live
 
@@ -555,7 +555,7 @@ def status(ctx, watch):
 def message(ctx, message):
     """Send a custom text message to the robots."""
     settings = ctx.obj["settings"]
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         client.message(message)
 
 
@@ -567,7 +567,7 @@ def message(ctx, message):
 def calibrate_lh2(ctx, lh2_calibration_file):
     """Send LH2 calibration data to the robots."""
     settings = ctx.obj["settings"]
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+    with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         client.send_lh2_calibration(lh2_calibration_file.read())
 
 

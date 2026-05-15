@@ -149,32 +149,42 @@ swarmit -n 0xA000 calibrate-lh2 ~/.dotbot/calibration.out
 swarmit -n 0xA000 -d BC3D3C8A2A6F8E68 calibrate-lh2 ~/.dotbot/calibration.out
 ```
 
-## Standalone daemon (no UI)
+## swarmit-server
 
-`swarmit-daemon` runs the same FastAPI backend as the Control Tower but
-without mounting the React frontend. The CLI auto-probes it at
-`http://127.0.0.1:8001` on every invocation; if it's reachable, commands
-are routed through HTTP/SSE (sub-50 ms cold-start) instead of building a
-fresh in-process Controller. Pass `--no-daemon` to force the legacy
-in-process path.
+`swarmit-server` is the unified FastAPI backend. Two deployment presets,
+same binary:
+
+- **Local-dev convenience** — `swarmit-server --local`. Binds
+  `127.0.0.1`, no JWT auth, no records DB. The local CLI auto-discovers
+  it at `localhost:8001` and routes commands through HTTP/SSE (sub-50 ms
+  cold-start) instead of building a fresh in-process Controller per
+  invocation. Pass `--no-server` to force the legacy in-process path.
+
+- **Shared service** — `swarmit-server` (default). Binds `0.0.0.0`, JWT
+  required, JWT records DB on. Used on a testbed server reachable by
+  operators and remote CLIs. React UI mounted on the same port.
 
 ```bash
-pip install swarmit[dashboard]   # daemon ships with the dashboard extra
-swarmit-daemon -n 0x1234 &       # localhost-only by default; no JWT auth
+pip install swarmit[dashboard]                # includes swarmit-server
+swarmit-server --local -n 0x1234 &            # local-dev preset
 
-# Same CLI, now answered by the daemon:
-swarmit status                   # live status from the long-lived controller
-swarmit flash sample.bin         # streaming OTA progress (SSE per chunk)
-swarmit status -w                # SSE-driven Rich Live table
-swarmit monitor                  # streams SWARMIT_EVENT_LOG from bots
+# Same CLI, now answered by the server:
+swarmit status                                # live status, sub-50 ms
+swarmit flash sample.bin                      # streaming OTA progress (SSE)
+swarmit status -w                             # SSE-driven Rich Live table
+swarmit monitor                               # streams SWARMIT_EVENT_LOG
 
-# Override the daemon endpoint:
-SWARMIT_DAEMON_URL=http://127.0.0.1:9001 swarmit status
+# Override the server endpoint (SWARMIT_DAEMON_URL is a deprecated fallback):
+SWARMIT_SERVER_URL=http://127.0.0.1:9001 swarmit status
 ```
 
-The daemon refuses to bind to any address other than localhost while
-running unauthenticated. Cross-machine deployment with JWT auth is on
-the roadmap; until then it's strictly a local helper.
+`swarmit-server --local` refuses to bind to any address other than
+localhost — using `--bind-host 0.0.0.0` with `--local` is rejected.
+Cross-machine deployment requires the default JWT-enabled mode.
+
+**Deprecated aliases (forwarded for one release):**
+- `swarmit-daemon` → `swarmit-server --local`
+- `python -m swarmit.dashboard.main` → `swarmit-server`
 
 ## Control Tower Dashboard
 
@@ -223,9 +233,9 @@ python3 -m swarmit.dashboard.main -c swarmit-argus.toml -n 1234 \
     --http-port 8080 --open-browser
 ```
 
-Note: the dashboard opens its own gateway connection. If `swarmit-daemon`
-is already running and owns the gateway (serial port, especially), stop
-the daemon before starting the dashboard.
+Note: the dashboard opens its own gateway connection. If
+`swarmit-server` is already running and owns the gateway (serial port,
+especially), stop it before starting another instance.
 
 Access the dashboard at [https://localhost:8080](https://localhost:8080)
 

@@ -24,9 +24,9 @@ Options:
   -d, --devices TEXT          Subset list of device addresses to interact with,
                               separated with ,
   -v, --verbose               Enable verbose mode.
-  --no-daemon                 Skip the daemon probe and run an in-process
-                              Controller for this invocation (the legacy
-                              behavior).
+  --no-server                 Skip the swarmit-server probe and run an in-
+                              process Controller for this invocation (the
+                              legacy behavior).
   -V, --version               Show the version and exit.
   -h, --help                  Show this message and exit.
 
