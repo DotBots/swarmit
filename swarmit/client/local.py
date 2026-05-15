@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import queue
 import threading
 import time
 from typing import Iterator, Optional
@@ -174,6 +175,31 @@ class LocalSwarmitClient:
         while True:
             time.sleep(interval)
             yield dict(self._controller.status_data)
+
+    def watch_log_events(self) -> Iterator[dict]:
+        """Subscribe to the controller's log-event fan-out and yield.
+
+        Uses a thread-safe queue so the RX-thread callback can push
+        without blocking. Iterator unregisters its listener on exit
+        (KeyboardInterrupt or generator close).
+        """
+        q: queue.Queue = queue.Queue()
+
+        def on_log(event: dict) -> None:
+            q.put({"type": "log_event", **event})
+
+        self._controller.add_log_event_listener(on_log)
+        try:
+            while True:
+                # Poll with a short timeout so KeyboardInterrupt is
+                # noticed promptly even on platforms where blocking
+                # queue.get() can mask signals.
+                try:
+                    yield q.get(timeout=0.5)
+                except queue.Empty:
+                    continue
+        finally:
+            self._controller.remove_log_event_listener(on_log)
 
     def close(self) -> None:
         self._controller.terminate()

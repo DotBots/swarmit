@@ -17,7 +17,6 @@ from swarmit.testbed.controller import (
     CHUNK_SIZE,
     OTA_ACK_TIMEOUT_DEFAULT,
     OTA_MAX_RETRIES_DEFAULT,
-    Controller,
     ControllerSettings,
     NodeStatus,
     ResetLocation,
@@ -26,6 +25,20 @@ from swarmit.testbed.controller import (
 from swarmit.testbed.helpers import load_toml_config
 from swarmit.testbed.logger import setup_logging
 from swarmit.testbed.protocol import StatusType
+
+
+def _print_log_event(event: dict) -> None:
+    """Render one SWARMIT_EVENT_LOG event for the CLI's monitor view."""
+    addr = event.get("addr", "?")
+    ts = event.get("timestamp", 0)
+    data_hex = event.get("data_hex", "")
+    # Most LOG payloads are text — try utf-8, fall back to <hex:...> for
+    # opaque binary blobs.
+    try:
+        data_repr = bytes.fromhex(data_hex).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        data_repr = f"<hex:{data_hex}>"
+    print(f"[magenta]{addr}[/] [dim]t={ts}[/] {data_repr}")
 
 
 def _render_transfer_summary(device_results: list[dict], console) -> None:
@@ -432,21 +445,17 @@ def monitor(ctx):
     """Tail SWARMIT_EVENT_LOG events emitted by bots.
 
     Different from `status -w`: that one renders the device table;
-    this one prints LOG events as bots send them, via structlog.
-
-    Currently in-process only (the CLI opens its own Controller and
-    listens). Daemon-mode log streaming would need a new SSE event
-    type — not implemented yet. Over MQTT this happily co-exists with
-    a running daemon; over serial the daemon owns the port and this
-    will fail to open it.
+    this one prints LOG events as bots send them. Routes through the
+    unified client — daemon mode streams via the /events SSE feed,
+    --no-daemon builds an in-process Controller.
     """
-    controller = Controller(ctx.obj["settings"])
-    try:
-        controller.monitor()
-    except KeyboardInterrupt:
-        print("Stopping monitor.")
-    finally:
-        controller.terminate()
+    settings = ctx.obj["settings"]
+    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
+        try:
+            for event in client.watch_log_events():
+                _print_log_event(event)
+        except KeyboardInterrupt:
+            print("Stopping monitor.")
 
 
 @main.command()

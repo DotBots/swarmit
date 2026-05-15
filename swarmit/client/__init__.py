@@ -73,6 +73,15 @@ class SwarmitClient(Protocol):
         self, interval: float = 0.5
     ) -> Iterator[dict[str, NodeStatus]]: ...
 
+    def watch_log_events(self) -> Iterator[dict]:
+        """Yield SWARMIT_EVENT_LOG events as they arrive.
+
+        Each event is `{type, addr, timestamp, data_size, data_hex}`.
+        Iterator blocks between events; caller stops via break or
+        KeyboardInterrupt.
+        """
+        ...
+
     def close(self) -> None: ...
 
 

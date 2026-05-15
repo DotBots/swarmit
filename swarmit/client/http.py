@@ -83,6 +83,38 @@ class HTTPSwarmitClient:
                     for addr, d in event["devices"].items()
                 }
 
+    def watch_log_events(self) -> Iterator[dict]:
+        """Filter the daemon's /events stream for log_event type."""
+        req = Request(
+            f"{self._base}/events",
+            method="GET",
+            headers={"Accept": "text/event-stream"},
+        )
+        try:
+            resp = urlopen(req, timeout=None)
+        except HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")
+            if e.code in (401, 403):
+                raise SwarmitAuthError(
+                    f"daemon returned HTTP {e.code} on /events: {detail}"
+                ) from e
+            raise RuntimeError(
+                f"daemon returned HTTP {e.code} on /events: {detail}"
+            ) from e
+        except URLError as e:
+            raise RuntimeError(
+                f"daemon unreachable on /events: {e.reason}"
+            ) from e
+
+        with resp:
+            for raw in resp:
+                line = raw.decode("utf-8").rstrip("\r\n")
+                if not line.startswith("data: "):
+                    continue
+                event = json.loads(line[6:])
+                if event.get("type") == "log_event":
+                    yield event
+
     # ---- write ----
 
     # NOTE on devices=[]: `if devices` is False for both None and an empty
