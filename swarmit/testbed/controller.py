@@ -737,10 +737,20 @@ class Controller:
             time.sleep(0.001)
             send = time.time() - send_time > self.settings.ota_timeout
 
-    def transfer(self, firmware, devices) -> dict[str, TransferDataStatus]:
-        """Transfer the firmware to the devices."""
+    def transfer(
+        self,
+        firmware,
+        devices,
+        show_progress: bool = True,
+    ) -> dict[str, TransferDataStatus]:
+        """Transfer the firmware to the devices.
+
+        `show_progress` controls the built-in tqdm bar. Clients that
+        render their own progress (e.g. the daemon's /flash/stream or
+        LocalSwarmitClient.flash) pass False to avoid duplicate output.
+        """
         data_size = len(firmware)
-        use_progress_bar = not self.settings.verbose
+        use_progress_bar = show_progress and not self.settings.verbose
         if use_progress_bar:
             progress = tqdm(
                 range(0, data_size),

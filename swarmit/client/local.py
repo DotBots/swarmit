@@ -111,7 +111,7 @@ class LocalSwarmitClient:
         def _runner():
             try:
                 result["data"] = self._controller.transfer(
-                    fw, start_data["acked"]
+                    fw, start_data["acked"], show_progress=False
                 )
             except Exception as exc:
                 result["exc"] = exc

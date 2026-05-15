@@ -355,7 +355,10 @@ async def flash_stream(payload: FlashRequest, request: Request):
 
         transfer_task = asyncio.create_task(
             run_in_threadpool(
-                controller.transfer, fw, start_data["acked"]
+                controller.transfer,
+                fw,
+                start_data["acked"],
+                False,  # show_progress=False — we stream events instead
             )
         )
 
