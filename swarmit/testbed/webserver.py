@@ -531,11 +531,15 @@ async def lh2_calibration(request: Request, payload: Lh2CalibrationRequest):
 
 @api.get("/events")
 async def events(request: Request):
-    """Server-Sent Events: periodic status snapshots, one event every ~500 ms.
+    """Server-Sent Events multiplex.
 
-    Connect with `curl -N http://127.0.0.1:8001/events` or any SSE client.
-    Disconnect cleanly via the underlying TCP close — the generator detects
-    it via `request.is_disconnected()` and exits.
+    Emits two event types over a single connection:
+      - "status":    periodic device-state snapshot (every ~500 ms).
+      - "log_event": pushed as soon as a SWARMIT_EVENT_LOG arrives.
+
+    Disconnect cleanly via the underlying TCP close — the generator
+    detects it via `request.is_disconnected()` and unregisters its
+    log listener on exit.
     """
     controller: Controller = request.app.state.controller
 
@@ -554,17 +558,42 @@ async def events(request: Request):
         }
 
     async def event_generator():
+        log_q: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def on_log(event: dict) -> None:
+            # Called from the controller's marilib RX thread; bridge to
+            # the asyncio loop via call_soon_threadsafe.
+            loop.call_soon_threadsafe(log_q.put_nowait, event)
+
+        controller.add_log_event_listener(on_log)
+
+        STATUS_INTERVAL = 0.5
+        TICK = 0.05
+        last_status = 0.0
         try:
             while True:
                 if await request.is_disconnected():
                     break
-                payload = json.dumps(
-                    {"type": "status", "devices": await _snapshot()}
-                )
-                yield f"data: {payload}\n\n"
-                await asyncio.sleep(0.5)
+
+                # Drain any queued log events first so latency stays low.
+                while not log_q.empty():
+                    ev = log_q.get_nowait()
+                    yield _sse({"type": "log_event", **ev})
+
+                # Emit a status snapshot on its cadence.
+                now = loop.time()
+                if now - last_status >= STATUS_INTERVAL:
+                    yield _sse(
+                        {"type": "status", "devices": await _snapshot()}
+                    )
+                    last_status = now
+
+                await asyncio.sleep(TICK)
         except asyncio.CancelledError:
             return
+        finally:
+            controller.remove_log_event_listener(on_log)
 
     return StreamingResponse(
         event_generator(),

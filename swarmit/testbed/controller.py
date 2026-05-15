@@ -241,6 +241,8 @@ class Controller:
         self.start_ota_data: StartOtaData = StartOtaData()
         self.transfer_data: dict[str, TransferDataStatus] = {}
         self._known_devices: dict[str, StatusType] = {}
+        self._log_event_listeners: list = []
+        self._log_listeners_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._cleanup_thread = threading.Thread(
             target=self._cleanup_loop, daemon=True
@@ -345,6 +347,23 @@ class Controller:
         self._cleanup_thread.join()
         self.interface.close()
 
+    def add_log_event_listener(self, callback) -> None:
+        """Register `callback(event_dict)` for each SWARMIT_EVENT_LOG payload.
+
+        The callback is invoked from the marilib RX thread, so it must
+        not block. Listeners typically push the event into an
+        asyncio.Queue (webserver) or queue.Queue (in-process client).
+        """
+        with self._log_listeners_lock:
+            self._log_event_listeners.append(callback)
+
+    def remove_log_event_listener(self, callback) -> None:
+        with self._log_listeners_lock:
+            try:
+                self._log_event_listeners.remove(callback)
+            except ValueError:
+                pass
+
     def send_payload(self, destination: int, payload: Payload):
         """Send a frame to the devices."""
         self.interface.send_payload(destination, payload)
@@ -400,6 +419,23 @@ class Controller:
                 data=packet.payload.data,
             )
             logger.info("LOG event")
+            # Fan out to registered listeners (used by /events SSE in
+            # daemon mode and LocalSwarmitClient.watch_log_events). Hex
+            # the payload so it survives JSON round-tripping.
+            event = {
+                "addr": device_addr,
+                "timestamp": packet.payload.timestamp,
+                "data_size": packet.payload.count,
+                "data_hex": bytes(packet.payload.data).hex(),
+            }
+            with self._log_listeners_lock:
+                listeners = list(self._log_event_listeners)
+            for cb in listeners:
+                try:
+                    cb(event)
+                except Exception:
+                    # never let a misbehaving listener kill the RX thread
+                    pass
 
     def _live_status(self, timeout, devices=[], message="found", watch=False):
         """Request the live status of the testbed."""
