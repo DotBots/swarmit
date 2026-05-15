@@ -68,6 +68,8 @@ dashboard = [
 
 [project.scripts]
 swarmit = "swarmit.cli.main:main"
+swarmit-server = "swarmit.server.main:main"
+# Deprecated; forwards to `swarmit-server --local`. Will be removed.
 swarmit-daemon = "swarmit.service.main:main"
 
 [tool.hatch.envs.default]
