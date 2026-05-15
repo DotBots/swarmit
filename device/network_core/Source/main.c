@@ -31,6 +31,7 @@
 
 #define SWARMIT_NET_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
 #define SWARMIT_NET_CONFIG_PAGE             (127)       // page index for config (last page)
+#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524D) // "SWRM" - matches mari + dotbot-provision
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
@@ -38,10 +39,11 @@
 
 //=========================== variables =========================================
 
-typedef struct {
-    uint32_t has_net_id;                                    ///< true if network ID is set
-    uint32_t net_id;                                        ///< Mari network ID
-    uint32_t homography_count;                              ///< number of homography matrices used for localization
+typedef struct __attribute__((packed)) {
+    uint32_t magic;                                         ///< must equal SWARMIT_CONFIG_MAGIC_VALUE if the page is valid
+    uint32_t has_net_id;                                    ///< 1 if net_id is provisioned; otherwise fall back to SWARMIT_DEFAULT_NET_ID
+    uint32_t net_id;                                        ///< Mari network ID, meaningful only when has_net_id == 1
+    uint32_t homography_count;                              ///< number of LH2 homography matrices (0 if no calibration baked in)
     int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization
 } swarmit_config_t;
 
@@ -135,21 +137,25 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
 }
 
 static void _load_config(void) {
-    // load config into RAM. On virgin flash every field reads back as 0xFFFFFFFFu;
-    // the has_net_id != 1 check below and the homography_count bounds check
-    // (0 < count <= LH2_BASESTATION_COUNT_MAX) filter that case implicitly.
+    // load config into RAM. On virgin flash every field reads back as 0xFFFFFFFFu.
+    // magic gates the whole page; has_net_id and homography_count gate their
+    // respective fields independently, so an OTA-calibrated-but-never-provisioned
+    // device sees a valid page with only calibration populated (has_net_id stays
+    // 0xFFFFFFFFu via the round-trip, so we still fall back to the default net_id).
     const swarmit_config_t *cfg_flash = (const swarmit_config_t *)SWARMIT_NET_CONFIG_START_ADDRESS;
     memcpy(&_app_vars.config, cfg_flash, sizeof(_app_vars.config));
 
     // set network ID
-    if (cfg_flash->has_net_id == 1) {
+    if (cfg_flash->magic == SWARMIT_CONFIG_MAGIC_VALUE && cfg_flash->has_net_id == 1) {
         _app_vars.mari_net_id = (uint16_t)(_app_vars.config.net_id & 0xFFFFu);
     } else {
         _app_vars.mari_net_id = SWARMIT_DEFAULT_NET_ID;
     }
 
-    // set lighthouse calibration data
-    if (_app_vars.config.homography_count > 0 && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX) {
+    // set lighthouse calibration data (only trust the matrix bytes if magic gates the whole page)
+    if (cfg_flash->magic == SWARMIT_CONFIG_MAGIC_VALUE
+        && _app_vars.config.homography_count > 0
+        && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX) {
         // copy homography matrices to shared memory without casting away volatile
         for (uint32_t idx = 0; idx < _app_vars.config.homography_count; idx++) {
             for (uint32_t row = 0; row < 3; row++) {
@@ -174,6 +180,12 @@ static void _send_status(void) {
 
 static void _commit_config_and_reboot(void) {
     mr_gpio_set(&_debug1); mr_gpio_clear(&_debug1);
+
+    // Always stamp the magic before write — a device that was never provisioned
+    // via dotbot-provision (page is virgin 0xFF...) and is committing config
+    // for the first time via OTA would otherwise persist 0xFFFFFFFFu as magic
+    // and self-invalidate on next boot.
+    _app_vars.config.magic = SWARMIT_CONFIG_MAGIC_VALUE;
 
     mr_gpio_set(&_debug1);
     nvmc_page_erase(SWARMIT_NET_CONFIG_PAGE);
