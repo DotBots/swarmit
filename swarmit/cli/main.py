@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import threading
 import time
 
 import click
@@ -8,6 +9,7 @@ from dotbot_utils.serial_interface import (
 )
 from rich import print
 from rich.console import Console
+from rich.live import Live
 from rich.pretty import pprint
 from tqdm import tqdm
 
@@ -91,6 +93,48 @@ def _render_transfer_summary(device_results: list[dict], console) -> None:
                 f"  [red]✗[/] [magenta]{addr}[/] "
                 f"[red]{acked}/{total}[/] r:{retries}"
             )
+
+
+def _live_run(client, op, settings, message: str) -> None:
+    """Run a blocking client op (`start`/`stop`) in a thread while a
+    Rich Live table consumes status snapshots from `client.watch_status()`.
+
+    In daemon mode `watch_status` is the `/events` SSE stream (one
+    long-lived HTTP connection, no per-tick `GET /status` spam). In
+    local mode it reads in-process `status_data` on the same cadence.
+
+    Effect: the user sees the device table from the current state
+    onward (e.g. starting in Bootloader, transitioning to Running)
+    instead of staring at a blank terminal until the op returns.
+    """
+    err: list[BaseException] = []
+    done = threading.Event()
+
+    def _runner():
+        try:
+            op()
+        except BaseException as e:
+            err.append(e)
+        finally:
+            done.set()
+
+    t = threading.Thread(target=_runner)
+    t.start()
+
+    # Empty initial render is replaced on the first snapshot; daemon's
+    # /events emits the first status event within ~tens of ms.
+    with Live(
+        generate_status({}, settings.devices, message),
+        refresh_per_second=4,
+    ) as live:
+        for snapshot in client.watch_status():
+            live.update(generate_status(snapshot, settings.devices, message))
+            if done.is_set():
+                break
+
+    t.join()
+    if err:
+        raise err[0]
 
 
 def _filter_by_status(
@@ -257,15 +301,9 @@ def start(ctx):
         if not ready:
             print("No device to start")
             return
-        client.start(devices=settings.devices if settings.devices else None)
-        # Render the post-start state on the CLI side. Daemon-mode flows
-        # used to leave this table only in the daemon's stdout.
-        print(
-            generate_status(
-                client.status(),
-                settings.devices,
-                status_message="to start",
-            )
+        devices = settings.devices if settings.devices else None
+        _live_run(
+            client, lambda: client.start(devices=devices), settings, "to start"
         )
 
 
@@ -285,13 +323,9 @@ def stop(ctx):
         if not stoppable:
             print("[bold]No device to stop[/]")
             return
-        client.stop(devices=settings.devices if settings.devices else None)
-        print(
-            generate_status(
-                client.status(),
-                settings.devices,
-                status_message="to stop",
-            )
+        devices = settings.devices if settings.devices else None
+        _live_run(
+            client, lambda: client.stop(devices=devices), settings, "to stop"
         )
 
 
