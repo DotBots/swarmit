@@ -17,6 +17,7 @@ from swarmit.testbed.controller import (
     CHUNK_SIZE,
     OTA_ACK_TIMEOUT_DEFAULT,
     OTA_MAX_RETRIES_DEFAULT,
+    Controller,
     ControllerSettings,
     NodeStatus,
     ResetLocation,
@@ -428,20 +429,24 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
 @main.command()
 @click.pass_context
 def monitor(ctx):
-    """Monitor the testbed — live device status until Ctrl-C."""
-    settings = ctx.obj["settings"]
-    with build_client(settings, no_daemon=ctx.obj["no_daemon"]) as client:
-        from rich.live import Live
+    """Tail SWARMIT_EVENT_LOG events emitted by bots.
 
-        with Live(
-            generate_status(client.status(), settings.devices),
-            refresh_per_second=4,
-        ) as live:
-            try:
-                for snapshot in client.watch_status(interval=0.25):
-                    live.update(generate_status(snapshot, settings.devices))
-            except KeyboardInterrupt:
-                print("Stopping monitor.")
+    Different from `status -w`: that one renders the device table;
+    this one prints LOG events as bots send them, via structlog.
+
+    Currently in-process only (the CLI opens its own Controller and
+    listens). Daemon-mode log streaming would need a new SSE event
+    type — not implemented yet. Over MQTT this happily co-exists with
+    a running daemon; over serial the daemon owns the port and this
+    will fail to open it.
+    """
+    controller = Controller(ctx.obj["settings"])
+    try:
+        controller.monitor()
+    except KeyboardInterrupt:
+        print("Stopping monitor.")
+    finally:
+        controller.terminate()
 
 
 @main.command()
