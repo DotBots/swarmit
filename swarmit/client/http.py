@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import json
-import time
 from typing import Iterator, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -44,11 +43,45 @@ class HTTPSwarmitClient:
     def watch_status(
         self, interval: float = 0.5
     ) -> Iterator[dict[str, NodeStatus]]:
-        # Polling instead of SSE to keep this stdlib-only. Phase D can
-        # switch to the daemon's /events stream for push-based updates.
-        while True:
-            yield self.status()
-            time.sleep(interval)
+        """Stream status snapshots from the daemon's /events SSE feed.
+
+        `interval` is kept for signature parity with LocalSwarmitClient
+        but is effectively a hint — the cadence is whatever the daemon's
+        /events handler decides (currently ~500 ms).
+        """
+        req = Request(
+            f"{self._base}/events",
+            method="GET",
+            headers={"Accept": "text/event-stream"},
+        )
+        try:
+            resp = urlopen(req, timeout=None)
+        except HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")
+            if e.code in (401, 403):
+                raise SwarmitAuthError(
+                    f"daemon returned HTTP {e.code} on /events: {detail}"
+                ) from e
+            raise RuntimeError(
+                f"daemon returned HTTP {e.code} on /events: {detail}"
+            ) from e
+        except URLError as e:
+            raise RuntimeError(
+                f"daemon unreachable on /events: {e.reason}"
+            ) from e
+
+        with resp:
+            for raw in resp:
+                line = raw.decode("utf-8").rstrip("\r\n")
+                if not line.startswith("data: "):
+                    continue
+                event = json.loads(line[6:])
+                if event.get("type") != "status":
+                    continue
+                yield {
+                    addr: _parse_node_status(d)
+                    for addr, d in event["devices"].items()
+                }
 
     # ---- write ----
 
