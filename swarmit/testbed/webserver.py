@@ -67,7 +67,14 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
-# Global lock to prevent concurrent controller access
+# Serializes every write operation that touches the Controller's state
+# machine. All POST endpoints (/flash, /flash/stream, /start, /stop,
+# /reset, /message, /lh2_calibration) acquire this. Held for the FULL
+# duration of /flash/stream — minutes for a large image — which means
+# every other write endpoint blocks during a flash. This is intentional:
+# only one OTA at a time, and concurrent start/stop during a flash would
+# fight the controller's per-bot state. Reads (/status, /settings,
+# /events) do NOT take the lock.
 controller_lock = asyncio.Lock()
 
 
@@ -363,7 +370,13 @@ async def flash_stream(payload: FlashRequest, request: Request):
         )
 
         last_acked = {addr: 0 for addr in start_data["acked"]}
-        start_ts = asyncio.get_event_loop().time()
+        start_ts = asyncio.get_running_loop().time()
+        # If the HTTP client disconnects mid-flash, this async generator
+        # gets a CancelledError, but the threadpool transfer keeps
+        # running to completion. Intentional: aborting an in-flight OTA
+        # leaves devices in an unknown half-flashed state, which is
+        # worse than just letting the OTA finish and dropping the
+        # progress stream.
         while not transfer_task.done():
             await asyncio.sleep(0.1)
             for addr in start_data["acked"]:
@@ -408,7 +421,7 @@ async def flash_stream(payload: FlashRequest, request: Request):
                 "all_success": all(
                     td.success for td in transfer.values()
                 ),
-                "elapsed_s": asyncio.get_event_loop().time() - start_ts,
+                "elapsed_s": asyncio.get_running_loop().time() - start_ts,
             }
         )
 
@@ -559,7 +572,7 @@ async def events(request: Request):
 
     async def event_generator():
         log_q: asyncio.Queue = asyncio.Queue()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def on_log(event: dict) -> None:
             # Called from the controller's marilib RX thread; bridge to
