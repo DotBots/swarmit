@@ -16,13 +16,13 @@ class SwarmitAuthError(RuntimeError):
     """Daemon returned 401 (token rejected) or 403 (token missing).
 
     Daemon in localhost-only mode doesn't require auth; this normally
-    surfaces when talking to a daemon configured with auth_mode='jwt'
+    surfaces when talking to a server configured with auth_mode='jwt'
     (e.g. a future cross-machine deployment) without a valid token.
     """
 
 
 class HTTPSwarmitClient:
-    """Make HTTP requests against the daemon's REST surface."""
+    """Make HTTP requests against the server's REST surface."""
 
     def __init__(self, base_url: str, default_timeout: float = 10.0):
         self._base = base_url.rstrip("/")
@@ -45,10 +45,10 @@ class HTTPSwarmitClient:
     def watch_status(
         self, interval: float = 0.5
     ) -> Iterator[dict[str, NodeStatus]]:
-        """Stream status snapshots from the daemon's /events SSE feed.
+        """Stream status snapshots from the server's /events SSE feed.
 
         `interval` is kept for signature parity with LocalSwarmitClient
-        but is effectively a hint — the cadence is whatever the daemon's
+        but is effectively a hint — the cadence is whatever the server's
         /events handler decides (currently ~500 ms).
         """
         req = Request(
@@ -62,14 +62,14 @@ class HTTPSwarmitClient:
             detail = e.read().decode("utf-8", errors="replace")
             if e.code in (401, 403):
                 raise SwarmitAuthError(
-                    f"daemon returned HTTP {e.code} on /events: {detail}"
+                    f"server returned HTTP {e.code} on /events: {detail}"
                 ) from e
             raise RuntimeError(
-                f"daemon returned HTTP {e.code} on /events: {detail}"
+                f"server returned HTTP {e.code} on /events: {detail}"
             ) from e
         except URLError as e:
             raise RuntimeError(
-                f"daemon unreachable on /events: {e.reason}"
+                f"server unreachable on /events: {e.reason}"
             ) from e
 
         with resp:
@@ -86,7 +86,7 @@ class HTTPSwarmitClient:
                 }
 
     def watch_log_events(self) -> Iterator[dict]:
-        """Filter the daemon's /events stream for log_event type."""
+        """Filter the server's /events stream for log_event type."""
         req = Request(
             f"{self._base}/events",
             method="GET",
@@ -98,14 +98,14 @@ class HTTPSwarmitClient:
             detail = e.read().decode("utf-8", errors="replace")
             if e.code in (401, 403):
                 raise SwarmitAuthError(
-                    f"daemon returned HTTP {e.code} on /events: {detail}"
+                    f"server returned HTTP {e.code} on /events: {detail}"
                 ) from e
             raise RuntimeError(
-                f"daemon returned HTTP {e.code} on /events: {detail}"
+                f"server returned HTTP {e.code} on /events: {detail}"
             ) from e
         except URLError as e:
             raise RuntimeError(
-                f"daemon unreachable on /events: {e.reason}"
+                f"server unreachable on /events: {e.reason}"
             ) from e
 
         with resp:
@@ -120,7 +120,7 @@ class HTTPSwarmitClient:
     # ---- write ----
 
     # NOTE on devices=[]: `if devices` is False for both None and an empty
-    # list, so both collapse to "no body" → daemon interprets as "all
+    # list, so both collapse to "no body" → server interprets as "all
     # devices". No current caller passes [] meaning "literally no devices",
     # but if one ever needs that semantic we'll need to distinguish here.
 
@@ -181,14 +181,14 @@ class HTTPSwarmitClient:
             detail = e.read().decode("utf-8", errors="replace")
             if e.code in (401, 403):
                 raise SwarmitAuthError(
-                    f"daemon returned HTTP {e.code} on /flash/stream: {detail}"
+                    f"server returned HTTP {e.code} on /flash/stream: {detail}"
                 ) from e
             raise RuntimeError(
-                f"daemon returned HTTP {e.code} on /flash/stream: {detail}"
+                f"server returned HTTP {e.code} on /flash/stream: {detail}"
             ) from e
         except URLError as e:
             raise RuntimeError(
-                f"daemon unreachable on /flash/stream: {e.reason}"
+                f"server unreachable on /flash/stream: {e.reason}"
             ) from e
 
         with resp:
@@ -236,14 +236,14 @@ class HTTPSwarmitClient:
             detail = e.read().decode("utf-8", errors="replace")
             if e.code in (401, 403):
                 raise SwarmitAuthError(
-                    f"daemon returned HTTP {e.code} on {method} {path}: {detail}"
+                    f"server returned HTTP {e.code} on {method} {path}: {detail}"
                 ) from e
             raise RuntimeError(
-                f"daemon returned HTTP {e.code} on {method} {path}: {detail}"
+                f"server returned HTTP {e.code} on {method} {path}: {detail}"
             ) from e
         except URLError as e:
             raise RuntimeError(
-                f"daemon unreachable ({method} {path}): {e.reason}"
+                f"server unreachable ({method} {path}): {e.reason}"
             ) from e
 
 

@@ -468,11 +468,10 @@ async def settings(request: Request):
     )
 
 
-@api.post("/start")
+@api.post("/start", dependencies=[Depends(verify_jwt)])
 async def start(
     request: Request,
     payload: Optional[DeviceList] = None,
-    _token_payload=Depends(verify_jwt),
 ):
     controller: Controller = request.app.state.controller
     devices = payload.devices if payload is not None else None

@@ -76,7 +76,7 @@ def test_build_client_falls_back_to_local(urlopen_mock, _controller_mock):
 
 @patch("swarmit.client.local.Controller")
 def test_build_client_respects_no_server(_controller_mock):
-    # Even if a daemon would be reachable, --no-daemon forces Local.
+    # Even if a server would be reachable, --no-server forces Local.
     with patch("swarmit.client.urlopen") as urlopen_mock:
         urlopen_mock.return_value = _MockResponse(body=b'{"network_id": 1}')
         client = build_client(ControllerSettings(), no_server=True)
@@ -98,7 +98,7 @@ def test_build_client_refuses_on_network_mismatch(urlopen_mock):
 def test_build_client_skips_mismatch_check_with_no_server(
     urlopen_mock, _controller_mock
 ):
-    # --no-daemon bypasses the probe entirely, so no mismatch check fires.
+    # --no-server bypasses the probe entirely, so no mismatch check fires.
     urlopen_mock.return_value = _MockResponse(body=b'{"network_id": 9999}')
     client = build_client(ControllerSettings(network_id=1), no_server=True)
     assert isinstance(client, LocalSwarmitClient)
@@ -137,7 +137,7 @@ def test_http_start_omits_body_when_no_devices(urlopen_mock):
     client.start()
     req = urlopen_mock.call_args.args[0]
     assert req.full_url.endswith("/start")
-    assert req.data is None  # no body → daemon broadcasts to all
+    assert req.data is None  # no body → server broadcasts to all
 
 
 @patch("swarmit.client.http.urlopen")
