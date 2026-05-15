@@ -32,7 +32,10 @@ git submodule update --init --recursive
 ## Entry points
 
 - `swarmit/cli/main.py` — Click CLI; the user-facing flow
+- `swarmit/service/main.py` — `swarmit-daemon` entry point; runs the FastAPI backend without the React UI, on `127.0.0.1:8001` by default
+- `swarmit/client/` — unified `SwarmitClient` (Protocol + Local + HTTP backends) that every CLI subcommand goes through
 - `swarmit/testbed/controller.py` — core orchestration (OTA chunks, start/stop/status)
+- `swarmit/testbed/webserver.py` — FastAPI app; shared between dashboard and daemon, including `/flash/stream` (SSE per-chunk progress) and `/events` (SSE multiplexing `status` snapshots + `log_event`)
 - `device/bootloader/` — TrustZone bootloader; the embedded heart of the sandbox
 
 ## Build / run / test
@@ -44,8 +47,10 @@ BUILD_TARGET=dotbot-v3 BUILD_CONFIG=Release make docker
 
 # Python
 pip install swarmit               # CLI only
-pip install swarmit[dashboard]    # CLI + dashboard
-swarmit --help
+pip install swarmit[dashboard]    # CLI + dashboard + daemon
+swarmit --help                    # auto-detects swarmit-daemon on localhost:8001
+swarmit --no-daemon status        # force in-process Controller for this invocation
+swarmit-daemon -n 0x1234 &        # background daemon (FastAPI, no UI)
 python3 -m swarmit.dashboard.main --http-port 8080 --open-browser
 
 # Tests

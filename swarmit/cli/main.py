@@ -85,9 +85,7 @@ def _render_transfer_summary(device_results: list[dict], console) -> None:
 
     if failures:
         console.print()
-        console.print(
-            f"[bold red]Failures[/] ({len(failures)}):"
-        )
+        console.print(f"[bold red]Failures[/] ({len(failures)}):")
         for addr, acked, total, retries in failures:
             console.print(
                 f"  [red]✗[/] [magenta]{addr}[/] "
@@ -111,6 +109,7 @@ def _filter_by_status(
         if node.status in target_statuses
         and (filter_set is None or addr in filter_set)
     ]
+
 
 DEFAULTS = {
     "adapter": "edge",
@@ -256,7 +255,9 @@ def start(ctx):
             client.status(), settings.devices, StatusType.Bootloader
         )
         if ready:
-            client.start(devices=settings.devices if settings.devices else None)
+            client.start(
+                devices=settings.devices if settings.devices else None
+            )
         else:
             print("No device to start")
 
@@ -381,9 +382,7 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
         print(f"Devices to flash ([bold white]{len(ready)}):[/]")
         pprint(ready, expand_all=True)
         if not yes:
-            click.confirm(
-                "Do you want to continue?", default=True, abort=True
-            )
+            click.confirm("Do you want to continue?", default=True, abort=True)
 
         events = client.flash(
             fw,
@@ -426,9 +425,7 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
                 elif etype == "complete":
                     if progress is not None:
                         progress.close()
-                    print(
-                        f"Elapsed: [bold cyan]{ev['elapsed_s']:.3f}s[/]"
-                    )
+                    print(f"Elapsed: [bold cyan]{ev['elapsed_s']:.3f}s[/]")
                     _render_transfer_summary(device_results, console)
                     if not ev.get("all_success", False):
                         console.print("[bold red]Error:[/] Transfer failed.")
@@ -436,9 +433,9 @@ def flash(ctx, yes, start, ota_timeout, ota_max_retries, firmware):
                     if start:
                         time.sleep(1)
                         client.start(
-                            devices=settings.devices
-                            if settings.devices
-                            else None
+                            devices=(
+                                settings.devices if settings.devices else None
+                            )
                         )
                     return
                 elif etype == "error":
@@ -495,7 +492,9 @@ def status(ctx, watch):
             ) as live:
                 try:
                     for snapshot in client.watch_status(interval=0.25):
-                        live.update(generate_status(snapshot, settings.devices))
+                        live.update(
+                            generate_status(snapshot, settings.devices)
+                        )
                 except KeyboardInterrupt:
                     pass
         else:

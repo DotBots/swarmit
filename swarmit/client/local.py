@@ -109,6 +109,7 @@ class LocalSwarmitClient:
 
         # Run transfer in a thread; poll transfer_data while it runs.
         result: dict = {}
+
         def _runner():
             try:
                 result["data"] = self._controller.transfer(

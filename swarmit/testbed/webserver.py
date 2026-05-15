@@ -28,7 +28,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from swarmit import __version__
-from swarmit.testbed.controller import Controller, ControllerSettings, ResetLocation
+from swarmit.testbed.controller import (
+    Controller,
+    ControllerSettings,
+    ResetLocation,
+)
 from swarmit.testbed.model import (
     Base,
     JWTRecord,
@@ -408,9 +412,7 @@ async def flash_stream(payload: FlashRequest, request: Request):
                     "addr": addr,
                     "success": td.success,
                     "retries": sum(c.retries for c in td.chunks),
-                    "chunks_acked": sum(
-                        1 for c in td.chunks if c.acked
-                    ),
+                    "chunks_acked": sum(1 for c in td.chunks if c.acked),
                     "chunks_total": len(td.chunks),
                 }
             )
@@ -418,16 +420,12 @@ async def flash_stream(payload: FlashRequest, request: Request):
         yield _sse(
             {
                 "type": "complete",
-                "all_success": all(
-                    td.success for td in transfer.values()
-                ),
+                "all_success": all(td.success for td in transfer.values()),
                 "elapsed_s": asyncio.get_running_loop().time() - start_ts,
             }
         )
 
-    return StreamingResponse(
-        event_stream(), media_type="text/event-stream"
-    )
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @api.get("/status")
@@ -529,9 +527,7 @@ async def lh2_calibration(request: Request, payload: Lh2CalibrationRequest):
     try:
         blob = base64.b64decode(payload.calibration_b64)
     except Exception as exc:
-        raise HTTPException(
-            status_code=400, detail=f"invalid base64: {exc}"
-        )
+        raise HTTPException(status_code=400, detail=f"invalid base64: {exc}")
     async with controller_lock:
         try:
             await run_in_threadpool(

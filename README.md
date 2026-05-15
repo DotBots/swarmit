@@ -149,6 +149,33 @@ swarmit -n 0xA000 calibrate-lh2 ~/.dotbot/calibration.out
 swarmit -n 0xA000 -d BC3D3C8A2A6F8E68 calibrate-lh2 ~/.dotbot/calibration.out
 ```
 
+## Standalone daemon (no UI)
+
+`swarmit-daemon` runs the same FastAPI backend as the Control Tower but
+without mounting the React frontend. The CLI auto-probes it at
+`http://127.0.0.1:8001` on every invocation; if it's reachable, commands
+are routed through HTTP/SSE (sub-50 ms cold-start) instead of building a
+fresh in-process Controller. Pass `--no-daemon` to force the legacy
+in-process path.
+
+```bash
+pip install swarmit[dashboard]   # daemon ships with the dashboard extra
+swarmit-daemon -n 0x1234 &       # localhost-only by default; no JWT auth
+
+# Same CLI, now answered by the daemon:
+swarmit status                   # live status from the long-lived controller
+swarmit flash sample.bin         # streaming OTA progress (SSE per chunk)
+swarmit status -w                # SSE-driven Rich Live table
+swarmit monitor                  # streams SWARMIT_EVENT_LOG from bots
+
+# Override the daemon endpoint:
+SWARMIT_DAEMON_URL=http://127.0.0.1:9001 swarmit status
+```
+
+The daemon refuses to bind to any address other than localhost while
+running unauthenticated. Cross-machine deployment with JWT auth is on
+the roadmap; until then it's strictly a local helper.
+
 ## Control Tower Dashboard
 
 The Control Tower is a web-based platform (backend and frontend) that enables users to manage and monitor the testbed remotely. It provides an interface for reserving timeslots, inspecting the live status of all DotBots, and supervising experiments. The platform displays each device’s position and operational state, and offers mechanisms to flash firmware, start or stop experiments, and oversee ongoing activity across the testbed.

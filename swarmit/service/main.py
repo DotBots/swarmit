@@ -94,7 +94,9 @@ DEFAULTS_DAEMON = {
     type=int,
     help=f"HTTP port. Default: {DEFAULTS_DAEMON['http_port']}.",
 )
-@click.version_option(__version__, "-V", "--version", prog_name="swarmit-daemon")
+@click.version_option(
+    __version__, "-V", "--version", prog_name="swarmit-daemon"
+)
 def main(
     config_path,
     port,

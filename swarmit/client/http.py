@@ -38,7 +38,9 @@ class HTTPSwarmitClient:
 
     def status(self) -> dict[str, NodeStatus]:
         data = self._request("GET", "/status")
-        return {addr: _parse_node_status(d) for addr, d in data["response"].items()}
+        return {
+            addr: _parse_node_status(d) for addr, d in data["response"].items()
+        }
 
     def watch_status(
         self, interval: float = 0.5
@@ -123,10 +125,14 @@ class HTTPSwarmitClient:
     # but if one ever needs that semantic we'll need to distinguish here.
 
     def start(self, devices: Optional[list[str]] = None) -> None:
-        self._request("POST", "/start", body={"devices": devices} if devices else None)
+        self._request(
+            "POST", "/start", body={"devices": devices} if devices else None
+        )
 
     def stop(self, devices: Optional[list[str]] = None) -> None:
-        self._request("POST", "/stop", body={"devices": devices} if devices else None)
+        self._request(
+            "POST", "/stop", body={"devices": devices} if devices else None
+        )
 
     def reset(self, locations: dict[str, ResetLocation]) -> None:
         body = {
@@ -195,7 +201,9 @@ class HTTPSwarmitClient:
         self._request("POST", "/message", body={"message": text})
 
     def send_lh2_calibration(self, blob: bytes) -> None:
-        body = {"calibration_b64": base64.b64encode(bytes(blob)).decode("ascii")}
+        body = {
+            "calibration_b64": base64.b64encode(bytes(blob)).decode("ascii")
+        }
         self._request("POST", "/lh2_calibration", body=body)
 
     def close(self) -> None:
