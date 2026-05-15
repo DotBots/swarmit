@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Iterator, Optional, Protocol, runtime_checkable
+from typing import Iterator, Protocol, runtime_checkable
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -43,18 +43,18 @@ class SwarmitClient(Protocol):
 
     def status(self) -> dict[str, NodeStatus]: ...
 
-    def start(self, devices: Optional[list[str]] = None) -> None: ...
+    def start(self, devices: list[str] | None = None) -> None: ...
 
-    def stop(self, devices: Optional[list[str]] = None) -> None: ...
+    def stop(self, devices: list[str] | None = None) -> None: ...
 
     def reset(self, locations: dict[str, ResetLocation]) -> None: ...
 
     def flash(
         self,
         firmware: bytes,
-        devices: Optional[list[str]] = None,
-        ota_timeout: Optional[float] = None,
-        ota_max_retries: Optional[int] = None,
+        devices: list[str] | None = None,
+        ota_timeout: float | None = None,
+        ota_max_retries: int | None = None,
     ) -> Iterator[dict]:
         """Stream OTA progress events. See webserver.flash_stream for the
         event type vocabulary (flash_started / chunk / device_done /
@@ -110,7 +110,7 @@ def build_client(
     return LocalSwarmitClient(settings)
 
 
-def _fetch_server_settings(url: str, timeout: float = 0.2) -> Optional[dict]:
+def _fetch_server_settings(url: str, timeout: float = 0.2) -> dict | None:
     """GET /settings; return parsed dict if reachable, None otherwise."""
     try:
         req = Request(f"{url.rstrip('/')}/settings", method="GET")

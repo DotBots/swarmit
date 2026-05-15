@@ -1,4 +1,3 @@
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,39 +6,6 @@ from click.testing import CliRunner
 from swarmit.cli.main import main
 from swarmit.testbed.controller import NodeStatus
 from swarmit.testbed.protocol import DeviceType, StatusType
-
-CLI_HELP_EXPECTED = """Usage: main [OPTIONS] COMMAND [ARGS]...
-
-Options:
-  -c, --config-path FILE      Path to a .toml configuration file.
-  -p, --port TEXT             Serial port to use to send the bitstream to the
-                              gateway. Default: /dev/ttyACM0.
-  -b, --baudrate INTEGER      Serial port baudrate. Default: 1000000.
-  -H, --mqtt-host TEXT        MQTT host. Default: localhost.
-  -P, --mqtt-port INTEGER     MQTT port. Default: 1883.
-  -T, --mqtt-use_tls          Use TLS with MQTT.
-  -n, --network-id TEXT       Marilib network ID to use. Default: 0x1200
-  -a, --adapter [edge|cloud]  Choose the adapter to communicate with the
-                              gateway. Default: edge
-  -d, --devices TEXT          Subset list of device addresses to interact with,
-                              separated with ,
-  -v, --verbose               Enable verbose mode.
-  --no-server                 Skip the swarmit-server probe and run an in-
-                              process Controller for this invocation (the
-                              legacy behavior).
-  -V, --version               Show the version and exit.
-  -h, --help                  Show this message and exit.
-
-Commands:
-  calibrate-lh2  Send LH2 calibration data to the robots.
-  flash          Flash a firmware to the robots.
-  message        Send a custom text message to the robots.
-  monitor        Tail SWARMIT_EVENT_LOG events emitted by bots.
-  reset          Reset robots locations.
-  start          Start the user application.
-  status         Print current status of the robots.
-  stop           Stop the user application.
-"""
 
 
 def _make_client():
@@ -70,12 +36,35 @@ def _running_status(*addrs):
     }
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="Serial port is different")
 def test_main_help():
+    """Smoke-check --help renders and surfaces the expected options and
+    subcommands. Avoids an exact-string compare — Click's line wrap
+    differs across versions and across platforms (default serial port)
+    and is not worth pinning."""
     runner = CliRunner()
     result = runner.invoke(main, ["--help"])
     assert result.exit_code == 0
-    assert result.output == CLI_HELP_EXPECTED
+    for expected in (
+        "Usage: main [OPTIONS] COMMAND [ARGS]...",
+        "-c, --config-path",
+        "-n, --network-id",
+        "-a, --adapter",
+        "-d, --devices",
+        "-v, --verbose",
+        "--no-server",
+    ):
+        assert expected in result.output, expected
+    for cmd in (
+        "calibrate-lh2",
+        "flash",
+        "message",
+        "monitor",
+        "reset",
+        "start",
+        "status",
+        "stop",
+    ):
+        assert cmd in result.output, cmd
 
 
 # ---- start / stop / message ----

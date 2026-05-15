@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
-from typing import Iterator, Optional
+from typing import Iterator
 
 from swarmit.testbed.controller import (
     STATUS_TIMEOUT,
@@ -22,7 +22,7 @@ class LocalSwarmitClient:
     def __init__(self, settings: ControllerSettings):
         self._controller = Controller(settings)
 
-    def __enter__(self) -> "LocalSwarmitClient":
+    def __enter__(self) -> LocalSwarmitClient:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -39,10 +39,10 @@ class LocalSwarmitClient:
             time.sleep(STATUS_TIMEOUT)
         return dict(self._controller.status_data)
 
-    def start(self, devices: Optional[list[str]] = None) -> None:
+    def start(self, devices: list[str] | None = None) -> None:
         self._controller.start(devices=devices)
 
-    def stop(self, devices: Optional[list[str]] = None) -> None:
+    def stop(self, devices: list[str] | None = None) -> None:
         self._controller.stop(devices=devices)
 
     def reset(self, locations: dict[str, ResetLocation]) -> None:
@@ -51,9 +51,9 @@ class LocalSwarmitClient:
     def flash(
         self,
         firmware: bytes,
-        devices: Optional[list[str]] = None,
-        ota_timeout: Optional[float] = None,
-        ota_max_retries: Optional[int] = None,
+        devices: list[str] | None = None,
+        ota_timeout: float | None = None,
+        ota_max_retries: int | None = None,
     ) -> Iterator[dict]:
         """Run an OTA and yield progress events.
 
@@ -78,7 +78,7 @@ class LocalSwarmitClient:
     def _run_flash(
         self,
         firmware: bytes,
-        devices: Optional[list[str]] = None,
+        devices: list[str] | None = None,
     ) -> Iterator[dict]:
         fw = bytearray(firmware)
         try:

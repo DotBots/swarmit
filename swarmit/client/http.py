@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Iterator, Optional
+from typing import Iterator
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -28,7 +28,7 @@ class HTTPSwarmitClient:
         self._base = base_url.rstrip("/")
         self._timeout = default_timeout
 
-    def __enter__(self) -> "HTTPSwarmitClient":
+    def __enter__(self) -> HTTPSwarmitClient:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -124,12 +124,12 @@ class HTTPSwarmitClient:
     # devices". No current caller passes [] meaning "literally no devices",
     # but if one ever needs that semantic we'll need to distinguish here.
 
-    def start(self, devices: Optional[list[str]] = None) -> None:
+    def start(self, devices: list[str] | None = None) -> None:
         self._request(
             "POST", "/start", body={"devices": devices} if devices else None
         )
 
-    def stop(self, devices: Optional[list[str]] = None) -> None:
+    def stop(self, devices: list[str] | None = None) -> None:
         self._request(
             "POST", "/stop", body={"devices": devices} if devices else None
         )
@@ -146,9 +146,9 @@ class HTTPSwarmitClient:
     def flash(
         self,
         firmware: bytes,
-        devices: Optional[list[str]] = None,
-        ota_timeout: Optional[float] = None,
-        ota_max_retries: Optional[int] = None,
+        devices: list[str] | None = None,
+        ota_timeout: float | None = None,
+        ota_max_retries: int | None = None,
     ) -> Iterator[dict]:
         """POST /flash/stream and yield SSE events.
 
@@ -216,11 +216,11 @@ class HTTPSwarmitClient:
         self,
         method: str,
         path: str,
-        body: Optional[dict] = None,
-        timeout: Optional[float] = None,
+        body: dict | None = None,
+        timeout: float | None = None,
     ) -> dict:
         url = f"{self._base}{path}"
-        data: Optional[bytes] = None
+        data: bytes | None = None
         headers = {"Accept": "application/json"}
         if body is not None:
             data = json.dumps(body).encode("utf-8")
