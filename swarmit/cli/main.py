@@ -131,6 +131,7 @@ def _live_run(client, op, settings, message: str) -> None:
             live.update(generate_status(snapshot, settings.devices, message))
             if done.is_set():
                 break
+    print()
 
     t.join()
     if err:
@@ -547,6 +548,7 @@ def status(ctx, watch):
                     pass
         else:
             print(generate_status(client.status(), settings.devices))
+            print()
 
 
 @main.command()
