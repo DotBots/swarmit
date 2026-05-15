@@ -16,6 +16,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define LH2_BASESTATION_COUNT_MAX (16)
+
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {
     uint32_t x;  ///< X coordinate in mm
@@ -27,7 +29,7 @@ typedef struct __attribute__((packed)) {
     int32_t homography_matrix[3][3];  ///< homography matrix, each element multiplied by 1e3
 } localization_homography_t;
 
-void localization_init(void);
+void localization_init(int32_t homographies[][3][3], uint32_t homography_count);
 
 bool localization_process_data(void);
 

@@ -24,6 +24,7 @@ from swarmit.testbed.adapter import (
 from swarmit.testbed.logger import LOGGER
 from swarmit.testbed.protocol import (
     DeviceType,
+    PayloadCalibrationData,
     PayloadMessage,
     PayloadOTAChunk,
     PayloadOTAStart,
@@ -35,11 +36,11 @@ from swarmit.testbed.protocol import (
 )
 
 CHUNK_SIZE = 128
-COMMAND_TIMEOUT = 6
+COMMAND_TIMEOUT = 2
 COMMAND_MAX_ATTEMPTS = 5
 COMMAND_ATTEMPT_DELAY = 0.7
 INACTIVE_TIMEOUT = 3  # s
-STATUS_TIMEOUT = 5
+STATUS_TIMEOUT = 2
 MONITOR_TIMEOUT = 60  # s
 OTA_MAX_RETRIES_DEFAULT = 10
 OTA_ACK_TIMEOUT_DEFAULT = 0.7
@@ -518,6 +519,70 @@ class Controller:
                 if addr not in running_devices:
                     continue
                 self._send_message(int(addr, 16), message)
+
+    def send_lh2_calibration(self, calibration_file: bytes):
+        matrix_size = 3 * 3 * 4  # 3x3, each element is 4 bytes (int32_t)
+        if not calibration_file:
+            raise ValueError("Calibration file is empty")
+
+        # Supported format: 1-byte count + N * 36 bytes
+        if (
+            len(calibration_file) < 1
+            or (len(calibration_file) - 1) % matrix_size != 0
+        ):
+            raise ValueError(
+                f"Invalid calibration file size: expected 1+N*{matrix_size} bytes (count byte + matrices)"
+            )
+
+        homography_count = calibration_file[0]
+        matrices_bytes = calibration_file[1:]
+        expected_count = len(matrices_bytes) // matrix_size
+        if homography_count != expected_count:
+            raise ValueError(
+                "Invalid calibration file: count byte does not match matrix payload length"
+            )
+        if homography_count == 0:
+            raise ValueError(
+                "Invalid calibration file: homography count cannot be zero"
+            )
+
+        if homography_count > 16:
+            raise ValueError(
+                "Invalid calibration file: homography count exceeds LH2 limit (16)"
+            )
+
+        ready_devices = self.ready_devices
+        if not ready_devices:
+            print(
+                f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}..."
+            )
+        else:
+            print(
+                f"Sending {homography_count} calibration matrix/matrices to {len(ready_devices)} devices: {str(ready_devices)}..."
+            )
+
+        for homography_index in range(homography_count):
+            print(f"Sending calibration matrix {homography_index}...")
+            start = homography_index * matrix_size
+            end = start + matrix_size
+            payload = PayloadCalibrationData(
+                homography_count=homography_count,
+                homography_index=homography_index,
+                homography=matrices_bytes[start:end],
+            )
+            if self.settings.verbose:
+                print(payload)
+                print(Packet.from_payload(payload).to_bytes())
+            for _ in range(COMMAND_MAX_ATTEMPTS):
+                # simple strategy to bypass non-reliable link layer, just send the payload multiple times
+                if not ready_devices:
+                    self.send_payload(BROADCAST_ADDRESS, payload)
+                else:
+                    for device_addr in ready_devices:
+                        self.send_payload(int(device_addr, 16), payload)
+                time.sleep(
+                    0.3
+                )  # give the device some time to process the payload
 
     def _send_start_ota(
         self, device_addr: str, devices_to_flash: set[str], firmware: bytes

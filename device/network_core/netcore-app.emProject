@@ -11,6 +11,8 @@
     <folder Name="Source">
       <file file_name="Source/ipc.h" />
       <file file_name="Source/main.c" />
+      <file file_name="Source/nvmc.c" />
+      <file file_name="Source/nvmc.h" />
       <file file_name="Source/protocol.c" />
       <file file_name="Source/protocol.h" />
     </folder>

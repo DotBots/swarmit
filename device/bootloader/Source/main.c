@@ -28,7 +28,16 @@
 #include "localization.h"
 #include "timer.h"
 
-#define SWARMIT_BASE_ADDRESS        (0x10000)
+#define SWARMIT_BASE_ADDRESS            (0x10000)
+#define SWARMIT_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
+
+// Boot-intent magic values. _boot_intent lives in secure RAM (.non_init in RAM1,
+// which the bootloader maps secure via tz_configure_ram_secure(0, 3)); user code
+// has no access. The bootloader reads it on every SREQ-triggered reset and routes
+// accordingly. Magic values keep an uninitialized first-power-on cycle from
+// accidentally matching either intent.
+#define SWRMT_BOOT_INTENT_USER_IMAGE    (0xC0DEC0DEu)
+#define SWRMT_BOOT_INTENT_BOOTLOADER    (0xB007B007u)
 
 #define BATTERY_UPDATE_DELAY        (1000U)
 #define POSITION_UPDATE_DELAY_MS    (100U) ///< 100ms delay between each position update
@@ -44,11 +53,15 @@ typedef struct {
     bool            ota_start_request;
     bool            ota_require_erase;
     bool            ota_chunk_request;
+    bool            lh2_calibration_ready;
     bool            start_application;
+    bool            system_reset_requested;
     position_2d_t   last_position;
     bool            position_update;
     bool            battery_update;
 } bootloader_app_data_t;
+
+static volatile uint32_t _boot_intent __attribute__((section(".non_init")));
 
 static const gpio_t _status_red_led = { .port = DB_RGB_LED_PWM_RED_PORT, .pin = DB_RGB_LED_PWM_RED_PIN };
 static const gpio_t _status_green_led = { .port = DB_RGB_LED_PWM_GREEN_PORT, .pin = DB_RGB_LED_PWM_GREEN_PIN };
@@ -246,17 +259,19 @@ int main(void) {
                             1 << IPC_CHAN_RADIO_RX |
                             1 << IPC_CHAN_OTA_START |
                             1 << IPC_CHAN_OTA_CHUNK |
-                            1 << IPC_CHAN_APPLICATION_START
-                            //1 << IPC_CHAN_APPLICATION_RESET
+                            1 << IPC_CHAN_APPLICATION_START |
+                            1 << IPC_CHAN_SOC_RESET |
+                            1 << IPC_CHAN_CALIBRATION_DATA
                         );
     NRF_IPC_S->SEND_CNF[IPC_CHAN_REQ]                   = 1 << IPC_CHAN_REQ;
     NRF_IPC_S->SEND_CNF[IPC_CHAN_LOG_EVENT]             = 1 << IPC_CHAN_LOG_EVENT;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_RADIO_RX]           = 1 << IPC_CHAN_RADIO_RX;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_APPLICATION_START]  = 1 << IPC_CHAN_APPLICATION_START;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_APPLICATION_STOP]   = 1 << IPC_CHAN_APPLICATION_STOP;
-    //NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_APPLICATION_RESET]  = 1 << IPC_CHAN_APPLICATION_RESET;
+    NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_SOC_RESET]          = 1 << IPC_CHAN_SOC_RESET;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_START]          = 1 << IPC_CHAN_OTA_START;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_CHUNK]          = 1 << IPC_CHAN_OTA_CHUNK;
+    NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_CALIBRATION_DATA]   = 1 << IPC_CHAN_CALIBRATION_DATA;
     NVIC_EnableIRQ(IPC_IRQn);
     NVIC_ClearPendingIRQ(IPC_IRQn);
     NVIC_SetPriority(IPC_IRQn, IPC_IRQ_PRIORITY);
@@ -280,6 +295,14 @@ int main(void) {
     // Start the network core
     release_network_core();
 
+    // Wait for the net core to finish its init (including _load_config()) before
+    // reading anything net-core-populated from ipc_shared_data. Otherwise the
+    // USER_IMAGE boot path below races _load_config and may read zeroed
+    // lh2_calibration / stale net_id.
+    while (!ipc_shared_data.net_ready) {
+        __WFE();
+    }
+
     mari_init();
 
     battery_level_init();
@@ -287,16 +310,30 @@ int main(void) {
 
     NVIC_ClearTargetState(SPIM4_IRQn);
     NVIC_ClearTargetState(IPC_IRQn);
-    localization_init();
 
     // Check reset reason and switch to user image if reset was not triggered by any wdt timeout
     uint32_t resetreas = NRF_RESET_S->RESETREAS;
     NRF_RESET_S->RESETREAS = NRF_RESET_S->RESETREAS;
 
-     //Boot user image after soft system reset
-    if (resetreas & RESET_RESETREAS_SREQ_Detected << RESET_RESETREAS_SREQ_Pos) {
+    // Consume the boot intent set by whoever requested this reset (or random
+    // RAM on first power-on, which won't match either magic value).
+    uint32_t boot_intent = _boot_intent;
+    _boot_intent = 0;
+
+    // Boot user image after soft system reset, but only when the previous run
+    // explicitly asked for it. Calibration-commit resets fall through to
+    // bootloader-ready mode.
+    if ((resetreas & RESET_RESETREAS_SREQ_Detected << RESET_RESETREAS_SREQ_Pos)
+        && boot_intent == SWRMT_BOOT_INTENT_USER_IMAGE) {
         // Experiment is running
         ipc_shared_data.status = SWRMT_APPLICATION_RUNNING;
+
+        // ensure LH2 localization is initialized
+        if (ipc_shared_data.lh2_calibration.homography_count > 0 && ipc_shared_data.lh2_calibration.homography_count <= LH2_BASESTATION_COUNT_MAX) {
+            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
+        } else {
+            printf("Initializing without LH2 calibration data, homography count: %u\n", ipc_shared_data.lh2_calibration.homography_count);
+        }
 
         // Initialize watchdog and non secure access
         setup_ns_user();
@@ -337,6 +374,11 @@ int main(void) {
 
     while (1) {
         __WFE();
+
+        if (_bootloader_vars.lh2_calibration_ready) {
+            _bootloader_vars.lh2_calibration_ready = false;
+            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
+        }
 
         if (_bootloader_vars.ota_start_request) {
             _bootloader_vars.ota_start_request = false;
@@ -386,6 +428,12 @@ int main(void) {
         }
 
         if (_bootloader_vars.start_application) {
+            _boot_intent = SWRMT_BOOT_INTENT_USER_IMAGE;
+            NVIC_SystemReset();
+        }
+
+        if (_bootloader_vars.system_reset_requested) {
+            _boot_intent = SWRMT_BOOT_INTENT_BOOTLOADER;
             NVIC_SystemReset();
         }
 
@@ -444,5 +492,15 @@ void IPC_IRQHandler(void) {
     if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_APPLICATION_START]) {
         NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_APPLICATION_START] = 0;
         _bootloader_vars.start_application = true;
+    }
+
+    if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_SOC_RESET]) {
+        NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_SOC_RESET] = 0;
+        _bootloader_vars.system_reset_requested = true;
+    }
+
+    if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_CALIBRATION_DATA]) {
+        NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_CALIBRATION_DATA] = 0;
+        _bootloader_vars.lh2_calibration_ready = true;
     }
 }

@@ -51,6 +51,9 @@ class PayloadType(IntEnum):
     # Custom messages
     SWARMIT_MESSAGE = 0xA0
 
+    # SwarmIT calibration data
+    SWARMIT_LH2_CALIBRATION = 0xA1
+
     # Marilib metrics probe
     METRICS_PROBE = MariDefaultPayloadType.METRICS_PROBE
 
@@ -152,6 +155,33 @@ class PayloadOTAChunk(Payload):
 
 
 @dataclass
+class PayloadCalibrationData(Payload):
+    """Dataclass that holds a calibration data packet."""
+
+    metadata: list[PayloadFieldMetadata] = dataclasses.field(
+        default_factory=lambda: [
+            PayloadFieldMetadata(
+                name="homography_count", disp="count", length=4
+            ),
+            PayloadFieldMetadata(
+                name="homography_index", disp="idx", length=4
+            ),
+            PayloadFieldMetadata(
+                name="homography", type_=bytes, length=3 * 3 * 4
+            ),
+        ]
+    )
+
+    homography_count: int = (
+        0  # number of homography matrices used for localization
+    )
+    homography_index: int = 0  # index of the homography matrix to be sent
+    homography: bytes = dataclasses.field(
+        default_factory=lambda: bytearray
+    )  # 9x4 bytes of the homography matrix
+
+
+@dataclass
 class PayloadOTAStartAck(Payload):
     """Dataclass that holds an application OTA start ACK notification packet."""
 
@@ -220,4 +250,5 @@ register_parser(PayloadType.SWARMIT_OTA_START_ACK, PayloadOTAStartAck)
 register_parser(PayloadType.SWARMIT_OTA_CHUNK_ACK, PayloadOTAChunkAck)
 register_parser(PayloadType.SWARMIT_EVENT_LOG, PayloadEvent)
 register_parser(PayloadType.SWARMIT_MESSAGE, PayloadMessage)
+register_parser(PayloadType.SWARMIT_LH2_CALIBRATION, PayloadCalibrationData)
 register_parser(PayloadType.METRICS_PROBE, MetricsProbePayload)

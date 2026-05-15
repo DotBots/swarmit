@@ -34,10 +34,11 @@ typedef enum {
     IPC_CHAN_RADIO_RX           = 1,    ///< Channel used for radio RX events
     IPC_CHAN_APPLICATION_START  = 2,    ///< Channel used for starting the application
     IPC_CHAN_APPLICATION_STOP   = 3,    ///< Channel used for stopping the application
-    IPC_CHAN_APPLICATION_RESET  = 4,    ///< Channel used for resetting the application
+    IPC_CHAN_SOC_RESET          = 4,    ///< Channel used to request a full SoC reset (e.g. after calibration commit)
     IPC_CHAN_LOG_EVENT          = 5,    ///< Channel used for logging events
     IPC_CHAN_OTA_START          = 6,    ///< Channel used for starting an OTA process
     IPC_CHAN_OTA_CHUNK          = 7,    ///< Channel used for writing a non secure image chunk
+    IPC_CHAN_CALIBRATION_DATA   = 8,    ///< Channel used for sending calibration data
 } ipc_channels_t;
 
 typedef struct __attribute__((packed)) {
@@ -53,6 +54,11 @@ typedef struct __attribute__((packed)) {
     int32_t  last_chunk_acked;
     uint8_t chunk[INT8_MAX + 1];
 } ipc_ota_data_t;
+
+typedef struct __attribute__((packed)) {
+    uint32_t homography_count; // number of homography matrices used for localization
+    int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization
+} ipc_lh2_calibration_t;
 
 typedef struct {
     uint8_t value;  ///< Byte containing the random value read
@@ -77,6 +83,7 @@ typedef struct __attribute__((packed,aligned(8))) {
     position_2d_t           current_position;   ///< Current 2D position
     ipc_radio_pdu_t         tx_pdu;             ///< TX PDU
     ipc_radio_pdu_t         rx_pdu;             ///< RX PDU
+    ipc_lh2_calibration_t  lh2_calibration;     ///< LH2 calibration data
 } ipc_shared_data_t;
 
 void mutex_lock(void);
