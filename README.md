@@ -202,11 +202,30 @@ openssl pkey -in .data/private.pem -pubout -out .data/public.pem
 
 ### Running the Dashboard
 
-After the initial setup (required only once), you can launch the dashboard with all configuration options using:
+After the initial setup (required only once), you can launch the dashboard. With the **edge** adapter (default — gateway over USB serial):
 
 ```bash
 python3 -m swarmit.dashboard.main --http-port 8080 --open-browser
 ```
+
+With the **cloud** adapter (gateway reached over an MQTT broker):
+
+```bash
+python3 -m swarmit.dashboard.main -a cloud -n 0x1234 \
+    -H broker.example.com -P 8883 -T \
+    --http-port 8080 --open-browser
+```
+
+Or use a TOML config file (recommended once you have one):
+
+```bash
+python3 -m swarmit.dashboard.main -c swarmit-argus.toml -n 1234 \
+    --http-port 8080 --open-browser
+```
+
+Note: the dashboard opens its own gateway connection. If `swarmit-daemon`
+is already running and owns the gateway (serial port, especially), stop
+the daemon before starting the dashboard.
 
 Access the dashboard at [https://localhost:8080](https://localhost:8080)
 

@@ -9,11 +9,10 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from swarmit.client import _probe_daemon, build_client
+from swarmit.client import _fetch_daemon_settings, build_client
 from swarmit.client.http import HTTPSwarmitClient, SwarmitAuthError
 from swarmit.client.local import LocalSwarmitClient
 from swarmit.testbed.controller import ControllerSettings
-
 
 # ---- helpers ----
 
@@ -43,24 +42,26 @@ def _http_error(code: int, body: bytes = b"") -> HTTPError:
     return HTTPError("http://x", code, "err", {}, io.BytesIO(body))
 
 
-# ---- _probe_daemon / build_client ----
+# ---- _fetch_daemon_settings / build_client ----
 
 
 @patch("swarmit.client.urlopen")
-def test_probe_daemon_reachable(urlopen_mock):
+def test_fetch_daemon_settings_reachable(urlopen_mock):
     urlopen_mock.return_value = _MockResponse(body=b'{"network_id": 4660}')
-    assert _probe_daemon("http://127.0.0.1:8001") is True
+    result = _fetch_daemon_settings("http://127.0.0.1:8001")
+    assert result == {"network_id": 4660}
 
 
 @patch("swarmit.client.urlopen")
-def test_probe_daemon_unreachable(urlopen_mock):
+def test_fetch_daemon_settings_unreachable(urlopen_mock):
     urlopen_mock.side_effect = URLError("connection refused")
-    assert _probe_daemon("http://127.0.0.1:8001") is False
+    assert _fetch_daemon_settings("http://127.0.0.1:8001") is None
 
 
 @patch("swarmit.client.urlopen")
 def test_build_client_picks_http_when_reachable(urlopen_mock):
-    urlopen_mock.return_value = _MockResponse(body=b"{}")
+    # Daemon returns network_id=1, matching ControllerSettings default.
+    urlopen_mock.return_value = _MockResponse(body=b'{"network_id": 1}')
     client = build_client(ControllerSettings(), no_daemon=False)
     assert isinstance(client, HTTPSwarmitClient)
 
@@ -77,10 +78,30 @@ def test_build_client_falls_back_to_local(urlopen_mock, _controller_mock):
 def test_build_client_respects_no_daemon(_controller_mock):
     # Even if a daemon would be reachable, --no-daemon forces Local.
     with patch("swarmit.client.urlopen") as urlopen_mock:
-        urlopen_mock.return_value = _MockResponse(body=b"{}")
+        urlopen_mock.return_value = _MockResponse(body=b'{"network_id": 1}')
         client = build_client(ControllerSettings(), no_daemon=True)
     assert isinstance(client, LocalSwarmitClient)
     urlopen_mock.assert_not_called()
+
+
+@patch("swarmit.client.urlopen")
+def test_build_client_refuses_on_network_mismatch(urlopen_mock):
+    # Daemon is on network 9999; CLI asked for 1 → must raise, not silently
+    # route through the wrong network.
+    urlopen_mock.return_value = _MockResponse(body=b'{"network_id": 9999}')
+    with pytest.raises(RuntimeError, match="network"):
+        build_client(ControllerSettings(network_id=1), no_daemon=False)
+
+
+@patch("swarmit.client.local.Controller")
+@patch("swarmit.client.urlopen")
+def test_build_client_skips_mismatch_check_with_no_daemon(
+    urlopen_mock, _controller_mock
+):
+    # --no-daemon bypasses the probe entirely, so no mismatch check fires.
+    urlopen_mock.return_value = _MockResponse(body=b'{"network_id": 9999}')
+    client = build_client(ControllerSettings(network_id=1), no_daemon=True)
+    assert isinstance(client, LocalSwarmitClient)
 
 
 # ---- HTTPSwarmitClient ----

@@ -18,6 +18,7 @@ TCP connect-refused when no daemon is running, ~5 ms.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Iterator, Optional, Protocol, runtime_checkable
 from urllib.error import URLError
@@ -89,26 +90,50 @@ def build_client(
     settings: ControllerSettings,
     no_daemon: bool = False,
 ) -> SwarmitClient:
-    """Probe for a running daemon; return HTTPSwarmitClient if reachable,
-    else LocalSwarmitClient.
+    """Probe for a running daemon; return HTTPSwarmitClient if reachable
+    AND its settings match the caller, else LocalSwarmitClient.
+
+    Raises RuntimeError if a daemon is running but its network_id (or
+    any other field exposed via /settings) diverges from the caller's
+    settings. Bypass with `no_daemon=True`.
     """
-    # Local import to avoid pulling httpx-style deps when daemon is not used.
     from swarmit.client.local import LocalSwarmitClient
 
     if not no_daemon:
         url = os.environ.get("SWARMIT_DAEMON_URL", DAEMON_URL_DEFAULT)
-        if _probe_daemon(url):
+        daemon_settings = _fetch_daemon_settings(url)
+        if daemon_settings is not None:
+            _ensure_config_matches(settings, daemon_settings, url)
             from swarmit.client.http import HTTPSwarmitClient
 
             return HTTPSwarmitClient(url)
     return LocalSwarmitClient(settings)
 
 
-def _probe_daemon(url: str, timeout: float = 0.2) -> bool:
-    """Quick reachability check via GET /settings."""
+def _fetch_daemon_settings(url: str, timeout: float = 0.2) -> Optional[dict]:
+    """GET /settings; return parsed dict if reachable, None otherwise."""
     try:
         req = Request(f"{url.rstrip('/')}/settings", method="GET")
         with urlopen(req, timeout=timeout) as r:
-            return r.status == 200
+            if getattr(r, "status", 200) != 200:
+                return None
+            return json.loads(r.read())
     except (URLError, ConnectionError, TimeoutError, OSError):
-        return False
+        return None
+
+
+def _ensure_config_matches(
+    local: ControllerSettings, daemon: dict, url: str
+) -> None:
+    """Refuse to route through a daemon that disagrees on operational config.
+
+    Today /settings only exposes `network_id`, so that's the only field
+    we can check. If the dashboard PR adds more fields, extend here.
+    """
+    daemon_net = daemon.get("network_id")
+    if daemon_net is not None and daemon_net != local.network_id:
+        raise RuntimeError(
+            f"daemon at {url} is on network 0x{daemon_net:04X}, but this "
+            f"invocation requested 0x{local.network_id:04X}. "
+            f"Stop the daemon or pass --no-daemon."
+        )

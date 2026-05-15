@@ -254,12 +254,19 @@ def start(ctx):
         ready = _filter_by_status(
             client.status(), settings.devices, StatusType.Bootloader
         )
-        if ready:
-            client.start(
-                devices=settings.devices if settings.devices else None
-            )
-        else:
+        if not ready:
             print("No device to start")
+            return
+        client.start(devices=settings.devices if settings.devices else None)
+        # Render the post-start state on the CLI side. Daemon-mode flows
+        # used to leave this table only in the daemon's stdout.
+        print(
+            generate_status(
+                client.status(),
+                settings.devices,
+                status_message="to start",
+            )
+        )
 
 
 @main.command()
@@ -275,10 +282,17 @@ def stop(ctx):
             StatusType.Programming,
             StatusType.Resetting,
         )
-        if stoppable:
-            client.stop(devices=settings.devices if settings.devices else None)
-        else:
+        if not stoppable:
             print("[bold]No device to stop[/]")
+            return
+        client.stop(devices=settings.devices if settings.devices else None)
+        print(
+            generate_status(
+                client.status(),
+                settings.devices,
+                status_message="to stop",
+            )
+        )
 
 
 @main.command()
