@@ -47,7 +47,9 @@ def _render_transfer_summary(device_results: list[dict], console) -> None:
     Each cell is one device: `ADDR acked/total r:N ✓|✗`. Rich's
     Columns auto-wraps cells side-by-side based on terminal width,
     so 100+ devices stay readable without 100 rows of vertical
-    space.
+    space. Failures (if any) are also listed separately at the
+    tail so a quick scan of the bottom of the screen surfaces them
+    even when the grid is dense.
     """
     from rich.columns import Columns
     from rich.text import Text
@@ -56,6 +58,7 @@ def _render_transfer_summary(device_results: list[dict], console) -> None:
         return
 
     cells = []
+    failures = []
     for d in sorted(device_results, key=lambda r: r["addr"]):
         success = d.get("success", False)
         color = "green" if success else "red"
@@ -69,6 +72,8 @@ def _render_transfer_summary(device_results: list[dict], console) -> None:
                 f"[{color}]{acked}/{total} r:{retries} {marker}[/]"
             )
         )
+        if not success:
+            failures.append((d["addr"], acked, total, retries))
 
     succ = sum(1 for d in device_results if d.get("success"))
     console.print()
@@ -77,6 +82,17 @@ def _render_transfer_summary(device_results: list[dict], console) -> None:
         f"([green]{succ}[/]/{len(device_results)} ok):"
     )
     console.print(Columns(cells, padding=(0, 2), expand=False))
+
+    if failures:
+        console.print()
+        console.print(
+            f"[bold red]Failures[/] ({len(failures)}):"
+        )
+        for addr, acked, total, retries in failures:
+            console.print(
+                f"  [red]✗[/] [magenta]{addr}[/] "
+                f"[red]{acked}/{total}[/] r:{retries}"
+            )
 
 
 def _filter_by_status(
