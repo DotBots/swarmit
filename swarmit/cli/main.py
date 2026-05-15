@@ -9,6 +9,7 @@ from dotbot_utils.serial_interface import (
 from rich import print
 from rich.console import Console
 from rich.pretty import pprint
+from tqdm import tqdm
 
 from swarmit import __version__
 from swarmit.client import build_client
