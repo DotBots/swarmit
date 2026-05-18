@@ -15,25 +15,32 @@ from swarmit.tests.utils import MarilibSerialAdapterMock
 MAIN_HELP_EXPECTED = """Usage: main [OPTIONS]
 
 Options:
-  -c, --config-path FILE      Path to a .toml configuration file.
-  -p, --port TEXT             Serial port to use to send the bitstream to the
-                              gateway. Default: /dev/ttyACM0.
-  -b, --baudrate INTEGER      Serial port baudrate. Default: 1000000.
-  -H, --mqtt-host TEXT        MQTT host. Default: localhost.
-  -P, --mqtt-port INTEGER     MQTT port. Default: 1883.
-  -T, --mqtt-use_tls          Use TLS with MQTT.
-  -n, --network-id TEXT       Marilib network ID to use. Default: 0x1200
-  -a, --adapter [edge|cloud]  Choose the adapter to communicate with the
-                              gateway. Default: edge
-  -d, --devices TEXT          Subset list of device addresses to interact with,
-                              separated with ,
-  -m, --map-size TEXT         Size of the map on the ground in mm, in the format
-                              WIDTHxHEIGHT. Default: 2500x2500.
-  -v, --verbose               Enable verbose mode.
-  --open-browser              Open the dashboard in a web browser automatically.
-  --http-port INTEGER         HTTP port. Default: edge
-  -V, --version               Show the version and exit.
-  --help                      Show this message and exit.
+  -c, --config-path FILE          Path to a .toml configuration file.
+  -p, --port TEXT                 Serial port to use to send the bitstream to
+                                  the gateway. Default: /dev/ttyACM0.
+  -b, --baudrate INTEGER          Serial port baudrate. Default: 1000000.
+  -H, --mqtt-host TEXT            MQTT host. Default: localhost.
+  -P, --mqtt-port INTEGER         MQTT port. Default: 1883.
+  -T, --mqtt-use_tls              Use TLS with MQTT.
+  -n, --network-id TEXT           Marilib network ID to use. Default: 0x1200
+  -a, --adapter [edge|cloud]      Choose the adapter to communicate with the
+                                  gateway. Default: edge
+  -d, --devices TEXT              Subset list of device addresses to interact
+                                  with, separated with ,
+  -m, --map-size TEXT             Size of the map on the ground in mm, in the
+                                  format WIDTHxHEIGHT. Default: 2500x2500.
+  --calibration-distance INTEGER  LH2 calibration distance in mm (the -d value
+                                  used with dotbot-calibration). Used to place
+                                  the 4 reference points on the map. Default:
+                                  inferred from --map-size as min(width,
+                                  height)/5 (correct for single-LH arenas; pass
+                                  explicitly for multi-LH).
+  -v, --verbose                   Enable verbose mode.
+  --open-browser                  Open the dashboard in a web browser
+                                  automatically.
+  --http-port INTEGER             HTTP port. Default: edge
+  -V, --version                   Show the version and exit.
+  --help                          Show this message and exit.
 """
 
 

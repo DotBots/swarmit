@@ -10,10 +10,11 @@ interface HomePageProps {
     width: number;
     height: number;
   };
+  calibrationDistance: number;
 }
 
 
-export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: HomePageProps) {
+export default function HomePage({ token, tokenActiveness, dotbots, areaSize, calibrationDistance }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -145,8 +146,8 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
 
   return (
     <div>
-      <DotBotsMap dotbots={dotbots} areaSize={areaSize} />
-      <div className="max-w-md mx-auto p-6 space-y-6 bg-white rounded-2xl shadow mt-10 animate-fadeIn">
+      <DotBotsMap dotbots={dotbots} areaSize={areaSize} calibrationDistance={calibrationDistance} />
+      <div className="max-w-xl mx-auto p-6 space-y-6 bg-white rounded-2xl shadow mt-6 animate-fadeIn">
         {token?.payload && <div className="border p-4 rounded-lg bg-gray-50">
           <h3 className="font-semibold mb-2">Token Info</h3>
           <p><span className="font-medium">Issued at:</span> {unixToLocale(token?.payload.iat)}</p>
@@ -160,7 +161,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
             <button
               className="w-full py-2 px-4 bg-green-600 text-white rounded-lg
                hover:bg-green-700 transition disabled:cursor-not-allowed
-               disabled:bg-green-900"
+               disabled:bg-gray-300 disabled:text-gray-500"
               onClick={() => handleStart()}
               disabled={loading || (tokenActiveness !== "Active")}
             >
@@ -180,7 +181,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
             <button
               className="w-full py-2 px-4 bg-red-600 text-white rounded-lg
                hover:bg-red-700 transition disabled:cursor-not-allowed
-               disabled:bg-red-900"
+               disabled:bg-gray-300 disabled:text-gray-500"
               onClick={() => handleStop()}
               disabled={loading || (tokenActiveness !== "Active")}
             >
@@ -224,7 +225,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize }: 
           <button
             className="w-full py-2 px-4 bg-[#1E91C7] text-white rounded-lg
                hover:bg-[#187AA3] transition disabled:cursor-not-allowed
-               disabled:bg-[#135C7B]"
+               disabled:bg-gray-300 disabled:text-gray-500"
             onClick={handleFlash}
             disabled={loading || (tokenActiveness !== "Active") || !file}
           >
