@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { tokenActivenessType, Token, DotBotData, API_URL } from "./App";
+import {
+  tokenActivenessType,
+  Token,
+  DotBotData,
+  API_URL,
+  isAuthorized,
+  authHeaders,
+} from "./App";
 import { DotBotsMap } from "./BotMap";
 
 interface HomePageProps {
@@ -20,7 +27,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
   const [message, setMessage] = useState<string | null>(null);
 
   const handleStart = () => {
-    if (!token) {
+    if (!isAuthorized(tokenActiveness)) {
       setMessage("Please fill a token first");
       return;
     };
@@ -29,7 +36,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
 
     fetch(`${API_URL}/start`, {
       method: "POST", headers: {
-        "Authorization": `Bearer ${token.token}`,
+        ...authHeaders(token, tokenActiveness),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({}),
@@ -57,7 +64,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
   };
 
   const handleStop = () => {
-    if (!token) {
+    if (!isAuthorized(tokenActiveness)) {
       setMessage("Please fill a token first");
       return;
     };
@@ -66,7 +73,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
 
     fetch(`${API_URL}/stop`, {
       method: "POST", headers: {
-        "Authorization": `Bearer ${token.token}`,
+        ...authHeaders(token, tokenActiveness),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({}),
@@ -94,7 +101,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
   };
 
   const handleFlash = () => {
-    if (!token) {
+    if (!isAuthorized(tokenActiveness)) {
       setMessage("Please fill a token first");
       return;
     };
@@ -115,7 +122,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
       fetch(`${API_URL}/flash`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token.token}`,
+          ...authHeaders(token, tokenActiveness),
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ firmware_b64: base64 }),
@@ -163,12 +170,12 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
                hover:bg-green-700 transition disabled:cursor-not-allowed
                disabled:bg-gray-300 disabled:text-gray-500"
               onClick={() => handleStart()}
-              disabled={loading || (tokenActiveness !== "Active")}
+              disabled={loading || (!isAuthorized(tokenActiveness))}
             >
               Start
             </button>
 
-            {((tokenActiveness !== "Active") || loading) && (
+            {((!isAuthorized(tokenActiveness)) || loading) && (
               <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
                     hidden group-hover:block bg-gray-800 text-white text-sm
                     rounded-md px-3 py-1 whitespace-nowrap shadow-lg">
@@ -183,12 +190,12 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
                hover:bg-red-700 transition disabled:cursor-not-allowed
                disabled:bg-gray-300 disabled:text-gray-500"
               onClick={() => handleStop()}
-              disabled={loading || (tokenActiveness !== "Active")}
+              disabled={loading || (!isAuthorized(tokenActiveness))}
             >
               Stop
             </button>
 
-            {((tokenActiveness !== "Active") || loading) && (
+            {((!isAuthorized(tokenActiveness)) || loading) && (
               <div
                 className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
                  hidden group-hover:block bg-gray-800 text-white text-sm
@@ -227,12 +234,12 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
                hover:bg-[#187AA3] transition disabled:cursor-not-allowed
                disabled:bg-gray-300 disabled:text-gray-500"
             onClick={handleFlash}
-            disabled={loading || (tokenActiveness !== "Active") || !file}
+            disabled={loading || (!isAuthorized(tokenActiveness)) || !file}
           >
             Flash
           </button>
 
-          {(loading || (tokenActiveness !== "Active") || !file) && (
+          {(loading || (!isAuthorized(tokenActiveness)) || !file) && (
             <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2
                     hidden group-hover:block bg-gray-800 text-white text-sm
                     rounded-md px-3 py-1 whitespace-nowrap shadow-lg">

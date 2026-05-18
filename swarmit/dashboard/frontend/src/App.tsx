@@ -52,6 +52,17 @@ export type tokenActivenessType =
   | "Expired"
   | "AuthDisabled"
 
+export const isAuthorized = (t: tokenActivenessType): boolean =>
+  t === "Active" || t === "AuthDisabled";
+
+export const authHeaders = (
+  token: Token | null,
+  tokenActiveness: tokenActivenessType,
+): Record<string, string> =>
+  tokenActiveness === "AuthDisabled" || !token
+    ? {}
+    : { Authorization: `Bearer ${token.token}` };
+
 // Note: Storing a token in localStorage is not the most secure approach,
 // as it can be exposed to XSS attacks. We accept this trade-off here because
 // losing the JWT is low impact — generating a new one is cheap and does not
