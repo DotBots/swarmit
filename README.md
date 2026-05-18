@@ -149,6 +149,42 @@ swarmit -n 0xA000 calibrate-lh2 ~/.dotbot/calibration.out
 swarmit -n 0xA000 -d BC3D3C8A2A6F8E68 calibrate-lh2 ~/.dotbot/calibration.out
 ```
 
+## swarmit-server
+
+`swarmit-server` is the unified FastAPI backend. Two deployment presets,
+same binary:
+
+- **Local-dev convenience** — `swarmit-server --local`. Binds
+  `127.0.0.1`, no JWT auth, no records DB. The local CLI auto-discovers
+  it at `localhost:8001` and routes commands through HTTP/SSE (sub-50 ms
+  cold-start) instead of building a fresh in-process Controller per
+  invocation. Pass `--no-server` to force the legacy in-process path.
+
+- **Shared service** — `swarmit-server` (default). Binds `0.0.0.0`, JWT
+  required, JWT records DB on. Used on a testbed server reachable by
+  operators and remote CLIs. React UI mounted on the same port.
+
+```bash
+pip install swarmit[dashboard]                # includes swarmit-server
+swarmit-server --local -n 0x1234 &            # local-dev preset
+
+# Same CLI, now answered by the server:
+swarmit status                                # live status, sub-50 ms
+swarmit flash sample.bin                      # streaming OTA progress (SSE)
+swarmit status -w                             # SSE-driven Rich Live table
+swarmit monitor                               # streams SWARMIT_EVENT_LOG
+
+# Override the server endpoint:
+SWARMIT_SERVER_URL=http://127.0.0.1:9001 swarmit status
+```
+
+`swarmit-server --local` refuses to bind to any address other than
+localhost — using `--bind-host 0.0.0.0` with `--local` is rejected.
+Cross-machine deployment requires the default JWT-enabled mode.
+
+`python -m swarmit.dashboard.main` is kept as a deprecated alias that
+forwards to `swarmit-server`.
+
 ## Control Tower Dashboard
 
 The Control Tower is a web-based platform (backend and frontend) that enables users to manage and monitor the testbed remotely. It provides an interface for reserving timeslots, inspecting the live status of all DotBots, and supervising experiments. The platform displays each device’s position and operational state, and offers mechanisms to flash firmware, start or stop experiments, and oversee ongoing activity across the testbed.
@@ -175,11 +211,30 @@ openssl pkey -in .data/private.pem -pubout -out .data/public.pem
 
 ### Running the Dashboard
 
-After the initial setup (required only once), you can launch the dashboard with all configuration options using:
+After the initial setup (required only once), you can launch the dashboard. With the **edge** adapter (default — gateway over USB serial):
 
 ```bash
 python3 -m swarmit.dashboard.main --http-port 8080 --open-browser
 ```
+
+With the **cloud** adapter (gateway reached over an MQTT broker):
+
+```bash
+python3 -m swarmit.dashboard.main -a cloud -n 0x1234 \
+    -H broker.example.com -P 8883 -T \
+    --http-port 8080 --open-browser
+```
+
+Or use a TOML config file (recommended once you have one):
+
+```bash
+python3 -m swarmit.dashboard.main -c swarmit-argus.toml -n 1234 \
+    --http-port 8080 --open-browser
+```
+
+Note: the dashboard opens its own gateway connection. If
+`swarmit-server` is already running and owns the gateway (serial port,
+especially), stop it before starting another instance.
 
 Access the dashboard at [https://localhost:8080](https://localhost:8080)
 
