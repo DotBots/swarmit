@@ -134,6 +134,17 @@ SAFE_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
     ),
 )
 @click.option(
+    "--calibration-distance",
+    type=int,
+    default=0,
+    help=(
+        "LH2 calibration distance in mm (the -d value used with "
+        "dotbot-calibration). Used to place the 4 reference points on the "
+        "map. Default: inferred from --map-size as min(width, height)/5 "
+        "(correct for single-LH arenas; pass explicitly for multi-LH)."
+    ),
+)
+@click.option(
     "--open-browser",
     is_flag=True,
     help="Open the dashboard in a web browser automatically.",
@@ -156,6 +167,7 @@ def main(
     bind_host,
     http_port,
     map_size,
+    calibration_distance,
     open_browser,
 ):
     """Run the swarmit FastAPI backend."""
@@ -173,6 +185,7 @@ def main(
         "bind_host": bind_host,
         "http_port": http_port,
         "map_size": map_size,
+        "calibration_distance": calibration_distance,
     }
     final_config = {
         **DEFAULTS_SERVER,
@@ -203,6 +216,7 @@ def main(
         adapter=final_config["adapter"],
         devices=[d for d in final_config["devices"].split(",") if d],
         map_size=final_config["map_size"],
+        calibration_distance=final_config.get("calibration_distance", 0) or 0,
         verbose=final_config["verbose"],
     )
 
