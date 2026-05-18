@@ -45,9 +45,16 @@ from swarmit.testbed.protocol import StatusType
 DATA_DIR = "./.data"
 API_DB_URL = f"sqlite:///{DATA_DIR}/database.db"
 
+SessionLocal = None
+
 
 def get_db():
     global SessionLocal
+    if SessionLocal is None:
+        raise HTTPException(
+            status_code=fastapi_status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="JWT records DB is disabled in this deployment.",
+        )
     db = SessionLocal()
     try:
         yield db
@@ -447,6 +454,7 @@ class SettingsResponse(BaseModel):
     area_width: int
     area_height: int
     calibration_distance: int  # mm; the -d value used by dotbot-calibration
+    auth_mode: str  # "jwt" or "none"
 
 
 @api.get("/settings", response_model=SettingsResponse)
@@ -465,6 +473,7 @@ async def settings(request: Request):
         area_width=width,
         area_height=height,
         calibration_distance=cd,
+        auth_mode="jwt" if AUTH_ENABLED else "none",
     )
 
 
