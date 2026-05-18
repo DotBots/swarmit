@@ -264,7 +264,7 @@ export default function MainDashboard() {
           )}
 
           {page === 3 && (
-            < OnlineDotBotPage dotbots={dotbots} token={token} />
+            < OnlineDotBotPage dotbots={dotbots} token={token} tokenActiveness={tokenActiveness} />
           )}
         </main>
       </div>
