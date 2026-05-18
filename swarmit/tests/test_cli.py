@@ -60,6 +60,7 @@ def test_main_help():
         "message",
         "monitor",
         "reset",
+        "serve",
         "start",
         "status",
         "stop",
@@ -384,3 +385,41 @@ def test_status_with_config(build_client_mock, tmp_path):
     result = runner.invoke(main, ["-c", str(cfg_path), "status"])
     assert result.exit_code == 0
     client.status.assert_called_once()
+
+
+# ---- serve ----
+
+
+def test_serve_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["serve", "--help"])
+    assert result.exit_code == 0
+    assert "swarmit FastAPI backend" in result.output
+    for expected in (
+        "--local",
+        "--bind-host",
+        "--http-port",
+        "--map-size",
+        "--calibration-distance",
+        "--open-browser",
+    ):
+        assert expected in result.output, expected
+
+
+def test_serve_local_refuses_non_localhost_bind():
+    """With --local (auth off), refuse 0.0.0.0 or any LAN address."""
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["serve", "--local", "--bind-host", "0.0.0.0"]
+    )
+    assert result.exit_code != 0
+    assert "refusing to start" in result.output.lower()
+
+
+def test_serve_local_refuses_lan_ip_bind():
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["serve", "--local", "--bind-host", "192.168.1.5"]
+    )
+    assert result.exit_code != 0
+    assert "refusing to start" in result.output.lower()

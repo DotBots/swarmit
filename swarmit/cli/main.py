@@ -573,5 +573,80 @@ def calibrate_lh2(ctx, lh2_calibration_file):
         client.send_lh2_calibration(lh2_calibration_file.read())
 
 
+@main.command()
+@click.option(
+    "--local",
+    is_flag=True,
+    help=(
+        "Local-only preset: bind 127.0.0.1, disable JWT auth, skip the "
+        "JWT records DB. Use this for local-dev convenience so the CLI "
+        "auto-discovers a fast in-process backend."
+    ),
+)
+@click.option(
+    "--bind-host",
+    type=str,
+    help=(
+        "HTTP bind address. Default: 0.0.0.0 (or 127.0.0.1 with --local). "
+        "Refused for non-localhost when --local is set."
+    ),
+)
+@click.option(
+    "--http-port",
+    type=int,
+    default=8001,
+    help="HTTP port. Default: 8001.",
+)
+@click.option(
+    "-m",
+    "--map-size",
+    type=str,
+    default="2500x2500",
+    help=(
+        "Size of the dashboard map on the ground in mm, in the format "
+        "WIDTHxHEIGHT. Default: 2500x2500."
+    ),
+)
+@click.option(
+    "--calibration-distance",
+    type=int,
+    default=0,
+    help=(
+        "LH2 calibration distance in mm (the -d value used with "
+        "dotbot-calibration). Used to place the 4 reference points on the "
+        "map. Default: inferred from --map-size as min(width, height)/5 "
+        "(correct for single-LH arenas; pass explicitly for multi-LH)."
+    ),
+)
+@click.option(
+    "--open-browser",
+    is_flag=True,
+    help="Open the dashboard in a web browser automatically.",
+)
+@click.pass_context
+def serve(
+    ctx,
+    local,
+    bind_host,
+    http_port,
+    map_size,
+    calibration_distance,
+    open_browser,
+):
+    """Start the swarmit FastAPI backend."""
+    from swarmit.server.main import run_server
+
+    settings = ctx.obj["settings"]
+    settings.map_size = map_size
+    settings.calibration_distance = calibration_distance
+    run_server(
+        settings,
+        local=local,
+        bind_host=bind_host,
+        http_port=http_port,
+        open_browser=open_browser,
+    )
+
+
 if __name__ == "__main__":
     main(obj={})  # pragma: no cover
