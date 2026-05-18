@@ -32,7 +32,8 @@ git submodule update --init --recursive
 ## Entry points
 
 - `swarmit/cli/main.py` — Click CLI; the user-facing flow
-- `swarmit/server/main.py` — `swarmit-server` entry point; unified FastAPI backend. Default: shared service (JWT, bind 0.0.0.0, DB on, UI mounted). With `--local`: localhost-only, no auth, no DB
+- `swarmit/cli/main.py:serve` — `swarmit serve` subcommand; canonical entry point to the FastAPI backend. Default: shared service (JWT, bind 0.0.0.0, DB on, UI mounted). With `--local`: localhost-only, no auth, no DB. Connection options (`-n`, `-a`, `-p`, etc.) are inherited from the parent `swarmit` group.
+- `swarmit/server/main.py` — `run_server()` helper plus the deprecated `swarmit-server` console_script (kept as an alias to `swarmit serve`).
 - `swarmit/dashboard/main.py` — deprecated shim; forwards `python -m swarmit.dashboard.main` → `swarmit-server`
 - `swarmit/client/` — unified `SwarmitClient` (Protocol + Local + HTTP backends) that every CLI subcommand goes through
 - `swarmit/testbed/controller.py` — core orchestration (OTA chunks, start/stop/status)
@@ -49,10 +50,11 @@ BUILD_TARGET=dotbot-v3 BUILD_CONFIG=Release make docker
 # Python
 pip install swarmit                  # CLI only
 pip install swarmit[dashboard]       # CLI + server
-swarmit --help                       # auto-detects swarmit-server on localhost:8001
-swarmit --no-server status           # force in-process Controller for this invocation
-swarmit-server --local -n 0x1234 &   # local-dev preset (no auth, localhost-only)
-swarmit-server -c argus.toml -n 1234 # shared-service preset (JWT, bind 0.0.0.0)
+swarmit --help                                  # auto-detects swarmit serve on localhost:8001
+swarmit --no-server status                      # force in-process Controller for this invocation
+swarmit -n 0x1234 serve --local &               # local-dev preset (no auth, localhost-only)
+swarmit -c argus.toml -n 1234 serve             # shared-service preset (JWT, bind 0.0.0.0)
+# swarmit-server is kept as a deprecated alias to `swarmit serve`.
 
 # Tests
 tox                                # envs: check, cli, dashboard-cli, tests
