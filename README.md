@@ -149,24 +149,24 @@ swarmit -n 0xA000 calibrate-lh2 ~/.dotbot/calibration.out
 swarmit -n 0xA000 -d BC3D3C8A2A6F8E68 calibrate-lh2 ~/.dotbot/calibration.out
 ```
 
-## swarmit-server
+## swarmit serve
 
-`swarmit-server` is the unified FastAPI backend. Two deployment presets,
+`swarmit serve` is the unified FastAPI backend. Two deployment presets,
 same binary:
 
-- **Local-dev convenience** — `swarmit-server --local`. Binds
+- **Local-dev convenience** — `swarmit serve --local`. Binds
   `127.0.0.1`, no JWT auth, no records DB. The local CLI auto-discovers
   it at `localhost:8001` and routes commands through HTTP/SSE (sub-50 ms
   cold-start) instead of building a fresh in-process Controller per
   invocation. Pass `--no-server` to force the legacy in-process path.
 
-- **Shared service** — `swarmit-server` (default). Binds `0.0.0.0`, JWT
+- **Shared service** — `swarmit serve` (default). Binds `0.0.0.0`, JWT
   required, JWT records DB on. Used on a testbed server reachable by
   operators and remote CLIs. React UI mounted on the same port.
 
 ```bash
-pip install swarmit[dashboard]                # includes swarmit-server
-swarmit-server --local -n 0x1234 &            # local-dev preset
+pip install swarmit[dashboard]                # includes the serve subcommand
+swarmit -n 0x1234 serve --local &             # local-dev preset
 
 # Same CLI, now answered by the server:
 swarmit status                                # live status, sub-50 ms
@@ -178,9 +178,13 @@ swarmit monitor                               # streams SWARMIT_EVENT_LOG
 SWARMIT_SERVER_URL=http://127.0.0.1:9001 swarmit status
 ```
 
-`swarmit-server --local` refuses to bind to any address other than
+`swarmit serve --local` refuses to bind to any address other than
 localhost — using `--bind-host 0.0.0.0` with `--local` is rejected.
 Cross-machine deployment requires the default JWT-enabled mode.
+
+`swarmit-server` is kept as a deprecated standalone console_script that
+behaves identically to `swarmit serve`. New scripts should use
+`swarmit serve`.
 
 `python -m swarmit.dashboard.main` is kept as a deprecated alias that
 forwards to `swarmit-server`.
@@ -233,7 +237,7 @@ python3 -m swarmit.dashboard.main -c swarmit-argus.toml -n 1234 \
 ```
 
 Note: the dashboard opens its own gateway connection. If
-`swarmit-server` is already running and owns the gateway (serial port,
+`swarmit serve` is already running and owns the gateway (serial port,
 especially), stop it before starting another instance.
 
 Access the dashboard at [https://localhost:8080](https://localhost:8080)

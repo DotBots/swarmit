@@ -89,6 +89,7 @@ def test_settings_endpoint(client):
         "area_height": 2500,
         "area_width": 2500,
         "calibration_distance": 500,
+        "auth_mode": "jwt",
     }
 
 

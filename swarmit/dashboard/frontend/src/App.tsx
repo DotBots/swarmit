@@ -42,6 +42,7 @@ export type DotBotData = {
 type SettingsType = {
   network_id: string;
   calibration_distance: number;
+  auth_mode: string;
 };
 
 export type tokenActivenessType =
@@ -49,6 +50,18 @@ export type tokenActivenessType =
   | "Active"
   | "NotValidYet"
   | "Expired"
+  | "AuthDisabled"
+
+export const isAuthorized = (t: tokenActivenessType): boolean =>
+  t === "Active" || t === "AuthDisabled";
+
+export const authHeaders = (
+  token: Token | null,
+  tokenActiveness: tokenActivenessType,
+): Record<string, string> =>
+  tokenActiveness === "AuthDisabled" || !token
+    ? {}
+    : { Authorization: `Bearer ${token.token}` };
 
 // Note: Storing a token in localStorage is not the most secure approach,
 // as it can be exposed to XSS attacks. We accept this trade-off here because
@@ -76,6 +89,7 @@ export interface SettingsResponse {
   area_width: number;
   area_height: number;
   calibration_distance: number;
+  auth_mode: string;
 }
 
 
@@ -98,9 +112,13 @@ export default function MainDashboard() {
         const settings: SettingsType = {
           network_id: json.network_id.toString(16),
           calibration_distance: json.calibration_distance,
+          auth_mode: json.auth_mode,
         };
         setSettings(settings);
         setAreaSize({width: json.area_width, height: json.area_height});
+        if (json.auth_mode === "none") {
+          setTokenActiveness("AuthDisabled");
+        }
       } catch (err) {
         console.error("Error fetching settings:", err);
       }
@@ -164,7 +182,15 @@ export default function MainDashboard() {
     Active: "Logged-in",
     NotValidYet: "Token not valid yet",
     Expired: "Token expired",
+    AuthDisabled: "Logged in (local mode, auth off)",
   };
+
+  const authDisabled = settings?.auth_mode === "none";
+  const navItems: { label: string; page: number; disabled: boolean }[] = [
+    { label: "Home", page: 1, disabled: false },
+    { label: "Reservations", page: 2, disabled: authDisabled },
+    { label: "DotBots Info", page: 3, disabled: false },
+  ];
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-[#1E91C7]/10 to-white overflow-hidden">
@@ -184,24 +210,34 @@ export default function MainDashboard() {
             {Object.keys(dotbots).length} {Object.keys(dotbots).length === 1 ? "device" : "devices"}
           </span>
         </div>
-        <button
-          onClick={() => setOpenLoginPopup(true)}
-          className="text-sm px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 transition"
-        >
-          {loginLabel[tokenActiveness]}
-        </button>
+        {authDisabled ? (
+          <span className="text-sm px-3 py-1 rounded-full bg-white/15 opacity-80">
+            {loginLabel[tokenActiveness]}
+          </span>
+        ) : (
+          <button
+            onClick={() => setOpenLoginPopup(true)}
+            className="text-sm px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 transition"
+          >
+            {loginLabel[tokenActiveness]}
+          </button>
+        )}
       </header>
 
       <LoginModal open={openLoginPopup} setOpen={setOpenLoginPopup} token={token} setToken={setToken} />
       <div className="flex flex-1 min-h-0">
         <aside className="shrink-0 w-56 bg-white/70 backdrop-blur-md border-r border-gray-200 shadow-sm flex flex-col p-4 space-y-3 overflow-y-auto">
-          {["Home", "Reservations", "DotBots Info"].map((label, i) => (
+          {navItems.map(({ label, page: targetPage, disabled }) => (
             <button
               key={label}
-              onClick={() => setPage(i + 1)}
-              className={`text-left px-4 py-2 rounded-xl font-medium transition-all ${page === i + 1
-                ? "bg-[#1E91C7] text-white shadow"
-                : "text-gray-700 hover:bg-[#1E91C7]/10"
+              onClick={() => setPage(targetPage)}
+              disabled={disabled}
+              title={disabled ? "Disabled in local mode" : undefined}
+              className={`text-left px-4 py-2 rounded-xl font-medium transition-all ${disabled
+                ? "text-gray-400 cursor-not-allowed"
+                : page === targetPage
+                  ? "bg-[#1E91C7] text-white shadow"
+                  : "text-gray-700 hover:bg-[#1E91C7]/10"
                 }`}
             >
               {label}
@@ -228,7 +264,7 @@ export default function MainDashboard() {
           )}
 
           {page === 3 && (
-            < OnlineDotBotPage dotbots={dotbots} token={token} />
+            < OnlineDotBotPage dotbots={dotbots} token={token} tokenActiveness={tokenActiveness} />
           )}
         </main>
       </div>

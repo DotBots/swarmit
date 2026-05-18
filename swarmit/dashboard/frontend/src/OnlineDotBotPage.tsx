@@ -1,5 +1,13 @@
 import { Dispatch, SetStateAction, useState } from "react";
-import { API_URL, checkTokenActiveness, DotBotData, StatusType, Token } from "./App";
+import {
+  API_URL,
+  authHeaders,
+  DotBotData,
+  isAuthorized,
+  StatusType,
+  Token,
+  tokenActivenessType,
+} from "./App";
 
 // Pill-style status badges so the table reads at a glance. Colors mirror
 // the status colors used by the SVG dots on the map (BotMap.tsx).
@@ -42,10 +50,11 @@ function BatteryCell({ voltage }: { voltage: number }) {
 
 interface CalendarPageProps {
   dotbots: Record<string, DotBotData>;
-  token: Token | null
+  token: Token | null;
+  tokenActiveness: tokenActivenessType;
 }
 
-export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) {
+export default function OnlineDotBotPage({ dotbots, token, tokenActiveness }: CalendarPageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -65,17 +74,17 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
     else setSelected(Object.keys(dotbots));
   };
 
-  const isActive = token && checkTokenActiveness(token.payload) === "Active";
+  const isActive = isAuthorized(tokenActiveness);
 
   const handleStart = () => {
-    if (!token) {
+    if (!isActive) {
       return;
     }
     setLoading(true);
     fetch(`${API_URL}/start`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token.token}`,
+        ...authHeaders(token, tokenActiveness),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ devices: selected }),
@@ -86,7 +95,7 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
   };
 
   const handleStop = () => {
-    if (!token) {
+    if (!isActive) {
       return;
     }
     setLoading(true);
@@ -94,7 +103,7 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
     fetch(`${API_URL}/stop`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token.token}`,
+        ...authHeaders(token, tokenActiveness),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ devices: selected }),
@@ -105,7 +114,7 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
   };
 
   const handleFlash = () => {
-    if (!token) {
+    if (!isActive) {
       return;
     };
     if (!file) {
@@ -122,7 +131,7 @@ export default function OnlineDotBotPage({ dotbots, token }: CalendarPageProps) 
       fetch(`${API_URL}/flash`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token.token}`,
+          ...authHeaders(token, tokenActiveness),
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ firmware_b64: base64, devices: selected }),

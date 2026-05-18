@@ -193,19 +193,6 @@ def main(
         **{k: v for k, v in cli_args.items() if v not in (None, False)},
     }
 
-    auth_mode = "none" if local else "jwt"
-    default_bind = "127.0.0.1" if local else "0.0.0.0"
-    bind = final_config.get("bind_host") or default_bind
-
-    if auth_mode == "none" and bind not in SAFE_BIND_HOSTS:
-        click.echo(
-            f"refusing to start: --bind-host={bind!r} with --local would "
-            f"expose unauthenticated control endpoints. "
-            f"Allowed with --local: {sorted(SAFE_BIND_HOSTS)}.",
-            err=True,
-        )
-        raise click.Abort()
-
     settings = ControllerSettings(
         serial_port=final_config["serial_port"],
         serial_baudrate=final_config["baudrate"],
@@ -220,10 +207,41 @@ def main(
         verbose=final_config["verbose"],
     )
 
+    run_server(
+        settings,
+        local=local,
+        bind_host=final_config.get("bind_host"),
+        http_port=final_config["http_port"],
+        open_browser=open_browser,
+    )
+
+
+def run_server(
+    settings: ControllerSettings,
+    *,
+    local: bool,
+    bind_host: str | None,
+    http_port: int,
+    open_browser: bool,
+) -> None:
+    """Start the swarmit FastAPI backend with the given settings."""
+    auth_mode = "none" if local else "jwt"
+    default_bind = "127.0.0.1" if local else "0.0.0.0"
+    bind = bind_host or default_bind
+
+    if auth_mode == "none" and bind not in SAFE_BIND_HOSTS:
+        click.echo(
+            f"refusing to start: --bind-host={bind!r} with --local would "
+            f"expose unauthenticated control endpoints. "
+            f"Allowed with --local: {sorted(SAFE_BIND_HOSTS)}.",
+            err=True,
+        )
+        raise click.Abort()
+
     init_api(api, settings, auth_mode=auth_mode)
     mount_frontend(api)
 
-    asyncio.run(_serve(bind, final_config["http_port"], open_browser))
+    asyncio.run(_serve(bind, http_port, open_browser))
 
 
 async def _serve(bind: str, http_port: int, open_browser: bool):
