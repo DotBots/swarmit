@@ -30,3 +30,6 @@ dist/
 # coverage
 coverage.xml
 .coverage
+
+.DS_Store
+*.swp
