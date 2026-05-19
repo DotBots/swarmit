@@ -51,25 +51,15 @@ add_link_options(
     -nostartfiles
 )
 
-# ── Nordic MDK + ARM CMSIS-Core via FetchContent ─────────────────────
-include(FetchContent)
-
-FetchContent_Declare(nrfx
-    GIT_REPOSITORY https://github.com/NordicSemiconductor/nrfx.git
-    GIT_TAG        v3.5.0
-    GIT_SHALLOW    TRUE
-)
-FetchContent_Declare(cmsis_core
-    GIT_REPOSITORY https://github.com/ARM-software/CMSIS_5.git
-    GIT_TAG        5.9.0
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(nrfx cmsis_core)
-
-set(NRFX_MDK_INCLUDE   ${nrfx_SOURCE_DIR}/mdk                       CACHE INTERNAL "Nordic MDK headers")
-set(CMSIS_CORE_INCLUDE ${cmsis_core_SOURCE_DIR}/CMSIS/Core/Include  CACHE INTERNAL "ARM CMSIS-Core headers")
-
-# ── dotbot-libs ──────────────────────────────────────────────────────
+# ── dotbot-libs (owns Nordic + CMSIS FetchContent) ───────────────────
+# dotbot-libs's CMakeLists owns the nrfx + CMSIS_5 FetchContent and
+# exposes two INTERFACE targets:
+#   * `dotbot_libs`   — BSP + drivers + pure-C startup (cpu.c)
+#   * `dotbot_nordic` — only the Nordic + ARM headers
+#
+# The bootloader and netcore here ship their OWN System/startup.c, so
+# they link `dotbot_nordic` (headers only) instead of `dotbot_libs`
+# (which would double-define Reset_Handler / vector tables).
 set(DOTBOT_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/dotbot-libs"
     CACHE PATH "Path to dotbot-libs. Defaults to the bundled submodule.")
 

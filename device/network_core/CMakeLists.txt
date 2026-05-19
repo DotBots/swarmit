@@ -35,8 +35,7 @@ target_compile_options(netcore PRIVATE ${NET_CPU_FLAGS})
 target_include_directories(netcore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source
     ${CMAKE_CURRENT_SOURCE_DIR}/System
-    ${NRFX_MDK_INCLUDE}
-    ${CMSIS_CORE_INCLUDE}
+    # Nordic MDK + ARM CMSIS-Core come via dotbot_nordic (linked below).
     ${DOTBOT_LIBS}/bsp
     ${DOTBOT_LIBS}/bsp/conf
     ${DOTBOT_LIBS}/drv
@@ -54,6 +53,7 @@ target_compile_definitions(netcore PRIVATE
 )
 
 target_link_libraries(netcore PRIVATE
+    dotbot_nordic   # headers-only INTERFACE: nrf.h + core_cm33.h
     mari_libs
 )
 

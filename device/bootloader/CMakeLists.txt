@@ -69,8 +69,7 @@ target_compile_options(bootloader PRIVATE ${BL_CPU_FLAGS} -Os)
 target_include_directories(bootloader PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Source
     ${CMAKE_CURRENT_SOURCE_DIR}/System
-    ${NRFX_MDK_INCLUDE}
-    ${CMSIS_CORE_INCLUDE}
+    # Nordic MDK + ARM CMSIS-Core come via dotbot_nordic (linked below).
     ${DOTBOT_LIBS}/bsp
     ${DOTBOT_LIBS}/bsp/conf
     ${DOTBOT_LIBS}/drv
@@ -90,6 +89,7 @@ target_compile_definitions(bootloader PRIVATE
 )
 
 target_link_libraries(bootloader PRIVATE
+    dotbot_nordic   # headers-only INTERFACE: nrf.h + core_cm33.h
     m
 )
 
