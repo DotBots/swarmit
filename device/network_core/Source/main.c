@@ -306,7 +306,13 @@ int main(void) {
             _app_vars.notification_buffer[length++] = ipc_shared_data.status;
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.battery_level, sizeof(uint16_t));
             length += sizeof(uint16_t);
+            // Held because the secure side writes x and y under this mutex.
+            // Without it the two halves can come from different solves, and
+            // since solves are no longer displacement-bounded the result can be
+            // a position neither solve produced.
+            mutex_lock();
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.current_position, sizeof(position_2d_t));
+            mutex_unlock();
             length += sizeof(position_2d_t);
             // The crash report is inventory by the same rule that puts image
             // and firmware versions in DEVICE_INFO instead: it is latched once
