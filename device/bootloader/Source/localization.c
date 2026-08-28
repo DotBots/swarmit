@@ -59,16 +59,29 @@ bool localization_process_data(void) {
 
 bool localization_get_position(position_2d_t *position) {
     if (_calibration_loaded) {
+        bool solved = false;
         db_lh2_stop();
         for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT; lh_index++) {
             if (_localization_data.lh2.data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE) {
                 db_lh2_calculate_position(_localization_data.lh2.locations[0][lh_index].lfsr_counts, _localization_data.lh2.locations[1][lh_index].lfsr_counts, lh_index, _localization_data.coordinates);
                 _localization_data.lh2.data_ready[0][lh_index] = DB_LH2_NO_NEW_DATA;
                 _localization_data.lh2.data_ready[1][lh_index] = DB_LH2_NO_NEW_DATA;
+                solved = true;
                 break;
             }
         }
         db_lh2_start();
+
+        // No basestation had both sweeps decoded, so coordinates[] still holds
+        // the previous solve. Publishing it would stamp a duplicate with a new
+        // sequence number, which is exactly what the sequence exists to rule
+        // out; on the first call it would publish the zero-initialised (0,0).
+        // A sweep can be withdrawn after it was flagged available, when a later
+        // raw sample for the same basestation fails to decode, so this is
+        // reachable rather than defensive.
+        if (!solved) {
+            return false;
+        }
 
         if (_localization_data.coordinates[0] < 0 || _localization_data.coordinates[0] > POSITION_MAX_MM || _localization_data.coordinates[1] < 0 || _localization_data.coordinates[1] > POSITION_MAX_MM) {
             printf("Invalid position (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
