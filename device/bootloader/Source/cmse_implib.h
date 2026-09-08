@@ -32,6 +32,12 @@ __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_get_battery_level(ui
 
 // Lighthouse 2 functions exposed to user image
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_get_position(position_2d_t *position);
+
+/// Read the current position together with the sequence number of the solve it
+/// came from. The sequence starts at 0 and advances by one per published solve,
+/// so an unchanged sequence means the same measurement read twice, which
+/// comparing coordinates cannot distinguish from a stationary robot.
+__attribute__((cmse_nonsecure_entry, aligned)) uint32_t swarmit_localization_get_fix(position_2d_t *position);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_handle_isr(void);
 
 // SAADC functions

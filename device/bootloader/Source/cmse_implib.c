@@ -16,7 +16,11 @@
 #include "saadc.h"
 
 static __attribute__((aligned(4))) uint8_t _tx_data_buffer[UINT8_MAX];
-static __attribute__((aligned(4))) uint32_t _localization_data_available = 0;
+static __attribute__((aligned(4))) volatile uint32_t _localization_data_available = 0;
+
+/// Counts the solves published to shared data. Wraps at 2^32, which at the
+/// fastest sweep rate the sensor produces is several years of running.
+static __attribute__((aligned(4))) uint32_t _localization_fix_sequence = 0;
 
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
 
@@ -24,12 +28,17 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
     NRF_WDT0_S->RR[0] = WDT_RR_RR_Reload << WDT_RR_RR_Pos;
     ipc_shared_data.battery_level = battery_level_read();
     if (_localization_data_available) {
+        // Cleared before the solve, not after: the SPIM4 handler can set it
+        // again while localization_get_position() runs, and clearing on the way
+        // out would drop that sweep.
+        _localization_data_available = 0;
         position_2d_t position;
         if (!localization_get_position(&position)) {
             return;
         }
         mutex_lock();
         memcpy((void *)&ipc_shared_data.current_position, &position, sizeof(position_2d_t));
+        _localization_fix_sequence++;
         mutex_unlock();
     }
 }
@@ -93,6 +102,15 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(pos
     position->x = ipc_shared_data.current_position.x;
     position->y = ipc_shared_data.current_position.y;
     mutex_unlock();
+}
+
+__attribute__((cmse_nonsecure_entry)) uint32_t swarmit_localization_get_fix(position_2d_t *position) {
+    mutex_lock();
+    position->x        = ipc_shared_data.current_position.x;
+    position->y        = ipc_shared_data.current_position.y;
+    uint32_t sequence  = _localization_fix_sequence;
+    mutex_unlock();
+    return sequence;
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_handle_isr(void) {

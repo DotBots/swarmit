@@ -264,7 +264,15 @@ async def _serve(bind: str, http_port: int, open_browser: bool):
 
 
 async def _run_uvicorn(bind: str, http_port: int):
-    config = uvicorn.Config(api, host=bind, port=http_port, log_level="info")
+    # The dashboard holds a status stream open for as long as it is on screen,
+    # so a graceful shutdown that waits for connections never returns.
+    config = uvicorn.Config(
+        api,
+        host=bind,
+        port=http_port,
+        log_level="info",
+        timeout_graceful_shutdown=0,
+    )
     server = uvicorn.Server(config)
     try:
         await server.serve()
