@@ -257,8 +257,8 @@ class Lh2CalibrationRequest(BaseModel):
     """Send LH2 calibration data to the swarm.
 
     `calibration_b64` is the base64-encoded blob in the format expected by
-    Controller.send_lh2_calibration: 1-byte count followed by N × 36-byte
-    homography matrices (3×3 int32_t each).
+    Controller.send_lh2_calibration: a 1-byte station count followed by one
+    36-byte record per station, nine little-endian float32 row-major.
     """
 
     calibration_b64: str
@@ -565,30 +565,35 @@ async def status(request: Request):
     return JSONResponse(content={"response": response})
 
 
+class BoundsModel(BaseModel):
+    """One rectangle of the active bounds, in frame millimetres."""
+
+    x: int
+    y: int
+    w: int
+    h: int
+
+
 class SettingsResponse(BaseModel):
     network_id: int
-    area_width: int
-    area_height: int
-    calibration_distance: int  # mm; the -d value used by dotbot-calibration
+    bounds: List[BoundsModel]
+    # Frame coordinates of the calibration's placement points, as [x, y]
+    # pairs: where the dashboard draws its calibration crosses. Independent
+    # of the bounds, so changing the view never moves a cross.
+    reference_points: List[List[float]]
     auth_mode: str  # "jwt" or "none"
 
 
 @api.get("/settings", response_model=SettingsResponse)
 async def settings(request: Request):
     controller: Controller = request.app.state.controller
-    map_size = controller.settings.map_size
-    width_str, height_str = map_size.lower().split('x')
-    width, height = int(width_str), int(height_str)
-    # If the operator didn't pass --calibration-distance explicitly, infer it
-    # from the arena: single-LH calibration produces a 5d × 5d arena, so
-    # d = min(w, h) / 5. For multi-LH arenas where the arena extends beyond
-    # the first LH's coverage, the operator must pass the real value.
-    cd = controller.settings.calibration_distance or (min(width, height) // 5)
     return SettingsResponse(
         network_id=controller.settings.network_id,
-        area_width=width,
-        area_height=height,
-        calibration_distance=cd,
+        bounds=[
+            BoundsModel(x=rect[0], y=rect[1], w=rect[2], h=rect[3])
+            for rect in controller.settings.bounds
+        ],
+        reference_points=controller.settings.reference_points,
         auth_mode="jwt" if AUTH_ENABLED else "none",
     )
 

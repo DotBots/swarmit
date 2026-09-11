@@ -33,7 +33,9 @@ from swarmit.testbed.controller import (
 )
 from swarmit.testbed.helpers import (
     load_toml_config,
+    read_calibration,
     read_lh2_calibration_payload,
+    reference_points,
 )
 from swarmit.testbed.logger import setup_logging
 from swarmit.testbed.protocol import StatusType
@@ -710,14 +712,18 @@ def message(ctx, message):
 def calibrate_lh2(ctx, lh2_calibration_file):
     """Send LH2 calibration data to the robots.
 
-    Accepts either the legacy raw payload (e.g. calibration.out) or a
-    calibration-*.toml written by `dotbot calibrate-lh2`; the format is
-    picked by file extension.
+    Takes a schema 2 calibration TOML; the wire payload is built from its
+    [[station]].homography tables at send time.
     """
     console = Console()
     settings = ctx.obj["settings"]
     try:
         blob = read_lh2_calibration_payload(lh2_calibration_file)
+        # The dashboard draws its crosses at the placements' points, which
+        # only an in-process controller sees from here.
+        settings.reference_points = reference_points(
+            read_calibration(lh2_calibration_file)
+        )
     except ValueError as exc:
         console.print(f"[bold red]Error:[/] {exc}")
         raise click.Abort()
@@ -725,7 +731,7 @@ def calibrate_lh2(ctx, lh2_calibration_file):
         console.print("[bold red]Error:[/] Calibration file is empty.")
         raise click.Abort()
 
-    # Format: 1-byte count + N×36B matrices. Read the count client-side so
+    # Format: 1-byte count + N x 36B matrices. Read the count client-side so
     # there is visible output in daemon mode too — over HTTP the controller's
     # own progress prints run in the server process, not this terminal.
     homography_count = blob[0]
@@ -773,24 +779,13 @@ def calibrate_lh2(ctx, lh2_calibration_file):
     help="HTTP port. Default: 8001.",
 )
 @click.option(
-    "-m",
-    "--map-size",
+    "--bounds",
+    "bounds",
     type=str,
-    default="2500x2500",
+    multiple=True,
     help=(
-        "Size of the dashboard map on the ground in mm, in the format "
-        "WIDTHxHEIGHT. Default: 2500x2500."
-    ),
-)
-@click.option(
-    "--calibration-distance",
-    type=int,
-    default=0,
-    help=(
-        "LH2 calibration distance in mm (the -d value used with "
-        "dotbot-calibration). Used to place the 4 reference points on the "
-        "map. Default: inferred from --map-size as min(width, height)/5 "
-        "(correct for single-LH arenas; pass explicitly for multi-LH)."
+        "The rectangle of the frame the dashboard draws and clips to, as "
+        "x,y,w,h in mm. Repeat for a set. Default: 0,0,2000,2000."
     ),
 )
 @click.option(
@@ -804,16 +799,14 @@ def serve(
     local,
     bind_host,
     http_port,
-    map_size,
-    calibration_distance,
+    bounds,
     open_browser,
 ):
     """Start the swarmit FastAPI backend."""
-    from swarmit.server.main import run_server
+    from swarmit.server.main import parse_bounds, run_server
 
     settings = ctx.obj["settings"]
-    settings.map_size = map_size
-    settings.calibration_distance = calibration_distance
+    settings.bounds = parse_bounds(bounds)
     run_server(
         settings,
         local=local,

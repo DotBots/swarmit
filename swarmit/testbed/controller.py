@@ -914,9 +914,15 @@ class ControllerSettings:
     network_id: int = 1
     adapter: str = "serial"  # or "mqtt", "marilib-edge", "marilib-cloud"
     devices: list[str] = dataclasses.field(default_factory=lambda: [])
-    map_size: str = "2500x2500"
-    # in mm; 0 = infer from map_size as min(w, h) / 5
-    calibration_distance: int = 0
+    # The rectangles of the frame the dashboard draws and clips to, each
+    # [x, y, w, h] in mm. A view of the frame, never a calibration.
+    bounds: list[list[int]] = dataclasses.field(
+        default_factory=lambda: [[0, 0, 2000, 2000]]
+    )
+    # The placements' points, in frame mm, that the dashboard draws crosses at.
+    reference_points: list[list[float]] = dataclasses.field(
+        default_factory=lambda: []
+    )
     # OTA_START retry budget (the block transfer does its own repair rounds).
     ota_max_retries: int = OTA_MAX_RETRIES_DEFAULT
     ota_timeout: float = OTA_ACK_TIMEOUT_DEFAULT
@@ -1490,7 +1496,7 @@ class Controller:
                 self._send_message(int(addr, 16), message)
 
     def send_lh2_calibration(self, calibration_file: bytes):
-        matrix_size = 3 * 3 * 4  # 3x3, each element is 4 bytes (int32_t)
+        matrix_size = 3 * 3 * 4  # 3x3, each element is 4 bytes
         if not calibration_file:
             raise ValueError("Calibration file is empty")
 

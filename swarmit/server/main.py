@@ -32,8 +32,31 @@ from swarmit.testbed.webserver import api, init_api, mount_frontend
 DEFAULTS_SERVER = {
     **DEFAULTS,
     "http_port": 8001,
-    "map_size": "2500x2500",
+    "bounds": ["0,0,2000,2000"],
 }
+
+
+def parse_bounds(specs):
+    """Turn `x,y,w,h` strings into the rectangles the dashboard draws.
+
+    A bounds is a view of the frame and carries no calibration, so it takes
+    four numbers and nothing is inferred from them.
+    """
+    specs = list(specs) or DEFAULTS_SERVER["bounds"]
+    rectangles = []
+    for spec in specs:
+        parts = [part.strip() for part in str(spec).split(",")]
+        if len(parts) != 4:
+            raise click.BadParameter(
+                f"bounds {spec!r}: four numbers, x,y,w,h in mm"
+            )
+        try:
+            rectangles.append([int(part) for part in parts])
+        except ValueError as exc:
+            raise click.BadParameter(
+                f"bounds {spec!r}: x,y,w,h must be whole millimetres"
+            ) from exc
+    return rectangles
 
 # Bind hosts allowed in `--local` mode (auth disabled).
 SAFE_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -124,24 +147,13 @@ SAFE_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
     help=f"HTTP port. Default: {DEFAULTS_SERVER['http_port']}.",
 )
 @click.option(
-    "-m",
-    "--map-size",
+    "--bounds",
+    "bounds",
     type=str,
-    default=DEFAULTS_SERVER["map_size"],
+    multiple=True,
     help=(
-        "Size of the dashboard map on the ground in mm, in the format "
-        "WIDTHxHEIGHT. Default: 2500x2500."
-    ),
-)
-@click.option(
-    "--calibration-distance",
-    type=int,
-    default=0,
-    help=(
-        "LH2 calibration distance in mm (the -d value used with "
-        "dotbot-calibration). Used to place the 4 reference points on the "
-        "map. Default: inferred from --map-size as min(width, height)/5 "
-        "(correct for single-LH arenas; pass explicitly for multi-LH)."
+        "The rectangle of the frame the dashboard draws and clips to, as "
+        "x,y,w,h in mm. Repeat for a set. Default: 0,0,2000,2000."
     ),
 )
 @click.option(
@@ -166,8 +178,7 @@ def main(
     local,
     bind_host,
     http_port,
-    map_size,
-    calibration_distance,
+    bounds,
     open_browser,
 ):
     """Run the swarmit FastAPI backend."""
@@ -184,8 +195,7 @@ def main(
         "verbose": verbose,
         "bind_host": bind_host,
         "http_port": http_port,
-        "map_size": map_size,
-        "calibration_distance": calibration_distance,
+        "bounds": list(bounds) or None,
     }
     final_config = {
         **DEFAULTS_SERVER,
@@ -202,8 +212,7 @@ def main(
         network_id=int(final_config["swarmit_network_id"], 16),
         adapter=final_config["adapter"],
         devices=[d for d in final_config["devices"].split(",") if d],
-        map_size=final_config["map_size"],
-        calibration_distance=final_config.get("calibration_distance", 0) or 0,
+        bounds=parse_bounds(final_config["bounds"]),
         verbose=final_config["verbose"],
     )
 

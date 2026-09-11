@@ -86,9 +86,8 @@ def test_settings_endpoint(client):
     assert res.status_code == 200
     assert res.json() == {
         "network_id": 999,
-        "area_height": 2500,
-        "area_width": 2500,
-        "calibration_distance": 500,
+        "bounds": [{"x": 0, "y": 0, "w": 2000, "h": 2000}],
+        "reference_points": [],
         "auth_mode": "jwt",
     }
 

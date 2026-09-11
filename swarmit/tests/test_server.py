@@ -13,8 +13,9 @@ def test_server_help():
     assert "--local" in result.output
     assert "--bind-host" in result.output
     assert "--http-port" in result.output
-    assert "--map-size" in result.output
-    assert "--calibration-distance" in result.output
+    assert "--bounds" in result.output
+    assert "--map-size" not in result.output
+    assert "--calibration-distance" not in result.output
 
 
 def test_server_local_refuses_non_localhost_bind():
