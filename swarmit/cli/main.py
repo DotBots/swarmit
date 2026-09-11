@@ -779,13 +779,13 @@ def calibrate_lh2(ctx, lh2_calibration_file):
     help="HTTP port. Default: 8001.",
 )
 @click.option(
-    "--bounds",
-    "bounds",
+    "--area",
+    "area",
     type=str,
     multiple=True,
     help=(
-        "The rectangle of the frame the dashboard draws and clips to, as "
-        "x,y,w,h in mm. Repeat for a set. Default: 0,0,2000,2000."
+        "The area of the site the dashboard draws and clips to, as x,y,w,h "
+        "in mm. Repeat for a set. Default: 0,0,2000,2000."
     ),
 )
 @click.option(
@@ -799,14 +799,14 @@ def serve(
     local,
     bind_host,
     http_port,
-    bounds,
+    area,
     open_browser,
 ):
     """Start the swarmit FastAPI backend."""
-    from swarmit.server.main import parse_bounds, run_server
+    from swarmit.server.main import parse_areas, run_server
 
     settings = ctx.obj["settings"]
-    settings.bounds = parse_bounds(bounds)
+    settings.areas = parse_areas(area)
     run_server(
         settings,
         local=local,

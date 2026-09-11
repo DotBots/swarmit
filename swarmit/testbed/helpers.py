@@ -56,7 +56,7 @@ def reference_points(data):
     """Every placement point of a calibration, in frame millimetres.
 
     The dashboard draws its calibration crosses at these, so they travel
-    beside the bounds and never derived from them.
+    beside the areas and never derived from them.
     """
     points = []
     for placement in data.get("placement", []):

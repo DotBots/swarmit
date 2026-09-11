@@ -1,23 +1,23 @@
 import React, { useEffect, useState } from "react";
-import { Bounds, DotBotData, StatusType } from "./App";
+import { Area, DotBotData, StatusType } from "./App";
 
 interface DotBotsMapPointProps {
   dotbot: DotBotData;
   address: string;
   mapSize: number;
-  bounds: Bounds;
+  area: Area;
 }
 
 function DotBotsMapPoint({
   dotbot,
   address,
   mapSize,
-  bounds,
+  area,
 }: DotBotsMapPointProps) {
-  // Positions arrive in frame coordinates, so the bounds origin comes off
+  // Positions arrive in frame coordinates, so the area origin comes off
   // before scaling into the drawn box.
-  const posX = (mapSize * (dotbot.pos_x - bounds.x)) / bounds.w;
-  const posY = (mapSize * (dotbot.pos_y - bounds.y)) / bounds.w;
+  const posX = (mapSize * (dotbot.pos_x - area.x)) / area.w;
+  const posY = (mapSize * (dotbot.pos_y - area.y)) / area.w;
 
   const getStatusColor = (status: StatusType) => {
     switch (status) {
@@ -63,14 +63,14 @@ Position: ${posX}x${posY}`}</title>
 
 interface DotBotsMapProps {
   dotbots: Record<string, DotBotData>;
-  bounds: Bounds;
+  area: Area;
   // Frame coordinates of the calibration's placement points, as [x, y]
   // pairs. Empty means no calibration has been sent through this controller,
   // so there is nothing to mark.
   referencePoints: number[][];
 }
 
-export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, bounds, referencePoints }: DotBotsMapProps) => {
+export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, area, referencePoints }: DotBotsMapProps) => {
   // Auto-scale the SVG so a tall arena (e.g. 1000x1800 from two stacked
   // LHs) still fits between the header and the controls card. Recompute on
   // window resize so the map stays sized after the user adjusts the window.
@@ -83,7 +83,7 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, bounds, referen
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const aspect = bounds.h / bounds.w;
+  const aspect = area.h / area.w;
   const maxW = 700;
   // Reserve room for the header (~64), main padding (64), and the controls
   // card below the map (~360). Floor keeps the map usable on short windows.
@@ -97,8 +97,8 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, bounds, referen
   // light gray, major every 500 mm in mid gray, so each major square has
   // 5x5 minor cells. The major pattern fills its background with the minor
   // pattern, so a single fill on the canvas-rect draws both layers.
-  const pxMinor = (100 * mapSize) / bounds.w;
-  const pxMajor = (500 * mapSize) / bounds.w;
+  const pxMinor = (100 * mapSize) / area.w;
+  const pxMajor = (500 * mapSize) / area.w;
 
   return (
     <div className="flex justify-center">
@@ -152,8 +152,8 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, bounds, referen
                 accuracy, so the marks come from the calibration and never
                 from the drawn rectangle. */}
             {referencePoints.map(([px, py]) => {
-                const x = ((px - bounds.x) * mapSize) / bounds.w;
-                const y = ((py - bounds.y) * mapSize) / bounds.w;
+                const x = ((px - area.x) * mapSize) / area.w;
+                const y = ((py - area.y) * mapSize) / area.w;
                 return (
                   <g key={`${px}-${py}`} pointerEvents="none">
                     <line x1={x - 5} y1={y} x2={x + 5} y2={y} stroke="#6b7280" strokeWidth={1.5} />
@@ -164,7 +164,7 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, bounds, referen
 
             {Object.entries(dotbots)
               .map(([address, dotbot]) => (
-                <DotBotsMapPoint key={address} dotbot={dotbot} address={address} mapSize={mapSize} bounds={bounds} />
+                <DotBotsMapPoint key={address} dotbot={dotbot} address={address} mapSize={mapSize} area={area} />
               ))}
           </svg>
         </div>

@@ -110,9 +110,9 @@ export function usePersistedToken() {
   return { token, setToken };
 }
 
-// One rectangle of the active bounds, in frame millimetres. A bounds is a
+// One rectangle of the active area set, in frame millimetres. An area is a
 // view of the frame and carries no calibration.
-export interface Bounds {
+export interface Area {
   x: number;
   y: number;
   w: number;
@@ -121,16 +121,16 @@ export interface Bounds {
 
 export interface SettingsResponse {
   network_id: number;
-  bounds: Bounds[];
+  areas: Area[];
   reference_points: number[][];
   auth_mode: string;
 }
 
 
-const DEFAULT_BOUNDS: Bounds = {x: 0, y: 0, w: 2000, h: 2000};
+const DEFAULT_AREA: Area = {x: 0, y: 0, w: 2000, h: 2000};
 
-function unionBounds(list: Bounds[]): Bounds {
-  if (list.length === 0) return DEFAULT_BOUNDS;
+function unionAreas(list: Area[]): Area {
+  if (list.length === 0) return DEFAULT_AREA;
   const x = Math.min(...list.map((b) => b.x));
   const y = Math.min(...list.map((b) => b.y));
   const xMax = Math.max(...list.map((b) => b.x + b.w));
@@ -146,7 +146,7 @@ export default function MainDashboard() {
   const { token, setToken } = usePersistedToken();
   const [tokenActiveness, setTokenActiveness] = useState<tokenActivenessType>("NoToken");
   const [settings, setSettings] = useState<SettingsType | null>(null);
-  const [bounds, setBounds] = useState<Bounds>({x: 0, y: 0, w: 2000, h: 2000});
+  const [area, setArea] = useState<Area>({x: 0, y: 0, w: 2000, h: 2000});
   const [referencePoints, setReferencePoints] = useState<number[][]>([]);
 
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function MainDashboard() {
         setSettings(settings);
         // The dashboard draws one box, so an active set is drawn over its
         // bounding box.
-        setBounds(unionBounds(json.bounds ?? []));
+        setArea(unionAreas(json.areas ?? []));
         setReferencePoints(json.reference_points ?? []);
         if (json.auth_mode === "none") {
           setTokenActiveness("AuthDisabled");
@@ -305,7 +305,7 @@ export default function MainDashboard() {
 
         <main className="flex-1 p-8 overflow-y-auto">
           {page === 1 && (
-            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} bounds={bounds} referencePoints={referencePoints} />
+            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} area={area} referencePoints={referencePoints} />
           )}
 
           {page === 2 && (

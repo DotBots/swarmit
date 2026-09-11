@@ -26,10 +26,9 @@ created_at = "2026-09-10T09:12:00Z"
 id = "3f9a1c07e2b845d6"
 robot = "dotbot-v3"
 
-[frame]
+[site]
 name = "inria-aio-c"
-false_origin_mm = [0, 0]
-false_origin_at = "arena top-left corner, against the door wall of C405"
+anchor = "the arena's top-left corner, against the door wall of C405"
 
 [validity]
 valid_mm = [0, 0, 4000, 4500]
@@ -100,7 +99,7 @@ def test_schema_1_file_is_refused(tmp_path):
 
 
 def test_reference_points_are_the_placements_points(tmp_path):
-    """The dashboard's crosses come from the placements, not from the bounds."""
+    """The dashboard's crosses come from the placements, not from the areas."""
     data = read_calibration(_write(tmp_path, CALIBRATION_TOML))
     assert reference_points(data) == [
         [50.0, 20.0],
@@ -110,10 +109,10 @@ def test_reference_points_are_the_placements_points(tmp_path):
     ]
 
 
-def test_changing_the_bounds_leaves_the_calibration_payload_identical(tmp_path):
-    """Bounds are a view: a settings change never touches what a bot receives."""
+def test_changing_the_areas_leaves_the_calibration_payload_identical(tmp_path):
+    """An area is a view: a settings change never touches what a bot receives."""
     from swarmit.testbed.controller import ControllerSettings
-    from swarmit.testbed.webserver import BoundsModel, SettingsResponse
+    from swarmit.testbed.webserver import AreaModel, SettingsResponse
 
     path = _write(tmp_path, CALIBRATION_TOML)
     before = read_lh2_calibration_payload(path)
@@ -121,18 +120,18 @@ def test_changing_the_bounds_leaves_the_calibration_payload_identical(tmp_path):
     settings = ControllerSettings(network_id=1)
     narrow = SettingsResponse(
         network_id=settings.network_id,
-        bounds=[BoundsModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.bounds],
+        areas=[AreaModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.areas],
         reference_points=reference_points(read_calibration(path)),
         auth_mode="none",
     )
-    settings.bounds = [[0, 2000, 2000, 2000], [2000, 2610, 1330, 1390]]
+    settings.areas = [[0, 2000, 2000, 2000], [2000, 2610, 1330, 1390]]
     wide = SettingsResponse(
         network_id=settings.network_id,
-        bounds=[BoundsModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.bounds],
+        areas=[AreaModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.areas],
         reference_points=reference_points(read_calibration(path)),
         auth_mode="none",
     )
 
-    assert narrow.bounds != wide.bounds
+    assert narrow.areas != wide.areas
     assert narrow.reference_points == wide.reference_points
     assert read_lh2_calibration_payload(path) == before

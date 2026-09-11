@@ -32,29 +32,29 @@ from swarmit.testbed.webserver import api, init_api, mount_frontend
 DEFAULTS_SERVER = {
     **DEFAULTS,
     "http_port": 8001,
-    "bounds": ["0,0,2000,2000"],
+    "areas": ["0,0,2000,2000"],
 }
 
 
-def parse_bounds(specs):
+def parse_areas(specs):
     """Turn `x,y,w,h` strings into the rectangles the dashboard draws.
 
-    A bounds is a view of the frame and carries no calibration, so it takes
+    An area is a view of the frame and carries no calibration, so it takes
     four numbers and nothing is inferred from them.
     """
-    specs = list(specs) or DEFAULTS_SERVER["bounds"]
+    specs = list(specs) or DEFAULTS_SERVER["areas"]
     rectangles = []
     for spec in specs:
         parts = [part.strip() for part in str(spec).split(",")]
         if len(parts) != 4:
             raise click.BadParameter(
-                f"bounds {spec!r}: four numbers, x,y,w,h in mm"
+                f"area {spec!r}: four numbers, x,y,w,h in mm"
             )
         try:
             rectangles.append([int(part) for part in parts])
         except ValueError as exc:
             raise click.BadParameter(
-                f"bounds {spec!r}: x,y,w,h must be whole millimetres"
+                f"area {spec!r}: x,y,w,h must be whole millimetres"
             ) from exc
     return rectangles
 
@@ -147,13 +147,13 @@ SAFE_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
     help=f"HTTP port. Default: {DEFAULTS_SERVER['http_port']}.",
 )
 @click.option(
-    "--bounds",
-    "bounds",
+    "--area",
+    "area",
     type=str,
     multiple=True,
     help=(
-        "The rectangle of the frame the dashboard draws and clips to, as "
-        "x,y,w,h in mm. Repeat for a set. Default: 0,0,2000,2000."
+        "The area of the site the dashboard draws and clips to, as x,y,w,h "
+        "in mm. Repeat for a set. Default: 0,0,2000,2000."
     ),
 )
 @click.option(
@@ -178,7 +178,7 @@ def main(
     local,
     bind_host,
     http_port,
-    bounds,
+    area,
     open_browser,
 ):
     """Run the swarmit FastAPI backend."""
@@ -195,7 +195,7 @@ def main(
         "verbose": verbose,
         "bind_host": bind_host,
         "http_port": http_port,
-        "bounds": list(bounds) or None,
+        "areas": list(area) or None,
     }
     final_config = {
         **DEFAULTS_SERVER,
@@ -212,7 +212,7 @@ def main(
         network_id=int(final_config["swarmit_network_id"], 16),
         adapter=final_config["adapter"],
         devices=[d for d in final_config["devices"].split(",") if d],
-        bounds=parse_bounds(final_config["bounds"]),
+        areas=parse_areas(final_config["areas"]),
         verbose=final_config["verbose"],
     )
 

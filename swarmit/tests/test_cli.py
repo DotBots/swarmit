@@ -401,11 +401,11 @@ def test_serve_help():
         "--local",
         "--bind-host",
         "--http-port",
-        "--bounds",
+        "--area",
         "--open-browser",
     ):
         assert expected in result.output, expected
-    for gone in ("--map-size", "--calibration-distance"):
+    for gone in ("--map-size", "--calibration-distance", "--bounds"):
         assert gone not in result.output, gone
 
 

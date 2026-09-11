@@ -565,8 +565,8 @@ async def status(request: Request):
     return JSONResponse(content={"response": response})
 
 
-class BoundsModel(BaseModel):
-    """One rectangle of the active bounds, in frame millimetres."""
+class AreaModel(BaseModel):
+    """One rectangle of the active area set, in frame millimetres."""
 
     x: int
     y: int
@@ -576,10 +576,10 @@ class BoundsModel(BaseModel):
 
 class SettingsResponse(BaseModel):
     network_id: int
-    bounds: List[BoundsModel]
+    areas: List[AreaModel]
     # Frame coordinates of the calibration's placement points, as [x, y]
     # pairs: where the dashboard draws its calibration crosses. Independent
-    # of the bounds, so changing the view never moves a cross.
+    # of the areas, so changing the view never moves a cross.
     reference_points: List[List[float]]
     auth_mode: str  # "jwt" or "none"
 
@@ -589,9 +589,9 @@ async def settings(request: Request):
     controller: Controller = request.app.state.controller
     return SettingsResponse(
         network_id=controller.settings.network_id,
-        bounds=[
-            BoundsModel(x=rect[0], y=rect[1], w=rect[2], h=rect[3])
-            for rect in controller.settings.bounds
+        areas=[
+            AreaModel(x=rect[0], y=rect[1], w=rect[2], h=rect[3])
+            for rect in controller.settings.areas
         ],
         reference_points=controller.settings.reference_points,
         auth_mode="jwt" if AUTH_ENABLED else "none",

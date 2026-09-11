@@ -914,9 +914,9 @@ class ControllerSettings:
     network_id: int = 1
     adapter: str = "serial"  # or "mqtt", "marilib-edge", "marilib-cloud"
     devices: list[str] = dataclasses.field(default_factory=lambda: [])
-    # The rectangles of the frame the dashboard draws and clips to, each
+    # The areas of the site the dashboard draws and clips to, each
     # [x, y, w, h] in mm. A view of the frame, never a calibration.
-    bounds: list[list[int]] = dataclasses.field(
+    areas: list[list[int]] = dataclasses.field(
         default_factory=lambda: [[0, 0, 2000, 2000]]
     )
     # The placements' points, in frame mm, that the dashboard draws crosses at.
