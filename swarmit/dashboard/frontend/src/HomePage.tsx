@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   tokenActivenessType,
   Token,
+  Bounds,
   DotBotData,
   API_URL,
   isAuthorized,
@@ -13,15 +14,12 @@ interface HomePageProps {
   token: Token | null;
   tokenActiveness: tokenActivenessType;
   dotbots: Record<string, DotBotData>;
-  areaSize: {
-    width: number;
-    height: number;
-  };
-  calibrationDistance: number;
+  bounds: Bounds;
+  referencePoints: number[][];
 }
 
 
-export default function HomePage({ token, tokenActiveness, dotbots, areaSize, calibrationDistance }: HomePageProps) {
+export default function HomePage({ token, tokenActiveness, dotbots, bounds, referencePoints }: HomePageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -153,7 +151,7 @@ export default function HomePage({ token, tokenActiveness, dotbots, areaSize, ca
 
   return (
     <div>
-      <DotBotsMap dotbots={dotbots} areaSize={areaSize} calibrationDistance={calibrationDistance} />
+      <DotBotsMap dotbots={dotbots} bounds={bounds} referencePoints={referencePoints} />
       <div className="max-w-xl mx-auto p-6 space-y-6 bg-white rounded-2xl shadow mt-6 animate-fadeIn">
         {token?.payload && <div className="border p-4 rounded-lg bg-gray-50">
           <h3 className="font-semibold mb-2">Token Info</h3>
