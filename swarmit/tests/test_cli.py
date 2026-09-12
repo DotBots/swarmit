@@ -401,11 +401,12 @@ def test_serve_help():
         "--local",
         "--bind-host",
         "--http-port",
-        "--map-size",
-        "--calibration-distance",
+        "--area",
         "--open-browser",
     ):
         assert expected in result.output, expected
+    for gone in ("--map-size", "--calibration-distance", "--bounds"):
+        assert gone not in result.output, gone
 
 
 def test_serve_local_refuses_non_localhost_bind():

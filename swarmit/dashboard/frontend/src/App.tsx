@@ -68,7 +68,6 @@ export const imageLabel = (bot: DotBotData): string =>
 
 type SettingsType = {
   network_id: string;
-  calibration_distance: number;
   auth_mode: string;
 };
 
@@ -111,12 +110,32 @@ export function usePersistedToken() {
   return { token, setToken };
 }
 
+// One rectangle of the active area set, in frame millimetres. An area is a
+// view of the frame and carries no calibration.
+export interface Area {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface SettingsResponse {
   network_id: number;
-  area_width: number;
-  area_height: number;
-  calibration_distance: number;
+  areas: Area[];
+  reference_points: number[][];
   auth_mode: string;
+}
+
+
+const DEFAULT_AREA: Area = {x: 0, y: 0, w: 2000, h: 2000};
+
+function unionAreas(list: Area[]): Area {
+  if (list.length === 0) return DEFAULT_AREA;
+  const x = Math.min(...list.map((b) => b.x));
+  const y = Math.min(...list.map((b) => b.y));
+  const xMax = Math.max(...list.map((b) => b.x + b.w));
+  const yMax = Math.max(...list.map((b) => b.y + b.h));
+  return {x, y, w: xMax - x, h: yMax - y};
 }
 
 
@@ -127,7 +146,8 @@ export default function MainDashboard() {
   const { token, setToken } = usePersistedToken();
   const [tokenActiveness, setTokenActiveness] = useState<tokenActivenessType>("NoToken");
   const [settings, setSettings] = useState<SettingsType | null>(null);
-  const [areaSize, setAreaSize] = useState<{width: number; height: number}>({width: 2500, height: 2500});
+  const [area, setArea] = useState<Area>({x: 0, y: 0, w: 2000, h: 2000});
+  const [referencePoints, setReferencePoints] = useState<number[][]>([]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -138,11 +158,13 @@ export default function MainDashboard() {
         const json = await res.json();
         const settings: SettingsType = {
           network_id: json.network_id.toString(16),
-          calibration_distance: json.calibration_distance,
           auth_mode: json.auth_mode,
         };
         setSettings(settings);
-        setAreaSize({width: json.area_width, height: json.area_height});
+        // The dashboard draws one box, so an active set is drawn over its
+        // bounding box.
+        setArea(unionAreas(json.areas ?? []));
+        setReferencePoints(json.reference_points ?? []);
         if (json.auth_mode === "none") {
           setTokenActiveness("AuthDisabled");
         }
@@ -283,7 +305,7 @@ export default function MainDashboard() {
 
         <main className="flex-1 p-8 overflow-y-auto">
           {page === 1 && (
-            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} areaSize={areaSize} calibrationDistance={settings?.calibration_distance ?? 0} />
+            < HomePage token={token} tokenActiveness={tokenActiveness} dotbots={dotbots} area={area} referencePoints={referencePoints} />
           )}
 
           {page === 2 && (
