@@ -1,8 +1,8 @@
-import struct
-
 import pytest
 
 from swarmit.testbed.helpers import (
+    MATRIX_BYTES,
+    homography_as_bytes,
     load_toml_config,
     read_calibration,
     read_lh2_calibration_payload,
@@ -50,17 +50,14 @@ residual_mm = 0.0
 homography = [[1523.4, -38.2, 1012.7], [41.9, 1531.8, 988.3], [0.2134, -0.0871, 1.0]]
 """
 
-EXPECTED_MATRIX = [
-    1523.4,
-    -38.2,
-    1012.7,
-    41.9,
-    1531.8,
-    988.3,
-    0.2134,
-    -0.0871,
-    1.0,
-]
+# The fixture's homography through the int32 x 1e3 shim: 1523400, -38200,
+# 1012700, 41900, 1531800, 988300, 213, -87, 1000 as little-endian int32.
+# PyDotBot pins the same bytes for the same matrix.
+EXPECTED_MATRIX_BYTES = bytes.fromhex(
+    "c83e1700c86affffdc730f00"
+    "aca30000985f17008c140f00"
+    "d5000000a9ffffffe8030000"
+)
 
 
 def _write(tmp_path, text, name="calibration.toml"):
@@ -84,12 +81,21 @@ def test_load_toml_config_empty():
     assert cfg == {}
 
 
-def test_schema_2_matrices_pack_to_the_expected_float32_payload(tmp_path):
-    """Byte-for-byte against the float32 encoding PyDotBot's packer pins."""
+def test_schema_2_matrices_pack_to_the_expected_int32_payload(tmp_path):
+    """Byte-for-byte against the int32 x 1e3 encoding PyDotBot's packer pins."""
     payload = read_lh2_calibration_payload(_write(tmp_path, CALIBRATION_TOML))
 
-    assert payload == bytes([1]) + struct.pack("<9f", *EXPECTED_MATRIX)
-    assert len(payload) == 1 + 36
+    assert payload == bytes([1]) + EXPECTED_MATRIX_BYTES
+    assert len(payload) == 1 + MATRIX_BYTES
+
+
+def test_the_shim_truncates_towards_zero_and_zeroes_on_overflow():
+    """Quantisation is int32 x 1e3 truncated, and a value too large zeroes the record."""
+    packed = homography_as_bytes([1.0009, -1.0009] + [0.0] * 7)
+
+    assert packed[0:4] == (1000).to_bytes(4, "little", signed=True)
+    assert packed[4:8] == (-1000).to_bytes(4, "little", signed=True)
+    assert homography_as_bytes([1e9] + [0.0] * 8) == bytes(MATRIX_BYTES)
 
 
 def test_schema_1_file_is_refused(tmp_path):

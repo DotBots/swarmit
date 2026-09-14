@@ -258,7 +258,8 @@ class Lh2CalibrationRequest(BaseModel):
 
     `calibration_b64` is the base64-encoded blob in the format expected by
     Controller.send_lh2_calibration: a 1-byte station count followed by one
-    36-byte record per station, nine little-endian float32 row-major.
+    36-byte record per station, nine little-endian int32 row-major, each the
+    value times 1e3.
     """
 
     calibration_b64: str

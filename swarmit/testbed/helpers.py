@@ -1,4 +1,3 @@
-import struct
 import tomllib
 
 # Bump in lockstep with the writer in PyDotBot's
@@ -6,12 +5,9 @@ import tomllib
 CALIBRATION_SCHEMA_VERSION = 2
 
 LH2_BASESTATION_COUNT_MAX = 16
-# 1-byte station count, then one 36-byte record per station: nine IEEE 754
-# float32, little-endian, row-major. Mirrors PyDotBot's
-# dotbot/calibration/wire.py, and a fixture test in each repo pins the same
-# bytes for the same file.
-_MATRIX = struct.Struct("<9f")
-MATRIX_BYTES = _MATRIX.size
+# 1-byte station count, then one 36-byte record per station: nine
+# little-endian int32, row-major, each the value times 1e3.
+MATRIX_BYTES = 9 * 4
 
 
 def load_toml_config(path):
@@ -66,11 +62,35 @@ def reference_points(data):
     return points
 
 
+def homography_as_bytes(flat):
+    """THE SHIM: pack a homography as nine int32, the value times 1e3, truncated.
+
+    The only place a homography is quantised, and it exists solely so a
+    schema 2 calibration can reach firmware that still reads the int32 x 1e3
+    encoding (`protocol_lh2_homography_t` in dotbot-libs). It is deleted in
+    the float32 firmware wave; until then nothing sends float32 to a bot.
+
+    PyDotBot's `homography_as_bytes` must stay byte-for-byte identical to
+    this, down to the all-zero fallback on overflow; the fixture test in
+    each repo pins the same bytes for the same matrix.
+    """
+    matrix_bytes = bytearray()
+    try:
+        for bytes_block in [
+            int(value * 1e3).to_bytes(4, "little", signed=True)
+            for value in flat
+        ]:
+            matrix_bytes += bytes_block
+    except Exception:  # noqa: BLE001 - defensive fallback for overflow
+        matrix_bytes = bytearray(MATRIX_BYTES)
+    return bytes(matrix_bytes)
+
+
 def read_lh2_calibration_payload(path):
     """Return the LH2 calibration wire payload for `path`.
 
     Built at send time from `[[station]].homography`, station indices in
-    order.
+    order, quantised through `homography_as_bytes`.
     """
     data = read_calibration(path)
     stations = sorted(data["station"], key=lambda s: int(s["index"]))
@@ -81,5 +101,5 @@ def read_lh2_calibration_payload(path):
             raise ValueError(
                 f"{path}: station {station['index']} homography is not 3x3"
             )
-        payload += _MATRIX.pack(*flat)
+        payload += homography_as_bytes(flat)
     return bytes(payload)
