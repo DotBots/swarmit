@@ -58,6 +58,7 @@ def parse_areas(specs):
             ) from exc
     return rectangles
 
+
 # Bind hosts allowed in `--local` mode (auth disabled).
 SAFE_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 

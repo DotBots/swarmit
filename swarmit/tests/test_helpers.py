@@ -99,7 +99,9 @@ def test_the_shim_truncates_towards_zero_and_zeroes_on_overflow():
 
 
 def test_schema_1_file_is_refused(tmp_path):
-    path = _write(tmp_path, 'schema_version = 1\n[calibration]\ndata_hex = "00"\n')
+    path = _write(
+        tmp_path, 'schema_version = 1\n[calibration]\ndata_hex = "00"\n'
+    )
     with pytest.raises(ValueError, match="schema_version 1"):
         read_lh2_calibration_payload(path)
 
@@ -126,14 +128,18 @@ def test_changing_the_areas_leaves_the_calibration_payload_identical(tmp_path):
     settings = ControllerSettings(network_id=1)
     narrow = SettingsResponse(
         network_id=settings.network_id,
-        areas=[AreaModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.areas],
+        areas=[
+            AreaModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.areas
+        ],
         reference_points=reference_points(read_calibration(path)),
         auth_mode="none",
     )
     settings.areas = [[0, 2000, 2000, 2000], [2000, 2610, 1330, 1390]]
     wide = SettingsResponse(
         network_id=settings.network_id,
-        areas=[AreaModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.areas],
+        areas=[
+            AreaModel(x=r[0], y=r[1], w=r[2], h=r[3]) for r in settings.areas
+        ],
         reference_points=reference_points(read_calibration(path)),
         auth_mode="none",
     )

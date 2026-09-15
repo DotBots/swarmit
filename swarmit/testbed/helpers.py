@@ -57,7 +57,8 @@ def reference_points(data):
     points = []
     for placement in data.get("placement", []):
         points.extend(
-            [float(point[0]), float(point[1])] for point in placement["points_mm"]
+            [float(point[0]), float(point[1])]
+            for point in placement["points_mm"]
         )
     return points
 
