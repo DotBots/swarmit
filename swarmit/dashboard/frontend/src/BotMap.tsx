@@ -1,24 +1,23 @@
 import React, { useEffect, useState } from "react";
-import { DotBotData, StatusType } from "./App";
+import { Area, DotBotData, StatusType } from "./App";
 
 interface DotBotsMapPointProps {
   dotbot: DotBotData;
   address: string;
   mapSize: number;
-  areaSize: {
-    width: number;
-    height: number;
-  };
+  area: Area;
 }
 
 function DotBotsMapPoint({
   dotbot,
   address,
   mapSize,
-  areaSize,
+  area,
 }: DotBotsMapPointProps) {
-  const posX = mapSize * dotbot.pos_x / areaSize!.width;
-  const posY = mapSize * dotbot.pos_y / areaSize!.width;
+  // Positions arrive in frame coordinates, so the area origin comes off
+  // before scaling into the drawn box.
+  const posX = (mapSize * (dotbot.pos_x - area.x)) / area.w;
+  const posY = (mapSize * (dotbot.pos_y - area.y)) / area.w;
 
   const getStatusColor = (status: StatusType) => {
     switch (status) {
@@ -64,17 +63,14 @@ Position: ${posX}x${posY}`}</title>
 
 interface DotBotsMapProps {
   dotbots: Record<string, DotBotData>;
-  areaSize: {
-    width: number;
-    height: number;
-  };
-  // LH2 calibration distance in mm (the -d value passed to dotbot-calibration).
-  // Used to place the 4 reference points at (2d..3d, 2d..3d) in arena coords.
-  // 0 means "unknown" → don't render the reference points.
-  calibrationDistance: number;
+  area: Area;
+  // Frame coordinates of the calibration's placement points, as [x, y]
+  // pairs. Empty means no calibration has been sent through this controller,
+  // so there is nothing to mark.
+  referencePoints: number[][];
 }
 
-export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calibrationDistance }: DotBotsMapProps) => {
+export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, area, referencePoints }: DotBotsMapProps) => {
   // Auto-scale the SVG so a tall arena (e.g. 1000x1800 from two stacked
   // LHs) still fits between the header and the controls card. Recompute on
   // window resize so the map stays sized after the user adjusts the window.
@@ -87,7 +83,7 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calib
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const aspect = areaSize.height / areaSize.width;
+  const aspect = area.h / area.w;
   const maxW = 700;
   // Reserve room for the header (~64), main padding (64), and the controls
   // card below the map (~360). Floor keeps the map usable on short windows.
@@ -97,15 +93,12 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calib
   const gridHeight = `${mapSize * aspect + 1}px`;
   const isEmpty = Object.keys(dotbots).length === 0;
 
-  // Graph-paper grid: minor lines every d (one calibration step) in light
-  // gray, major lines every 5d (one LH2 coverage square) in mid gray. So
-  // each major square has 5x5 minor cells. The major pattern fills its
-  // background with the minor pattern, so a single fill on the canvas-rect
-  // draws both layers.
-  const minorMm = calibrationDistance > 0 ? calibrationDistance : 100;
-  const majorMm = calibrationDistance > 0 ? 5 * calibrationDistance : 500;
-  const pxMinor = (minorMm * mapSize) / areaSize.width;
-  const pxMajor = (majorMm * mapSize) / areaSize.width;
+  // Graph-paper grid in frame millimetres: minor lines every 100 mm in
+  // light gray, major every 500 mm in mid gray, so each major square has
+  // 5x5 minor cells. The major pattern fills its background with the minor
+  // pattern, so a single fill on the canvas-rect draws both layers.
+  const pxMinor = (100 * mapSize) / area.w;
+  const pxMajor = (500 * mapSize) / area.w;
 
   return (
     <div className="flex justify-center">
@@ -154,20 +147,15 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calib
               strokeWidth={1.5}
             />
 
-            {/* LH2 calibration reference points: + marks at (2d, 2d),
-                (3d, 2d), (2d, 3d), (3d, 3d) in arena (mm) coordinates.
-                These positions are fixed by REFERENCE_POINTS_DEFAULT in
-                dotbot_lh2_calibration/lighthouse2.py and are independent of
-                LH count — even in multi-LH setups every LH is calibrated
-                against the same 4 physical points within LH0's coverage. */}
-            {calibrationDistance > 0 &&
-              [
-                [2, 2], [3, 2], [2, 3], [3, 3],
-              ].map(([fx, fy]) => {
-                const x = (fx * calibrationDistance * mapSize) / areaSize.width;
-                const y = (fy * calibrationDistance * mapSize) / areaSize.width;
+            {/* One cross per calibration point, at the frame coordinates the
+                placements recorded. Where the points went is what sets the
+                accuracy, so the marks come from the calibration and never
+                from the drawn rectangle. */}
+            {referencePoints.map(([px, py]) => {
+                const x = ((px - area.x) * mapSize) / area.w;
+                const y = ((py - area.y) * mapSize) / area.w;
                 return (
-                  <g key={`${fx}-${fy}`} pointerEvents="none">
+                  <g key={`${px}-${py}`} pointerEvents="none">
                     <line x1={x - 5} y1={y} x2={x + 5} y2={y} stroke="#6b7280" strokeWidth={1.5} />
                     <line x1={x} y1={y - 5} x2={x} y2={y + 5} stroke="#6b7280" strokeWidth={1.5} />
                   </g>
@@ -176,7 +164,7 @@ export const DotBotsMap: React.FC<DotBotsMapProps> = ({ dotbots, areaSize, calib
 
             {Object.entries(dotbots)
               .map(([address, dotbot]) => (
-                <DotBotsMapPoint key={address} dotbot={dotbot} address={address} mapSize={mapSize} areaSize={areaSize} />
+                <DotBotsMapPoint key={address} dotbot={dotbot} address={address} mapSize={mapSize} area={area} />
               ))}
           </svg>
         </div>
