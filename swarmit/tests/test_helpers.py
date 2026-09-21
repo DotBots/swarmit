@@ -1,12 +1,12 @@
 import pytest
 
-from swarmit.tests.lh2_wire_fixture import FIXTURE_TOML, MESSAGE_HEX
 from swarmit.testbed.helpers import (
     load_toml_config,
     read_calibration,
     read_lh2_calibration_payload,
     reference_points,
 )
+from swarmit.tests.lh2_wire_fixture import FIXTURE_TOML, MESSAGE_HEX
 
 TEST_CONFIG_TOML = """
 adapter = "edge"
@@ -48,6 +48,7 @@ residual_mm = 0.0
 homography = [[1523.4, -38.2, 1012.7], [41.9, 1531.8, 988.3], [0.2134, -0.0871, 1.0]]
 """
 
+
 def _write(tmp_path, text, name="calibration.toml"):
     path = tmp_path / name
     path.write_text(text)
@@ -78,7 +79,9 @@ def test_the_calibration_messages_are_pinned(tmp_path):
 
 
 def test_a_gap_in_the_station_numbering_is_refused(tmp_path):
-    gapped = FIXTURE_TOML.replace("index = 1\nsolved_from", "index = 2\nsolved_from")
+    gapped = FIXTURE_TOML.replace(
+        "index = 1\nsolved_from", "index = 2\nsolved_from"
+    )
     with pytest.raises(ValueError, match="without gaps"):
         read_lh2_calibration_payload(_write(tmp_path, gapped))
 
@@ -86,9 +89,15 @@ def test_a_gap_in_the_station_numbering_is_refused(tmp_path):
 @pytest.mark.parametrize(
     "edit, match",
     [
-        (('name = "c405-arena"', 'name = "a-name-too-long-for-16"'), "1 to 16"),
+        (
+            ('name = "c405-arena"', 'name = "a-name-too-long-for-16"'),
+            "1 to 16",
+        ),
         (('id = "ac893d2d85e3068c"', 'id = "ac89"'), "shorter than 16"),
-        (("valid_mm = [0, 0, 3330, 4000]", "valid_mm = [0, 0, -1, 4000]"), "valid_mm"),
+        (
+            ("valid_mm = [0, 0, 3330, 4000]", "valid_mm = [0, 0, -1, 4000]"),
+            "valid_mm",
+        ),
     ],
     ids=["long-site", "short-id", "negative-valid-mm"],
 )
