@@ -36,7 +36,9 @@ typedef struct __attribute__((packed)) {
     uint32_t count2;    ///< sweep 1 LFSR count
 } lh2_raw_sample_t;
 
-void localization_init(float homographies[][3][3], uint32_t homography_count);
+/// Load the homographies and the rectangle outside which a solve is dropped
+/// (x_min, y_min, x_max, y_max in mm; all 0xFF selects 0 to 100000 mm).
+void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[4]);
 
 /// Start the LH2 driver without loading any calibration (idempotent). Used for raw capture in READY mode.
 void localization_start(void);

@@ -6,10 +6,9 @@
 #include "localization.h"
 #include "lh2_calibration.h"
 
-/// A solve is published when its coordinates fall inside this range. Nothing
-/// else filters the stream: consumers that need outlier rejection track their
-/// own uncertainty and reject against that.
-#define POSITION_MAX_MM (100000.0)
+/// Rectangle used when the calibration carries none. A solve outside the
+/// rectangle is dropped; nothing else filters the stream.
+static const uint32_t _valid_mm_default[4] = { 0, 0, 100000, 100000 };
 
 typedef struct {
     db_lh2_t                lh2;
@@ -19,6 +18,7 @@ typedef struct {
 
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 static bool _calibration_loaded = false;
+static uint32_t _valid_mm[4] = { 0, 0, 100000, 100000 };
 static bool _lh2_started = false;
 
 void localization_start(void) {
@@ -30,9 +30,16 @@ void localization_start(void) {
     _lh2_started = true;
 }
 
-void localization_init(float homographies[][3][3], uint32_t homography_count) {
+void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[4]) {
     printf("Initialize localization with %u homography matrices\n", homography_count);
     localization_start();
+
+    bool valid_mm_absent = true;
+    for (uint8_t i = 0; i < 4; i++) {
+        valid_mm_absent = valid_mm_absent && (valid_mm[i] == UINT32_MAX);
+    }
+    memcpy(_valid_mm, valid_mm_absent ? _valid_mm_default : valid_mm, sizeof(_valid_mm));
+    printf("Valid positions: x in [%u, %u], y in [%u, %u] mm\n", _valid_mm[0], _valid_mm[2], _valid_mm[1], _valid_mm[3]);
 
     for (uint8_t lh_index = 0; lh_index < homography_count; lh_index++) {
         printf("Store homography matrix for LH%u:\n", lh_index);
@@ -83,7 +90,10 @@ bool localization_get_position(position_2d_t *position) {
             return false;
         }
 
-        if (_localization_data.coordinates[0] < 0 || _localization_data.coordinates[0] > POSITION_MAX_MM || _localization_data.coordinates[1] < 0 || _localization_data.coordinates[1] > POSITION_MAX_MM) {
+        double x = _localization_data.coordinates[0];
+        double y = _localization_data.coordinates[1];
+        // Written as a negated conjunction so a NaN coordinate is rejected
+        if (!(x >= _valid_mm[0] && x <= _valid_mm[2] && y >= _valid_mm[1] && y <= _valid_mm[3])) {
             printf("Invalid position (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
             return false;
         }

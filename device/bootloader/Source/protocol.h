@@ -51,6 +51,10 @@
 /// signature.
 #define SWRMT_IMAGE_DIGEST_LEN      (8U)
 
+/// Fixed widths of the site identity a calibration carries.
+#define SWRMT_LH2_SITE_NAME_LEN         (16U)   ///< ASCII, NUL-padded, not necessarily NUL-terminated
+#define SWRMT_LH2_CALIBRATION_ID_LEN    (8U)    ///< leading bytes of the calibration file's id
+
 /// Image lifecycle, LwM2M Object 5 resource 3 (State).
 typedef enum {
     SWRMT_IMAGE_STATE_IDLE = 0,

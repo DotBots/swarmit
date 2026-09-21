@@ -89,6 +89,9 @@ typedef struct {
 typedef struct __attribute__((packed)) {
     uint32_t homography_count; // number of homography matrices used for localization
     float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization, float32 in mm
+    uint32_t valid_mm[4]; // x_min, y_min, x_max, y_max in mm; all 0xFF when the calibration carries none
+    char     site_name[SWRMT_LH2_SITE_NAME_LEN]; // all zero when absent
+    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN]; // all zero when absent
 } ipc_lh2_calibration_t;
 
 typedef struct {
@@ -147,6 +150,8 @@ _Static_assert(offsetof(ipc_shared_data_t, current_position) % 4 == 0,
                "current_position must be 4-byte aligned");
 _Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) % 4 == 0,
                "lh2_calibration must be 4-byte aligned");
+_Static_assert(sizeof(ipc_lh2_calibration_t) == 620,
+               "ipc_lh2_calibration_t size must match the other core's copy");
 _Static_assert(sizeof(ipc_device_info_t) % 4 == 0,
                "ipc_device_info_t size must be a multiple of 4");
 _Static_assert(offsetof(ipc_shared_data_t, device_info) % 4 == 0,

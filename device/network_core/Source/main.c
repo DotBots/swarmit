@@ -52,7 +52,13 @@ typedef struct __attribute__((packed)) {
     uint32_t net_id;                                        ///< Mari network ID, meaningful only when has_net_id == 1
     uint32_t homography_count;                              ///< number of LH2 homography matrices (0 if no calibration baked in)
     float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization, float32 in mm
+    uint32_t valid_mm[4];                                   ///< x_min, y_min, x_max, y_max in mm; all 0xFF when absent
+    char     site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< all 0xFF when absent
+    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< all 0xFF when absent
 } swarmit_config_t;
+
+_Static_assert(sizeof(swarmit_config_t) == 632,
+               "swarmit_config_t is the layout the host writes to the config page");
 
 typedef struct {
     bool        req_received;
@@ -157,6 +163,16 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
     }
 }
 
+static bool _is_erased(const void *field, size_t length) {
+    const uint8_t *bytes = field;
+    for (size_t i = 0; i < length; i++) {
+        if (bytes[i] != 0xFF) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static void _load_config(void) {
     // load config into RAM. On virgin flash every field reads back as 0xFFFFFFFFu.
     // magic gates the whole page; has_net_id and homography_count gate their
@@ -174,9 +190,27 @@ static void _load_config(void) {
     }
 
     // set lighthouse calibration data (only trust the matrix bytes if magic gates the whole page)
-    if (cfg_flash->magic == SWARMIT_CONFIG_MAGIC_VALUE
+    bool calibrated = cfg_flash->magic == SWARMIT_CONFIG_MAGIC_VALUE
         && _app_vars.config.homography_count > 0
-        && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX) {
+        && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX;
+
+    // Shared memory survives resets, so every calibration field is written
+    // either way: an erased value is reported as absent (zero), the rectangle
+    // keeps its erased 0xFF so the app core falls back to its default.
+    bool site_name_erased = _is_erased(_app_vars.config.site_name, sizeof(_app_vars.config.site_name));
+    bool calibration_id_erased = _is_erased(_app_vars.config.calibration_id, sizeof(_app_vars.config.calibration_id));
+    for (size_t i = 0; i < 4; i++) {
+        ipc_shared_data.lh2_calibration.valid_mm[i] = calibrated ? _app_vars.config.valid_mm[i] : UINT32_MAX;
+    }
+    for (size_t i = 0; i < SWRMT_LH2_SITE_NAME_LEN; i++) {
+        ipc_shared_data.lh2_calibration.site_name[i] = (calibrated && !site_name_erased) ? _app_vars.config.site_name[i] : '\0';
+    }
+    for (size_t i = 0; i < SWRMT_LH2_CALIBRATION_ID_LEN; i++) {
+        ipc_shared_data.lh2_calibration.calibration_id[i] = (calibrated && !calibration_id_erased) ? _app_vars.config.calibration_id[i] : 0;
+    }
+    ipc_shared_data.lh2_calibration.homography_count = 0;
+
+    if (calibrated) {
         // copy homography matrices to shared memory without casting away volatile
         for (uint32_t idx = 0; idx < _app_vars.config.homography_count; idx++) {
             for (uint32_t row = 0; row < 3; row++) {
@@ -538,6 +572,9 @@ int main(void) {
                         break;
                     }
 
+                    if (_app_vars.req_length < 1 + sizeof(swrmt_lh2_calibration_data_t)) {
+                        break;
+                    }
                     const swrmt_lh2_calibration_data_t *pkt = (const swrmt_lh2_calibration_data_t *)req->data;
                     if (pkt->homography_index >= LH2_BASESTATION_COUNT_MAX) {
                         // printf("Invalid calibration index %u\n", pkt->homography_index);
@@ -572,8 +609,12 @@ int main(void) {
 
                     // mr_gpio_set(&_debug1);
 
-                    /* User-defined protocol: last matrix index triggers flash commit + reboot. */
+                    /* User-defined protocol: last matrix index triggers flash commit + reboot.
+                       The site fields are identical in every message of a push. */
                     if (pkt->homography_index == (pkt->homography_count - 1)) {
+                        memcpy(_app_vars.config.valid_mm, pkt->valid_mm, sizeof(_app_vars.config.valid_mm));
+                        memcpy(_app_vars.config.site_name, pkt->site_name, sizeof(_app_vars.config.site_name));
+                        memcpy(_app_vars.config.calibration_id, pkt->calibration_id, sizeof(_app_vars.config.calibration_id));
                         _commit_config_and_reboot();
                     }
                 } break;
