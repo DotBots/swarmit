@@ -1,3 +1,4 @@
+import struct
 import tomllib
 
 # Bump in lockstep with the writer in PyDotBot's
@@ -5,9 +6,11 @@ import tomllib
 CALIBRATION_SCHEMA_VERSION = 2
 
 LH2_BASESTATION_COUNT_MAX = 16
-# 1-byte station count, then one 36-byte record per station: nine
-# little-endian int32, row-major, each the value times 1e3.
-MATRIX_BYTES = 9 * 4
+LH2_SITE_NAME_LEN = 16
+LH2_CALIBRATION_ID_LEN = 8
+# What PyDotBot's reader assumes for a file without [validity]; keep in step.
+VALID_MM_DEFAULT = (0, 0, 4000, 4500)
+SITE_DEFAULT = "default"
 
 
 def load_toml_config(path):
@@ -63,44 +66,80 @@ def reference_points(data):
     return points
 
 
-def homography_as_bytes(flat):
-    """THE SHIM: pack a homography as nine int32, the value times 1e3, truncated.
+def site_fields(data, path=""):
+    """valid_mm, site name and calibration id: the 40 bytes after a matrix.
 
-    The only place a homography is quantised, and it exists solely so a
-    schema 2 calibration can reach firmware that still reads the int32 x 1e3
-    encoding (`protocol_lh2_homography_t` in dotbot-libs). It is deleted in
-    the float32 firmware wave; until then nothing sends float32 to a bot.
-
-    PyDotBot's `homography_as_bytes` must stay byte-for-byte identical to
-    this, down to the all-zero fallback on overflow; the fixture test in
-    each repo pins the same bytes for the same matrix.
+    PyDotBot's `site_fields_as_bytes` packs the same bytes; the fixture test
+    in each repo pins them for the same file.
     """
-    matrix_bytes = bytearray()
+    valid_mm = [
+        int(v)
+        for v in data.get("validity", {}).get("valid_mm", VALID_MM_DEFAULT)
+    ]
+    if (
+        len(valid_mm) != 4
+        or any(v < 0 or v > 0xFFFFFFFF for v in valid_mm)
+        or valid_mm[0] > valid_mm[2]
+        or valid_mm[1] > valid_mm[3]
+    ):
+        raise ValueError(
+            f"{path}: valid_mm must be [x_min, y_min, x_max, y_max] in "
+            f"uint32 mm, got {valid_mm}"
+        )
+    name = data.get("site", {}).get("name", SITE_DEFAULT)
     try:
-        for bytes_block in [
-            int(value * 1e3).to_bytes(4, "little", signed=True)
-            for value in flat
-        ]:
-            matrix_bytes += bytes_block
-    except Exception:  # noqa: BLE001 - defensive fallback for overflow
-        matrix_bytes = bytearray(MATRIX_BYTES)
-    return bytes(matrix_bytes)
+        raw_name = name.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise ValueError(f"{path}: site name {name!r} is not ASCII") from exc
+    if not raw_name or len(raw_name) > LH2_SITE_NAME_LEN:
+        raise ValueError(
+            f"{path}: site name {name!r} must be 1 to {LH2_SITE_NAME_LEN} "
+            "characters to reach a robot"
+        )
+    calibration_id = str(data.get("metadata", {}).get("id", ""))
+    try:
+        raw_id = bytes.fromhex(calibration_id[: 2 * LH2_CALIBRATION_ID_LEN])
+    except ValueError as exc:
+        raise ValueError(
+            f"{path}: metadata.id {calibration_id!r} is not hex"
+        ) from exc
+    if len(raw_id) != LH2_CALIBRATION_ID_LEN:
+        raise ValueError(
+            f"{path}: metadata.id {calibration_id!r} is shorter than "
+            f"{2 * LH2_CALIBRATION_ID_LEN} hex characters"
+        )
+    return (
+        struct.pack("<4I", *valid_mm)
+        + raw_name.ljust(LH2_SITE_NAME_LEN, b"\x00")
+        + raw_id
+    )
 
 
 def read_lh2_calibration_payload(path):
-    """Return the LH2 calibration wire payload for `path`.
+    """The calibration messages for `path`, one 84-byte message per station.
 
-    Built at send time from `[[station]].homography`, station indices in
-    order, quantised through `homography_as_bytes`.
+    Built at send time from `[[station]].homography` and the site fields.
+    The receiver trusts slots 0 to count - 1, so stations must be numbered
+    from zero without gaps.
     """
     data = read_calibration(path)
     stations = sorted(data["station"], key=lambda s: int(s["index"]))
-    payload = bytearray([len(stations)])
+    indices = [int(s["index"]) for s in stations]
+    if indices != list(range(len(stations))):
+        got = ", ".join(str(i) for i in indices)
+        raise ValueError(
+            f"{path}: stations must be numbered from zero without gaps to be "
+            f"pushed, got {got}"
+        )
+    tail = site_fields(data, path)
+    payload = bytearray()
     for station in stations:
         flat = [float(v) for row in station["homography"] for v in row]
         if len(flat) != 9:
             raise ValueError(
                 f"{path}: station {station['index']} homography is not 3x3"
             )
-        payload += homography_as_bytes(flat)
+        payload += struct.pack("<II", len(stations), int(station["index"]))
+        payload += struct.pack("<9f", *flat)
+        payload += tail
     return bytes(payload)

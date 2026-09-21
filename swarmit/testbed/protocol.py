@@ -298,8 +298,13 @@ INFO_GEN_SIZE = 1
 INFO_STRING_LEN = 32
 # Bytes of the image SHA256 carried on the wire (the device keeps all 32).
 IMAGE_DIGEST_LEN = 8
-# Schema version this host understands in SWARMIT_DEVICE_INFO_RESP.
-DEVICE_INFO_VERSION = 1
+# Newest schema version this host understands in SWARMIT_DEVICE_INFO_RESP.
+# Version 2 appends the LH2 site name and calibration id to version 1.
+DEVICE_INFO_VERSION = 2
+# The LH2 site name and calibration id, as the calibration message, the
+# config page and device info v2 carry them.
+LH2_SITE_NAME_LEN = 16
+LH2_CALIBRATION_ID_LEN = 8
 
 
 class ImageState(Enum):
@@ -378,6 +383,7 @@ def boot_reason(reset_reason: int, fault: int) -> BootReason:
 # Bits of the lh2_flags field.
 LH2_FLAG_VALID = 1 << 0
 LH2_FLAG_FROM_FLASH = 1 << 1
+LH2_FLAG_FLOAT32 = 1 << 2
 
 
 def decode_string_field(raw: bytes) -> str:
@@ -568,7 +574,12 @@ class PayloadOTAChunk(Payload):
 
 @dataclass
 class PayloadCalibrationData(Payload):
-    """Dataclass that holds a calibration data packet."""
+    """One station's LH2 homography, `swrmt_lh2_calibration_data_t`.
+
+    The matrix is nine little-endian float32, row-major. The validity
+    rectangle, site name and calibration id are the same in every message of
+    one push.
+    """
 
     metadata: list[PayloadFieldMetadata] = dataclasses.field(
         default_factory=lambda: [
@@ -581,16 +592,43 @@ class PayloadCalibrationData(Payload):
             PayloadFieldMetadata(
                 name="homography", type_=bytes, length=3 * 3 * 4
             ),
+            PayloadFieldMetadata(name="valid_x_min", disp="x0", length=4),
+            PayloadFieldMetadata(name="valid_y_min", disp="y0", length=4),
+            PayloadFieldMetadata(name="valid_x_max", disp="x1", length=4),
+            PayloadFieldMetadata(name="valid_y_max", disp="y1", length=4),
+            PayloadFieldMetadata(
+                name="site_name",
+                disp="site",
+                type_=bytes,
+                length=LH2_SITE_NAME_LEN,
+            ),
+            PayloadFieldMetadata(
+                name="calibration_id",
+                disp="id",
+                type_=bytes,
+                length=LH2_CALIBRATION_ID_LEN,
+            ),
         ]
     )
 
-    homography_count: int = (
-        0  # number of homography matrices used for localization
+    homography_count: int = 0
+    homography_index: int = 0
+    homography: bytes = dataclasses.field(default_factory=lambda: bytes(36))
+    valid_x_min: int = 0
+    valid_y_min: int = 0
+    valid_x_max: int = 0
+    valid_y_max: int = 0
+    site_name: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_SITE_NAME_LEN)
     )
-    homography_index: int = 0  # index of the homography matrix to be sent
-    homography: bytes = dataclasses.field(
-        default_factory=lambda: bytearray
-    )  # 9x4 bytes of the homography matrix
+    calibration_id: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_CALIBRATION_ID_LEN)
+    )
+
+    @property
+    def site_fields(self) -> bytes:
+        """Everything after the matrix, identical across one push."""
+        return bytes(self.to_bytes())[44:]
 
 
 @dataclass
@@ -768,6 +806,18 @@ class PayloadDeviceInfo(Payload):
             ),
             PayloadFieldMetadata(name="lh2_homography_count", disp="lh2"),
             PayloadFieldMetadata(name="lh2_flags", disp="lh2f"),
+            PayloadFieldMetadata(
+                name="lh2_site_name",
+                disp="site",
+                type_=bytes,
+                length=LH2_SITE_NAME_LEN,
+            ),
+            PayloadFieldMetadata(
+                name="lh2_calibration_id",
+                disp="cal.",
+                type_=bytes,
+                length=LH2_CALIBRATION_ID_LEN,
+            ),
         ]
     )
 
@@ -795,13 +845,26 @@ class PayloadDeviceInfo(Payload):
     )
     lh2_homography_count: int = 0
     lh2_flags: int = 0
+    lh2_site_name: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_SITE_NAME_LEN)
+    )
+    lh2_calibration_id: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_CALIBRATION_ID_LEN)
+    )
 
-    # No from_bytes override, for the same reason PayloadStatus has none: a
-    # reply that is not this shape comes from a bot too old to talk to, and
-    # zero-filling it invented a record rather than reporting nothing. It now
-    # raises, the adapter drops the frame, and the cached info simply does not
-    # update. Trailing bytes from a newer schema need no handling either - the
-    # base parser consumes the fields it knows and ignores the rest.
+    def from_bytes(self, bytes_):
+        """Parse a v1 (154-byte) or v2 (178-byte) reply.
+
+        A reply shorter than v1 raises, as for any payload: it comes from a
+        bot too old to talk to. A v1 reply leaves the v2 fields empty, since
+        such firmware holds no site and no id. Trailing bytes from a newer
+        schema are ignored.
+        """
+        super().from_bytes(bytes_)
+        if len(bytes_) < self.size:
+            self.lh2_site_name = bytes(LH2_SITE_NAME_LEN)
+            self.lh2_calibration_id = bytes(LH2_CALIBRATION_ID_LEN)
+        return self
 
 
 @dataclass

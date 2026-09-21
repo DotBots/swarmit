@@ -257,9 +257,8 @@ class Lh2CalibrationRequest(BaseModel):
     """Send LH2 calibration data to the swarm.
 
     `calibration_b64` is the base64-encoded blob in the format expected by
-    Controller.send_lh2_calibration: a 1-byte station count followed by one
-    36-byte record per station, nine little-endian int32 row-major, each the
-    value times 1e3.
+    Controller.send_lh2_calibration: one 84-byte calibration message per
+    station, concatenated in index order.
     """
 
     calibration_b64: str
