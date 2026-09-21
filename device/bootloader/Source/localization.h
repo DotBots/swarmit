@@ -29,12 +29,23 @@ typedef struct __attribute__((packed)) {
     float   homography_matrix[3][3];  ///< homography matrix, float32 in mm
 } localization_homography_t;
 
-/// Raw LH2 LFSR counts for a single basestation (both sweeps), used for OTA calibration capture
-typedef struct __attribute__((packed)) {
-    uint8_t  lh_index;  ///< basestation index
+/// Raw LH2 LFSR counts for a single basestation (both sweeps), used for OTA calibration capture.
+/// Naturally aligned: the secure side stores into it through a veneer with the
+/// unaligned-access trap enabled, so the user image must pass a 4-byte-aligned buffer.
+typedef struct {
     uint32_t count1;    ///< sweep 0 LFSR count
     uint32_t count2;    ///< sweep 1 LFSR count
+    uint8_t  lh_index;  ///< basestation index
+    uint8_t  _pad[3];
 } lh2_raw_sample_t;
+
+_Static_assert(sizeof(lh2_raw_sample_t) == 12, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(__builtin_offsetof(lh2_raw_sample_t, count1) == 0, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(__builtin_offsetof(lh2_raw_sample_t, count2) == 4, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(__builtin_offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is part of the NSC ABI");
+
+/// Size of one sample on the wire: [lh_index:1][count1:4 LE][count2:4 LE]
+#define LH2_RAW_SAMPLE_WIRE_SIZE (9U)
 
 /// Load the homographies and the rectangle outside which a solve is dropped
 /// (x_min, y_min, x_max, y_max in mm; all 0xFF selects 0 to 100000 mm).
