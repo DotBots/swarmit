@@ -1553,3 +1553,35 @@ def test_reset_severity_matches_the_wording_of_format_reset_cause(
     assert reset_severity(node) == expected
     if expected != "normal":
         assert format_reset_cause(node).startswith(expected)
+
+
+@patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
+@patch("swarmit.testbed.controller.COMMAND_ATTEMPT_DELAY", 0.1)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 3)
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+def test_controller_stop_survives_a_device_pruned_mid_stop():
+    """A device that goes silent mid-stop is retried, not a KeyError."""
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    test_adapter = controller.interface.mari.serial_interface
+    node = SwarmitNode(
+        address=0x01, status=StatusType.Running, adapter=test_adapter
+    )
+    test_adapter.add_node(node)
+    time.sleep(0.3)
+    addr = f"{node.address:08X}"
+    assert addr in controller.running_devices
+    node.enabled = False
+    time.sleep(0.2)
+
+    def prune(*_args, **_kwargs):
+        controller.cleanup_inactive(0)
+
+    with patch.object(
+        controller, "send_payload", side_effect=prune
+    ) as send_payload:
+        controller.stop(devices=[addr])
+
+    assert send_payload.call_count == 3
+    controller.terminate()
