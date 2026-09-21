@@ -1438,7 +1438,8 @@ class Controller:
 
         attempts = 0
         while attempts < COMMAND_MAX_ATTEMPTS and not all(
-            self.status_data[addr].status
+            addr in self.status_data
+            and self.status_data[addr].status
             in [StatusType.Stopping, StatusType.Bootloader]
             for addr in devices_to_stop
         ):
