@@ -399,7 +399,7 @@ int main(void) {
 
         // ensure LH2 localization is initialized
         if (ipc_shared_data.lh2_calibration.homography_count > 0 && ipc_shared_data.lh2_calibration.homography_count <= LH2_BASESTATION_COUNT_MAX) {
-            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
+            localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
         } else {
             printf("Initializing without LH2 calibration data, homography count: %u\n", ipc_shared_data.lh2_calibration.homography_count);
         }
@@ -446,7 +446,7 @@ int main(void) {
 
         if (_bootloader_vars.lh2_calibration_ready) {
             _bootloader_vars.lh2_calibration_ready = false;
-            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
+            localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
         }
 
         if (_bootloader_vars.lh2_capture_request) {

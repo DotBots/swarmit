@@ -38,7 +38,7 @@ _Static_assert(sizeof(SWRMT_FW_VERSION) <= SWRMT_INFO_STRING_LEN,
 
 #define SWARMIT_NET_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
 #define SWARMIT_NET_CONFIG_PAGE             (127)       // page index for config (last page)
-#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524D) // "SWRM" - matches mari + dotbot-provision
+#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524E) // "SWRN" - float32 homographies; mari's gateway page keeps 0x5753524D
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
@@ -51,7 +51,7 @@ typedef struct __attribute__((packed)) {
     uint32_t has_net_id;                                    ///< 1 if net_id is provisioned; otherwise fall back to SWARMIT_DEFAULT_NET_ID
     uint32_t net_id;                                        ///< Mari network ID, meaningful only when has_net_id == 1
     uint32_t homography_count;                              ///< number of LH2 homography matrices (0 if no calibration baked in)
-    int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization
+    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization, float32 in mm
 } swarmit_config_t;
 
 typedef struct {

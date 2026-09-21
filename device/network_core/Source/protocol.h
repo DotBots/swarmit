@@ -200,7 +200,7 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint32_t homography_count;              ///< number of homography matrices used for localization
     uint32_t homography_index;              ///< index of the homography matrix to use for localization
-    int32_t homography[3][3];               ///< homography matrix for localization
+    float    homography[3][3];              ///< homography matrix for localization, float32 in mm
 } swrmt_lh2_calibration_data_t;
 
 typedef struct __attribute__((packed)) {

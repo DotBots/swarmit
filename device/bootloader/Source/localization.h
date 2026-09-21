@@ -26,7 +26,7 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
     uint8_t basestation_index;        ///< which LH basestation is this homography for?
-    int32_t homography_matrix[3][3];  ///< homography matrix, each element multiplied by 1e3
+    float   homography_matrix[3][3];  ///< homography matrix, float32 in mm
 } localization_homography_t;
 
 /// Raw LH2 LFSR counts for a single basestation (both sweeps), used for OTA calibration capture
@@ -36,7 +36,7 @@ typedef struct __attribute__((packed)) {
     uint32_t count2;    ///< sweep 1 LFSR count
 } lh2_raw_sample_t;
 
-void localization_init(int32_t homographies[][3][3], uint32_t homography_count);
+void localization_init(float homographies[][3][3], uint32_t homography_count);
 
 /// Start the LH2 driver without loading any calibration (idempotent). Used for raw capture in READY mode.
 void localization_start(void);

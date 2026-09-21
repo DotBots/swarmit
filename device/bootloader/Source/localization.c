@@ -30,7 +30,7 @@ void localization_start(void) {
     _lh2_started = true;
 }
 
-void localization_init(int32_t homographies[][3][3], uint32_t homography_count) {
+void localization_init(float homographies[][3][3], uint32_t homography_count) {
     printf("Initialize localization with %u homography matrices\n", homography_count);
     localization_start();
 
@@ -38,7 +38,7 @@ void localization_init(int32_t homographies[][3][3], uint32_t homography_count) 
         printf("Store homography matrix for LH%u:\n", lh_index);
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
-                printf("%i ", homographies[lh_index][i][j]);
+                printf("%f ", (double)homographies[lh_index][i][j]);
             }
             printf("\n");
         }

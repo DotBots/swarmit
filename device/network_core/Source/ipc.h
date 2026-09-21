@@ -101,7 +101,7 @@ typedef struct {
 /// LH2 calibration data
 typedef struct __attribute__((packed)) {
     uint32_t homography_count; // number of homography matrices used for localization
-    int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization
+    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization, float32 in mm
 } ipc_lh2_calibration_t;
 
 /// DotBot protocol LH2 computed location
