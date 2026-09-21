@@ -557,7 +557,13 @@ int main(void) {
                     _copy_from_shared(info.image_name, ipc_shared_data.device_info.image_name, SWRMT_INFO_STRING_LEN);
                     _copy_from_shared(info.image_version, ipc_shared_data.device_info.image_version, SWRMT_INFO_STRING_LEN);
                     info.lh2_homography_count = ipc_shared_data.device_info.lh2_homography_count;
-                    info.lh2_flags = ipc_shared_data.device_info.lh2_flags;
+                    info.lh2_flags = ipc_shared_data.device_info.lh2_flags | SWRMT_LH2_FLAG_FLOAT32;
+                    for (size_t i = 0; i < SWRMT_LH2_SITE_NAME_LEN; i++) {
+                        info.lh2_site_name[i] = ipc_shared_data.lh2_calibration.site_name[i];
+                    }
+                    for (size_t i = 0; i < SWRMT_LH2_CALIBRATION_ID_LEN; i++) {
+                        info.lh2_calibration_id[i] = ipc_shared_data.lh2_calibration.calibration_id[i];
+                    }
 
                     size_t length = 0;
                     _app_vars.notification_buffer[length++] = SWRMT_MSG_DEVICE_INFO_RESP;

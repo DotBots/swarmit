@@ -39,7 +39,7 @@
 #define SWRMT_LH2_CALIB_TAG         (0xCAU)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.
-#define SWRMT_DEVICE_INFO_VERSION   (1U)
+#define SWRMT_DEVICE_INFO_VERSION   (2U)
 
 /// Ceiling for identity strings, including the NUL terminator. Matter
 /// (VendorName/ProductName/SerialNumber), Zigbee (ManufacturerName/
@@ -77,6 +77,7 @@ typedef enum {
 /// Bits of swrmt_device_info_pkt_t.lh2_flags.
 #define SWRMT_LH2_FLAG_VALID        (1U << 0)   ///< a usable homography set is loaded
 #define SWRMT_LH2_FLAG_FROM_FLASH   (1U << 1)   ///< it came from the provisioned config page
+#define SWRMT_LH2_FLAG_FLOAT32      (1U << 2)   ///< homographies are float32 on the wire and in the config page
 
 /// Generic one-shot query. Modelled on MAVLink's MAV_CMD_REQUEST_MESSAGE
 /// (512), which superseded ~15 bespoke MAV_CMD_REQUEST_* commands: a future
@@ -104,9 +105,11 @@ typedef struct __attribute__((packed)) {
     char     image_version[SWRMT_INFO_STRING_LEN];  ///< LwM2M Object 5 res 7 PkgVersion, display only
     uint8_t  lh2_homography_count;                  ///< 0 = uncalibrated
     uint8_t  lh2_flags;                             ///< SWRMT_LH2_FLAG_*
+    char     lh2_site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< site of the loaded calibration, all zero if none
+    uint8_t  lh2_calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< id of the loaded calibration, all zero if none
 } swrmt_device_info_pkt_t;
 
-_Static_assert(sizeof(swrmt_device_info_pkt_t) == 154,
+_Static_assert(sizeof(swrmt_device_info_pkt_t) == 178,
                "swrmt_device_info_pkt_t is a wire format; its size is part of the contract");
 
 typedef struct __attribute__((packed)) {
