@@ -116,6 +116,13 @@ typedef struct __attribute__((packed)) {
     uint32_t psr;           ///< Stacked xPSR; IPSR field names the active exception, 0 for thread mode
 } ipc_crash_report_t;
 
+/// The uplink this node gets on the schedule it adopted at join
+typedef struct __attribute__((packed)) {
+    uint16_t budget_cpps;   ///< Uplink packets per second x 100; 0 = not joined
+    uint8_t  schedule_id;   ///< Schedule adopted from the beacon; 0 = not joined
+    uint8_t  reserved;
+} ipc_uplink_budget_t;
+
 typedef struct __attribute__((packed,aligned(8))) {
     bool                    net_ready;          ///< Network core is ready
     bool                    net_ack;            ///< Network core acked the latest request
@@ -133,6 +140,8 @@ typedef struct __attribute__((packed,aligned(8))) {
     ipc_lh2_calibration_t  lh2_calibration;     ///< LH2 calibration data
     ipc_device_info_t       device_info;        ///< What this bot is running
     ipc_crash_report_t      crash_report;       ///< Cause of the most recent reset
+    uint8_t                 reserved[2];        ///< Word-aligns uplink_budget after the 30-byte crash_report
+    ipc_uplink_budget_t     uplink_budget;      ///< Written by the network core on join and disconnect
 } ipc_shared_data_t;
 
 // ipc_shared_data_t is packed, so every member's offset is the running sum of
@@ -158,6 +167,10 @@ _Static_assert(offsetof(ipc_shared_data_t, device_info) % 4 == 0,
                "device_info must be 4-byte aligned");
 _Static_assert(offsetof(ipc_shared_data_t, crash_report) % 4 == 0,
                "crash_report must be 4-byte aligned");
+_Static_assert(sizeof(ipc_uplink_budget_t) == 4,
+               "ipc_uplink_budget_t size must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, uplink_budget) % 4 == 0,
+               "uplink_budget must be 4-byte aligned");
 
 void mutex_lock(void);
 

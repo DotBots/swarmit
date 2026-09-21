@@ -30,6 +30,10 @@ __attribute__((cmse_nonsecure_entry, aligned)) uint64_t swarmit_read_device_id(v
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_log_data(uint8_t *data, size_t length);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_get_battery_level(uint16_t *battery);
 
+/// Uplink packets per second x 100 this node gets on the schedule it joined
+/// with (377 on huge); 0 when not joined.
+__attribute__((cmse_nonsecure_entry, aligned)) uint16_t swarmit_get_uplink_budget(void);
+
 // Lighthouse 2 functions exposed to user image
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_get_position(position_2d_t *position);
 

@@ -27,6 +27,7 @@
 #include "models.h"
 #include "mac.h"
 #include "mari.h"
+#include "scheduler.h"
 
 // The version string is reported over the air in a fixed 32-byte field, so a
 // tag that does not fit must fail the build rather than truncate on the wire.
@@ -138,6 +139,15 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     _app_vars.data_received = true;
 }
 
+// A joined node owns one uplink cell per slotframe, so its budget is one
+// packet per slotframe duration.
+static void _publish_uplink_budget(bool connected) {
+    uint32_t slotframe_us = connected ? mr_scheduler_get_duration_us() : 0;
+    uint32_t budget_cpps  = slotframe_us ? 100000000UL / slotframe_us : 0;
+    ipc_shared_data.uplink_budget.budget_cpps = (budget_cpps > UINT16_MAX) ? UINT16_MAX : (uint16_t)budget_cpps;
+    ipc_shared_data.uplink_budget.schedule_id = budget_cpps ? mr_scheduler_get_active_schedule_id() : 0;
+}
+
 static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
     switch (event) {
         case MARI_NEW_PACKET:
@@ -148,11 +158,13 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
         case MARI_CONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Connected to gateway %016llX\n", gateway_id);
+            _publish_uplink_budget(true);
             break;
         }
         case MARI_DISCONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Disconnected from gateway %016llX, reason: %u\n", gateway_id, event_data.tag);
+            _publish_uplink_budget(false);
             break;
         }
         case MARI_ERROR:
@@ -320,6 +332,8 @@ int main(void) {
 
     mr_gpio_set(&_debug1); mr_gpio_clear(&_debug1);
     // mr_gpio_set(&_debug2); mr_gpio_clear(&_debug2);
+
+    _publish_uplink_budget(false);
 
     // Network core must remain on
     ipc_shared_data.net_ready = true;
