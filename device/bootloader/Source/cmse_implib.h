@@ -38,6 +38,11 @@ __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_get_pos
 /// so an unchanged sequence means the same measurement read twice, which
 /// comparing coordinates cannot distinguish from a stationary robot.
 __attribute__((cmse_nonsecure_entry, aligned)) uint32_t swarmit_localization_get_fix(position_2d_t *position);
+
+/// Start LH2 if needed and drain the raw counts of every basestation with both
+/// sweeps decoded into @p samples, at most @p max of them. Returns the number
+/// written; 0 when none is ready or the buffer is not in non-secure memory.
+__attribute__((cmse_nonsecure_entry, aligned)) uint8_t swarmit_localization_get_raw_counts(lh2_raw_sample_t *samples, uint8_t max);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_handle_isr(void);
 
 // SAADC functions

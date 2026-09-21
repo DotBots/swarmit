@@ -113,6 +113,21 @@ __attribute__((cmse_nonsecure_entry)) uint32_t swarmit_localization_get_fix(posi
     return sequence;
 }
 
+__attribute__((cmse_nonsecure_entry)) uint8_t swarmit_localization_get_raw_counts(lh2_raw_sample_t *samples, uint8_t max) {
+    // Reject a buffer that reaches into secure RAM or secure flash
+    uintptr_t start = (uintptr_t)samples;
+    uintptr_t end   = start + (uintptr_t)max * sizeof(lh2_raw_sample_t);
+    if (max == 0 || end < start) {
+        return 0;
+    }
+    if ((start < 0x20008000 && end > 0x20000000) || start < 0x0000ff00) {
+        return 0;
+    }
+
+    localization_start();
+    return localization_get_raw_counts(samples, max);
+}
+
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_handle_isr(void) {
     if (NRF_SPIM4_S->EVENTS_END) {
         // Clear the Interrupt flag
