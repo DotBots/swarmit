@@ -117,7 +117,7 @@ __attribute__((cmse_nonsecure_entry)) uint8_t swarmit_localization_get_raw_count
     // Reject a buffer that reaches into secure RAM or secure flash
     uintptr_t start = (uintptr_t)samples;
     uintptr_t end   = start + (uintptr_t)max * sizeof(lh2_raw_sample_t);
-    if (max == 0 || end < start) {
+    if (max == 0 || end < start || (start % __alignof__(lh2_raw_sample_t)) != 0) {
         return 0;
     }
     if ((start < 0x20008000 && end > 0x20000000) || start < 0x0000ff00) {
