@@ -6,7 +6,12 @@ from swarmit.testbed.helpers import (
     read_lh2_calibration_payload,
     reference_points,
 )
-from swarmit.tests.lh2_wire_fixture import FIXTURE_TOML, MESSAGE_HEX
+from swarmit.tests.lh2_wire_fixture import (
+    DEFAULTS_FIXTURE_TOML,
+    DEFAULTS_MESSAGE_HEX,
+    FIXTURE_TOML,
+    MESSAGE_HEX,
+)
 
 TEST_CONFIG_TOML = """
 adapter = "edge"
@@ -76,6 +81,13 @@ def test_the_calibration_messages_are_pinned(tmp_path):
 
     assert payload == b"".join(bytes.fromhex(h) for h in MESSAGE_HEX)
     assert len(payload) == 2 * 84
+
+
+def test_a_file_without_site_or_validity_takes_pydotbots_defaults(tmp_path):
+    payload = read_lh2_calibration_payload(
+        _write(tmp_path, DEFAULTS_FIXTURE_TOML)
+    )
+    assert payload == b"".join(bytes.fromhex(h) for h in DEFAULTS_MESSAGE_HEX)
 
 
 def test_a_gap_in_the_station_numbering_is_refused(tmp_path):
