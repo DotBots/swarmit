@@ -14,6 +14,7 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define LH2_BASESTATION_COUNT_MAX (16)
@@ -43,9 +44,9 @@ typedef struct {
 } lh2_raw_sample_t;
 
 _Static_assert(sizeof(lh2_raw_sample_t) == 12, "lh2_raw_sample_t is part of the NSC ABI");
-_Static_assert(__builtin_offsetof(lh2_raw_sample_t, count1) == 0, "lh2_raw_sample_t is part of the NSC ABI");
-_Static_assert(__builtin_offsetof(lh2_raw_sample_t, count2) == 4, "lh2_raw_sample_t is part of the NSC ABI");
-_Static_assert(__builtin_offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(offsetof(lh2_raw_sample_t, count1) == 0, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(offsetof(lh2_raw_sample_t, count2) == 4, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is part of the NSC ABI");
 
 /// Size of one sample on the wire: [lh_index:1][count1:4 LE][count2:4 LE]
 #define LH2_RAW_SAMPLE_WIRE_SIZE (9U)
