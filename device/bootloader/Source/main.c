@@ -277,6 +277,16 @@ static void _read_battery(void) {
     _bootloader_vars.battery_update = true;
 }
 
+/// Load the calibration the net core published, when it holds one.
+static void _load_calibration(void) {
+    uint32_t homography_count = ipc_shared_data.lh2_calibration.homography_count;
+    if (homography_count == 0 || homography_count > LH2_BASESTATION_COUNT_MAX) {
+        printf("Initializing without LH2 calibration data, homography count: %u\n", homography_count);
+        return;
+    }
+    localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, homography_count, (const uint32_t *)ipc_shared_data.lh2_calibration.valid_mm);
+}
+
 int main(void) {
 
     setup_watchdog1();
@@ -405,12 +415,7 @@ int main(void) {
         // Experiment is running
         ipc_shared_data.status = SWRMT_APPLICATION_RUNNING;
 
-        // ensure LH2 localization is initialized
-        if (ipc_shared_data.lh2_calibration.homography_count > 0 && ipc_shared_data.lh2_calibration.homography_count <= LH2_BASESTATION_COUNT_MAX) {
-            localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count, (const uint32_t *)ipc_shared_data.lh2_calibration.valid_mm);
-        } else {
-            printf("Initializing without LH2 calibration data, homography count: %u\n", ipc_shared_data.lh2_calibration.homography_count);
-        }
+        _load_calibration();
 
         // Initialize watchdog and non secure access
         setup_ns_user();
@@ -454,7 +459,7 @@ int main(void) {
 
         if (_bootloader_vars.lh2_calibration_ready) {
             _bootloader_vars.lh2_calibration_ready = false;
-            localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count, (const uint32_t *)ipc_shared_data.lh2_calibration.valid_mm);
+            _load_calibration();
         }
 
         if (_bootloader_vars.lh2_capture_request) {
