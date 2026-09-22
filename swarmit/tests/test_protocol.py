@@ -126,23 +126,17 @@ def test_payload_device_info_v2_carries_the_site_and_id():
     assert info.lh2_calibration_id == "ac893d2d85e3068c"
 
 
-def test_payload_device_info_v1_parses_with_no_site_and_no_id():
-    v2 = PayloadDeviceInfo(
-        info_version=1,
-        info_gen=7,
-        lh2_homography_count=1,
-        lh2_site_name=b"x" * 16,
-        lh2_calibration_id=b"\x01" * 8,
-    )
-    v1 = bytes(v2.to_bytes())[:154]
+def test_an_older_device_info_reply_keeps_only_its_version_and_generation():
+    v1 = bytes(
+        PayloadDeviceInfo(
+            info_version=1, info_gen=7, lh2_homography_count=1
+        ).to_bytes()
+    )[:154]
 
-    parsed = PayloadDeviceInfo().from_bytes(v1)
-    info = DeviceInfo.from_payload(parsed)
-    assert info.info_version == 1
-    assert info.lh2_homography_count == 1
-    assert parsed.lh2_site_name == bytes(16)
-    assert info.lh2_site_name == ""
-    assert info.lh2_calibration_id == ""
+    info = DeviceInfo.from_payload(PayloadDeviceInfo().from_bytes(v1))
+    assert (info.info_version, info.info_gen) == (1, 7)
+    assert info.lh2_homography_count == 0
+    assert info.too_old
 
 
 def test_an_all_zero_id_reads_as_none():
@@ -154,7 +148,7 @@ def test_an_all_zero_id_reads_as_none():
 
 def test_payload_device_info_round_trip():
     payload = PayloadDeviceInfo(
-        info_version=1,
+        info_version=2,
         info_gen=42,
         boot_count=37,
         uptime_s=4324,
@@ -184,19 +178,19 @@ def test_payload_device_info_round_trip():
 
 
 def test_payload_device_info_short_payload_raises():
-    # A reply that is not the full record comes from a bot too old to talk to.
+    # A current-version reply that is not the full record is truncated.
     # Zero-filling it invented a device record; raising lets the adapter drop
     # the frame and leaves the cached info untouched.
     with pytest.raises(ValueError):
-        PayloadDeviceInfo().from_bytes(b"\x01\x05")
+        PayloadDeviceInfo().from_bytes(b"\x02\x05")
 
 
 def test_payload_device_info_tolerates_trailing_bytes():
     # A device on a newer schema appends fields. The known prefix still parses
     # and the rest is ignored, so the host does not need its own truncation.
-    full = bytes(PayloadDeviceInfo(info_version=1, info_gen=42).to_bytes())
+    full = bytes(PayloadDeviceInfo(info_version=2, info_gen=42).to_bytes())
     parsed = PayloadDeviceInfo().from_bytes(full + b"\xde\xad\xbe\xef")
-    assert parsed.info_version == 1
+    assert parsed.info_version == 2
     assert parsed.info_gen == 42
 
 

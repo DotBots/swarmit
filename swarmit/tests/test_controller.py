@@ -1029,7 +1029,7 @@ def test_device_info_reply_survives_a_concurrent_timeout():
 
     header = MagicMock()
     header.source = 0x22
-    packet = Packet.from_payload(PayloadDeviceInfo(info_version=1, info_gen=3))
+    packet = Packet.from_payload(PayloadDeviceInfo(info_version=2, info_gen=3))
     # status_data is deliberately empty: the device timed out between the
     # request going out and this reply arriving.
     controller.on_frame_received(header, packet)
@@ -1205,7 +1205,7 @@ def test_matching_generation_clears_the_backoff():
     header.source = 0x44
     controller.on_frame_received(
         header,
-        Packet.from_payload(PayloadDeviceInfo(info_version=1, info_gen=7)),
+        Packet.from_payload(PayloadDeviceInfo(info_version=2, info_gen=7)),
     )
 
     assert controller._device_info["00000044"].info_gen == 7
@@ -1321,7 +1321,7 @@ def test_info_panel_always_names_the_calibration_state():
         generate_info(never_asked, [])
     )
 
-    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=1))}
+    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=2))}
     out = _render(generate_info(uncalibrated, []))
     assert "LH2 calibration" in out
     assert "uncalibrated" in out
@@ -1329,7 +1329,7 @@ def test_info_panel_always_names_the_calibration_state():
     calibrated = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         )
     }
@@ -1358,11 +1358,13 @@ def test_info_panel_always_shows_the_site_and_the_id():
     assert "site" in out and "none" in out
 
     old = {"AA": NodeStatus(info=DeviceInfo(info_version=1))}
-    assert "firmware predates it" in _render(generate_info(old, []))
+    out = _render(generate_info(old, []))
+    assert "firmware too old: reflash" in out
+    assert "Sandbox fw" not in out
 
 
 def test_a_single_basestation_is_not_pluralised():
-    info = DeviceInfo(info_version=1, lh2_homography_count=1, lh2_flags=0b01)
+    info = DeviceInfo(info_version=2, lh2_homography_count=1, lh2_flags=0b01)
     assert info.lh2_summary == "1 basestation (valid)"
 
 
@@ -1390,7 +1392,7 @@ def test_position_tells_uncalibrated_apart_from_a_missing_fix():
     would have changed the cell. Device info already says which it is, so the
     cell says it too, in the same word as the `LH2 calibration` row.
     """
-    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=1))}
+    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=2))}
     out = _render(generate_info(uncalibrated, []))
     assert "uncalibrated" in out
     assert "no fix" not in out
@@ -1399,10 +1401,10 @@ def test_position_tells_uncalibrated_apart_from_a_missing_fix():
     # named in the header line and the Position cell is the only place the
     # word can come from.
     fleet = {
-        "AA": NodeStatus(info=DeviceInfo(info_version=1)),
+        "AA": NodeStatus(info=DeviceInfo(info_version=2)),
         "BB": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         ),
     }
@@ -1429,7 +1431,7 @@ def test_status_collapses_calibration_when_the_fleet_agrees():
     Same treatment as the sandbox-firmware column: spending table width to
     repeat one string per row is what stops the fleet laying out side by side.
     """
-    info = DeviceInfo(info_version=1, lh2_homography_count=2, lh2_flags=0b11)
+    info = DeviceInfo(info_version=2, lh2_homography_count=2, lh2_flags=0b11)
     fleet = {
         "AA": NodeStatus(info=info),
         "BB": NodeStatus(info=info),
@@ -1452,10 +1454,10 @@ def test_status_shows_the_calibration_column_when_the_fleet_disagrees():
     fleet = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         ),
-        "BB": NodeStatus(info=DeviceInfo(info_version=1)),
+        "BB": NodeStatus(info=DeviceInfo(info_version=2)),
         "CC": NodeStatus(info=None),
     }
     out = _render(generate_status(fleet))
@@ -1475,12 +1477,12 @@ def test_status_compares_calibration_on_the_summary_not_the_count():
     fleet = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         ),
         "BB": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b01
+                info_version=2, lh2_homography_count=2, lh2_flags=0b01
             )
         ),
     }

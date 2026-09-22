@@ -300,8 +300,8 @@ INFO_GEN_SIZE = 1
 INFO_STRING_LEN = 32
 # Bytes of the image SHA256 carried on the wire (the device keeps all 32).
 IMAGE_DIGEST_LEN = 8
-# Newest schema version this host understands in SWARMIT_DEVICE_INFO_RESP.
-# Version 2 appends the LH2 site name and calibration id to version 1.
+# Schema version this host understands in SWARMIT_DEVICE_INFO_RESP. A bot
+# reporting an older one runs firmware to reflash.
 DEVICE_INFO_VERSION = 2
 # The LH2 site name and calibration id, as the calibration message, the
 # config page and device info v2 carry them.
@@ -861,18 +861,12 @@ class PayloadDeviceInfo(Payload):
     )
 
     def from_bytes(self, bytes_):
-        """Parse a v1 (154-byte) or v2 (178-byte) reply.
-
-        A reply shorter than v1 raises, as for any payload: it comes from a
-        bot too old to talk to. A v1 reply leaves the v2 fields empty, since
-        such firmware holds no site and no id. Trailing bytes from a newer
-        schema are ignored.
-        """
-        super().from_bytes(bytes_)
-        if len(bytes_) < self.size:
-            self.lh2_site_name = bytes(LH2_SITE_NAME_LEN)
-            self.lh2_calibration_id = bytes(LH2_CALIBRATION_ID_LEN)
-        return self
+        """Parse a reply; one older than DEVICE_INFO_VERSION keeps only its
+        version and generation, enough to tell the operator to reflash."""
+        if len(bytes_) >= 2 and 0 < bytes_[0] < DEVICE_INFO_VERSION:
+            self.info_version, self.info_gen = bytes_[0], bytes_[1]
+            return self
+        return super().from_bytes(bytes_)
 
 
 @dataclass

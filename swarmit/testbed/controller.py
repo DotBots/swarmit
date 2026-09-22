@@ -127,6 +127,9 @@ class StaleBootloaderError(Exception):
         )
 
 
+FIRMWARE_TOO_OLD = "firmware too old: reflash"
+
+
 @dataclass
 class DeviceInfo:
     """What a bot reports it is running, decoded for display.
@@ -149,7 +152,7 @@ class DeviceInfo:
     image_version: str = ""
     lh2_homography_count: int = 0
     lh2_flags: int = 0
-    lh2_site_name: str = ""  # "" when the bot holds none or reports v1
+    lh2_site_name: str = ""  # "" when the bot holds none
     lh2_calibration_id: str = ""  # 16 hex characters, "" when none
     raw: str = ""  # hex of the full device-info packet as received
 
@@ -190,6 +193,11 @@ class DeviceInfo:
         return self.image_size > 0 or self.image_digest.strip("0") != ""
 
     @property
+    def too_old(self) -> bool:
+        """Whether the bot runs firmware older than this host, to reflash."""
+        return 0 < self.info_version < DEVICE_INFO_VERSION
+
+    @property
     def image_label(self) -> str:
         """How to name this image in a table.
 
@@ -220,6 +228,8 @@ class DeviceInfo:
 
     @property
     def lh2_summary(self) -> str:
+        if self.too_old:
+            return FIRMWARE_TOO_OLD
         if not self.lh2_homography_count:
             return "uncalibrated"
         # One homography is stored per basestation index, so the count is the
@@ -475,6 +485,8 @@ def format_sandbox_fw(info: DeviceInfo | None) -> str:
     """
     if info is None:
         return "-"
+    if info.too_old:
+        return f"[red]{FIRMWARE_TOO_OLD}"
     bl, net = info.bl_version, info.net_version
     if not bl and not net:
         return "-"
@@ -511,8 +523,8 @@ def format_lh2_site(info: DeviceInfo | None) -> str:
     """The site the bot's calibration was captured in."""
     if info is None:
         return "-"
-    if info.info_version < 2:
-        return "unknown (firmware predates it)"
+    if info.too_old:
+        return FIRMWARE_TOO_OLD
     return info.lh2_site_name or "none"
 
 
@@ -520,8 +532,8 @@ def format_lh2_id(info: DeviceInfo | None) -> str:
     """The id of the calibration file the bot holds."""
     if info is None:
         return "-"
-    if info.info_version < 2:
-        return "unknown (firmware predates it)"
+    if info.too_old:
+        return FIRMWARE_TOO_OLD
     return info.lh2_calibration_id or "none"
 
 
@@ -537,6 +549,8 @@ def format_lh2_cell(info: DeviceInfo | None) -> str:
     """
     if info is None:
         return "-"
+    if info.too_old:
+        return "too old"
     if not info.lh2_homography_count:
         return "none"
     return str(info.lh2_homography_count)
@@ -772,7 +786,13 @@ def generate_info(status_data, devices=[], show_raw=False):
             age = max(0.0, time.time() - d.last_updated_at)
             table.add_row("Last update", f"{age:.1f}s ago")
 
-        if d.info is not None:
+        if d.info is not None and d.info.too_old:
+            table.add_row("", "")
+            table.add_row(
+                "Device info",
+                f"[red]v{d.info.info_version}, {FIRMWARE_TOO_OLD}",
+            )
+        elif d.info is not None:
             info = d.info
             table.add_row("", "")
             table.add_row("Image", info.image_label)
