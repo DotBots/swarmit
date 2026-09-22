@@ -33,6 +33,11 @@ static bool _ns_writable(void *ptr, size_t size, size_t align) {
     return ((uintptr_t)ptr % align) == 0 && cmse_check_address_range(ptr, size, CMSE_NONSECURE | CMSE_MPU_READWRITE) != NULL;
 }
 
+/// True when the caller may read [ptr, ptr + size) from non-secure state.
+static bool _ns_readable(const void *ptr, size_t size) {
+    return size == 0 || cmse_check_address_range((void *)ptr, size, CMSE_NONSECURE | CMSE_MPU_READ) != NULL;
+}
+
 __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
     NRF_WDT0_S->RR[0] = WDT_RR_RR_Reload << WDT_RR_RR_Pos;
     ipc_shared_data.battery_level = battery_level_read();
@@ -53,15 +58,21 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_send_data_packet(const uint8_t *packet, uint8_t length) {
+    if (length > sizeof(_tx_data_buffer) - 2 || !_ns_readable(packet, length)) {
+        return;
+    }
     size_t pos = 0;
     _tx_data_buffer[pos++] = PACKET_DATA;
     _tx_data_buffer[pos++] = length;
-    memcpy(_tx_data_buffer + pos, &packet, length);
+    memcpy(_tx_data_buffer + pos, packet, length);
     pos += length;
     mari_node_tx(_tx_data_buffer, pos);
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_send_raw_data(const uint8_t *packet, uint8_t length) {
+    if (!_ns_readable(packet, length)) {
+        return;
+    }
     mari_node_tx(packet, length);
 }
 
@@ -88,13 +99,7 @@ __attribute__((cmse_nonsecure_entry)) uint64_t swarmit_read_device_id(void) {
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_t length) {
-    if (length > INT8_MAX) {
-        // Ensure length fits in the log data buffer in shared RAM
-        return;
-    }
-
-    if ((data > (uint8_t *)0x20000000 && data < (uint8_t *)0x20008000) || (data > (uint8_t *)0x00000000 && data < (uint8_t *)0x0000ff00)) {
-        // Ensure data address is not in secure space
+    if (length > INT8_MAX || !_ns_readable(data, length)) {
         return;
     }
 
