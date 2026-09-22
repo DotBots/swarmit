@@ -30,6 +30,10 @@ __attribute__((cmse_nonsecure_entry, aligned)) uint64_t swarmit_read_device_id(v
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_log_data(uint8_t *data, size_t length);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_get_battery_level(uint16_t *battery);
 
+// Every veneer that writes through a caller pointer leaves it untouched, and
+// returns 0 where it returns anything, unless the whole object is in memory
+// the caller can write from non-secure state and is naturally aligned.
+
 /// Uplink packets per second x 100 this node gets on the schedule it joined
 /// with (377 on huge); 0 when not joined.
 __attribute__((cmse_nonsecure_entry, aligned)) uint16_t swarmit_get_uplink_budget(void);

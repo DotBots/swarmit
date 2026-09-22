@@ -77,6 +77,9 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_init_rng(void) {
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_read_rng(uint8_t *value) {
+    if (!_ns_writable(value, sizeof(*value), 1)) {
+        return;
+    }
     rng_read(value);
 }
 
@@ -103,6 +106,9 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_log_data(uint8_t *data, size_
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_get_battery_level(uint16_t *battery) {
+    if (!_ns_writable(battery, sizeof(*battery), __alignof__(*battery))) {
+        return;
+    }
     *battery = ipc_shared_data.battery_level;
 }
 
@@ -111,6 +117,9 @@ __attribute__((cmse_nonsecure_entry)) uint16_t swarmit_get_uplink_budget(void) {
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
+    if (!_ns_writable(position, sizeof(*position), 4)) {
+        return;
+    }
     mutex_lock();
     position->x = ipc_shared_data.current_position.x;
     position->y = ipc_shared_data.current_position.y;
@@ -118,6 +127,9 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(pos
 }
 
 __attribute__((cmse_nonsecure_entry)) uint32_t swarmit_localization_get_fix(position_2d_t *position) {
+    if (!_ns_writable(position, sizeof(*position), 4)) {
+        return 0;
+    }
     mutex_lock();
     position->x        = ipc_shared_data.current_position.x;
     position->y        = ipc_shared_data.current_position.y;
@@ -146,6 +158,9 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_localization_handle_isr(void)
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_saadc_read(uint8_t channel, uint16_t *value) {
     if (channel != DB_SAADC_INPUT_VDDH && !(channel <= DB_SAADC_INPUT_VDD) && !(channel >= DB_SAADC_INPUT_AIN0)) {
+        return;
+    }
+    if (!_ns_writable(value, sizeof(*value), __alignof__(*value))) {
         return;
     }
     return db_saadc_read(channel, value);
