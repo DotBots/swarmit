@@ -88,7 +88,7 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_init_rng(void) {
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_read_rng(uint8_t *value) {
-    if (!_ns_writable(value, sizeof(*value), 1)) {
+    if (!_ns_writable(value, sizeof(*value), __alignof__(*value))) {
         return;
     }
     rng_read(value);
@@ -122,7 +122,7 @@ __attribute__((cmse_nonsecure_entry)) uint16_t swarmit_get_uplink_budget(void) {
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
-    if (!_ns_writable(position, sizeof(*position), 4)) {
+    if (!_ns_writable(position, sizeof(*position), POSITION_2D_ALIGN)) {
         return;
     }
     mutex_lock();
@@ -132,7 +132,7 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(pos
 }
 
 __attribute__((cmse_nonsecure_entry)) uint32_t swarmit_localization_get_fix(position_2d_t *position) {
-    if (!_ns_writable(position, sizeof(*position), 4)) {
+    if (!_ns_writable(position, sizeof(*position), POSITION_2D_ALIGN)) {
         return 0;
     }
     mutex_lock();

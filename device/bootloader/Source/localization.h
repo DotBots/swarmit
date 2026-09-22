@@ -28,6 +28,9 @@ typedef struct __attribute__((packed)) {
     uint32_t y;  ///< Y coordinate in mm
 } position_2d_t;
 
+/// The veneers store x and y as words, so a caller's position_2d_t must sit at this alignment.
+#define POSITION_2D_ALIGN (4U)
+
 typedef struct __attribute__((packed)) {
     uint8_t basestation_index;        ///< which LH basestation is this homography for?
     float   homography_matrix[3][3];  ///< homography matrix, float32 in mm
