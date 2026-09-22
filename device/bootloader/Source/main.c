@@ -265,6 +265,14 @@ static void _update_position(void) {
     _bootloader_vars.position_update = true;
 }
 
+/// Store @p value little-endian at @p dst and return the bytes written.
+static uint8_t _put_u32_le(volatile uint8_t *dst, uint32_t value) {
+    for (uint8_t shift = 0; shift < 32; shift += 8) {
+        *dst++ = (uint8_t)(value >> shift);
+    }
+    return sizeof(value);
+}
+
 static void _read_battery(void) {
     _bootloader_vars.battery_update = true;
 }
@@ -600,12 +608,8 @@ int main(void) {
                 ipc_shared_data.log.data[length++] = SWRMT_LH2_CALIB_TAG;
                 for (uint8_t i = 0; i < count; i++) {
                     ipc_shared_data.log.data[length++] = samples[i].lh_index;
-                    for (uint8_t shift = 0; shift < 32; shift += 8) {
-                        ipc_shared_data.log.data[length++] = (uint8_t)(samples[i].count1 >> shift);
-                    }
-                    for (uint8_t shift = 0; shift < 32; shift += 8) {
-                        ipc_shared_data.log.data[length++] = (uint8_t)(samples[i].count2 >> shift);
-                    }
+                    length += _put_u32_le(&ipc_shared_data.log.data[length], samples[i].count1);
+                    length += _put_u32_le(&ipc_shared_data.log.data[length], samples[i].count2);
                 }
                 ipc_shared_data.log.length = length;
                 mutex_unlock();

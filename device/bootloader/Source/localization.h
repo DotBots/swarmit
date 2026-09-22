@@ -53,6 +53,7 @@ _Static_assert(offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is p
 
 /// Size of one sample on the wire: [lh_index:1][count1:4 LE][count2:4 LE]
 #define LH2_RAW_SAMPLE_WIRE_SIZE (9U)
+_Static_assert(LH2_RAW_SAMPLE_WIRE_SIZE == sizeof(uint8_t) + 2 * sizeof(uint32_t), "wire record is lh_index, count1, count2");
 
 /// Load the homographies and the rectangle outside which a solve is dropped
 /// (x_min, y_min, x_max, y_max in mm; all 0xFF selects 0 to LH2_VALID_MM_MAX_DEFAULT).
