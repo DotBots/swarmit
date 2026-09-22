@@ -270,6 +270,8 @@ class NodeStatus:
     # Generation counter as of the most recent status frame. When it differs
     # from `info.info_gen` the cached block is stale and gets refetched.
     info_gen: int = 0
+    ipc_timeouts: int = 0
+    tx_dropped: int = 0
     info: DeviceInfo | None = None
 
 
@@ -832,6 +834,12 @@ def generate_info(status_data, devices=[], show_raw=False):
 
         table.add_row("", "")
         table.add_row(
+            "Frames dropped",
+            f"{d.tx_dropped} not joined, {d.ipc_timeouts} net core timeouts",
+        )
+
+        table.add_row("", "")
+        table.add_row(
             "Last reset",
             f"[{reset_cause_color(d)}]{format_reset_cause(d)}",
         )
@@ -1313,6 +1321,8 @@ class Controller:
                 raw=packet.to_bytes().hex(),
                 last_updated_at=now,
                 info_gen=packet.payload.info_gen,
+                ipc_timeouts=packet.payload.ipc_timeouts,
+                tx_dropped=packet.payload.tx_dropped,
                 # Carried over rather than refetched: the block only changes
                 # when the generation counter says it did.
                 info=self._device_info.get(device_addr),
