@@ -3,7 +3,6 @@ import pytest
 from swarmit.testbed.controller import DeviceInfo
 from swarmit.testbed.protocol import (
     CRASH_REPORT_SIZE,
-    DROP_COUNTERS_SIZE,
     IMAGE_DIGEST_LEN,
     INFO_GEN_SIZE,
     INFO_STRING_LEN,
@@ -40,21 +39,12 @@ def test_payload_status_round_trip():
         pc=0x0001_2345,
         lr=0x0001_2340,
         info_gen=7,
-        ipc_timeouts=3,
-        tx_dropped=41,
     )
     raw = payload.to_bytes()
-    assert len(raw) == (
-        STATUS_BASE_SIZE
-        + CRASH_REPORT_SIZE
-        + INFO_GEN_SIZE
-        + DROP_COUNTERS_SIZE
-    )
+    assert len(raw) == STATUS_BASE_SIZE + CRASH_REPORT_SIZE + INFO_GEN_SIZE
 
     parsed = PayloadStatus().from_bytes(bytes(raw))
     assert parsed.info_gen == 7
-    assert parsed.ipc_timeouts == 3
-    assert parsed.tx_dropped == 41
     assert parsed.device == 1
     assert parsed.status == 2
     assert parsed.battery == 2800
@@ -313,12 +303,7 @@ def test_watchdog_timeout_rides_the_existing_crash_report():
         lr=0x0001_39C0,
     )
     raw = payload.to_bytes()
-    assert len(raw) == (
-        STATUS_BASE_SIZE
-        + CRASH_REPORT_SIZE
-        + INFO_GEN_SIZE
-        + DROP_COUNTERS_SIZE
-    )
+    assert len(raw) == STATUS_BASE_SIZE + CRASH_REPORT_SIZE + INFO_GEN_SIZE
 
     parsed = PayloadStatus().from_bytes(bytes(raw))
     assert parsed.fault == 3

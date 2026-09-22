@@ -293,7 +293,6 @@ STATUS_BASE_SIZE = 12
 CRASH_REPORT_SIZE = 30
 # Size of the generation counter appended after the crash report.
 INFO_GEN_SIZE = 1
-DROP_COUNTERS_SIZE = 8
 
 # Width of the identity strings on the wire, NUL-padded. Mirrors
 # SWRMT_INFO_STRING_LEN in the firmware; Matter, Zigbee and Thread all cap
@@ -436,8 +435,6 @@ class PayloadStatus(Payload):
             PayloadFieldMetadata(name="sp", disp="sp", length=4),
             PayloadFieldMetadata(name="psr", disp="psr", length=4),
             PayloadFieldMetadata(name="info_gen", disp="gen"),
-            PayloadFieldMetadata(name="ipc_timeouts", disp="ipc to", length=4),
-            PayloadFieldMetadata(name="tx_dropped", disp="tx drop", length=4),
         ]
     )
 
@@ -459,11 +456,6 @@ class PayloadStatus(Payload):
     # controller refetches on any difference from what it cached, so the
     # steady state costs no device-info traffic at all.
     info_gen: int = 0
-    # Both counters run since boot. ipc_timeouts: requests the application
-    # core gave up waiting on the network core for. tx_dropped: uplink
-    # frames the network core discarded because the bot was not joined.
-    ipc_timeouts: int = 0
-    tx_dropped: int = 0
 
     # There is deliberately no upgrade path for a shorter frame. Firmware and
     # host ship together, so a payload of any other shape comes from a bot too

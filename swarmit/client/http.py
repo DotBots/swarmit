@@ -307,8 +307,6 @@ def _parse_node_status(d: dict) -> NodeStatus:
         raw=d.get("raw", ""),
         last_updated_at=d["last_updated_at"],
         info_gen=d.get("info_gen", 0),
-        ipc_timeouts=d.get("ipc_timeouts", 0),
-        tx_dropped=d.get("tx_dropped", 0),
         # A daemon predating device info sends no "info" key at all, and a
         # bot that has not answered yet leaves it null.
         info=_parse_device_info(info) if isinstance(info, dict) else None,
