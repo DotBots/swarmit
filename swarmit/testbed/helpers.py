@@ -13,7 +13,7 @@ CALIBRATION_SCHEMA_VERSION = 2
 
 LH2_BASESTATION_COUNT_MAX = 16
 # What PyDotBot's reader assumes for a file without [validity]; keep in step.
-VALID_MM_DEFAULT = (0, 0, 4000, 4500)
+VALID_MM_DEFAULT = (0, 0, 10000, 10000)
 SITE_DEFAULT = "default"
 
 
