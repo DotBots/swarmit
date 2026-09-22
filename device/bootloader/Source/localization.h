@@ -18,6 +18,9 @@
 
 #define LH2_BASESTATION_COUNT_MAX (16)
 
+#define LH2_VALID_MM_LEN          (4U)       ///< x_min, y_min, x_max, y_max
+#define LH2_VALID_MM_MAX_DEFAULT  (100000U)  ///< mm; x_max and y_max when the calibration carries no rectangle
+
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {
     uint32_t x;  ///< X coordinate in mm
@@ -48,8 +51,8 @@ _Static_assert(__builtin_offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sam
 #define LH2_RAW_SAMPLE_WIRE_SIZE (9U)
 
 /// Load the homographies and the rectangle outside which a solve is dropped
-/// (x_min, y_min, x_max, y_max in mm; all 0xFF selects 0 to 100000 mm).
-void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[4]);
+/// (x_min, y_min, x_max, y_max in mm; all 0xFF selects 0 to LH2_VALID_MM_MAX_DEFAULT).
+void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[LH2_VALID_MM_LEN]);
 
 /// Start the LH2 driver without loading any calibration (idempotent). Used for raw capture in READY mode.
 void localization_start(void);

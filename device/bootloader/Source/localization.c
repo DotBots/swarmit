@@ -8,7 +8,7 @@
 
 /// Rectangle used when the calibration carries none. A solve outside the
 /// rectangle is dropped; nothing else filters the stream.
-static const uint32_t _valid_mm_default[4] = { 0, 0, 100000, 100000 };
+static const uint32_t _valid_mm_default[LH2_VALID_MM_LEN] = { 0, 0, LH2_VALID_MM_MAX_DEFAULT, LH2_VALID_MM_MAX_DEFAULT };
 
 typedef struct {
     db_lh2_t                lh2;
@@ -18,7 +18,7 @@ typedef struct {
 
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 static bool _calibration_loaded = false;
-static uint32_t _valid_mm[4] = { 0, 0, 100000, 100000 };
+static uint32_t _valid_mm[LH2_VALID_MM_LEN] = { 0, 0, LH2_VALID_MM_MAX_DEFAULT, LH2_VALID_MM_MAX_DEFAULT };
 static bool _lh2_started = false;
 
 void localization_start(void) {
@@ -30,12 +30,12 @@ void localization_start(void) {
     _lh2_started = true;
 }
 
-void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[4]) {
+void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[LH2_VALID_MM_LEN]) {
     printf("Initialize localization with %u homography matrices\n", homography_count);
     localization_start();
 
     bool valid_mm_absent = true;
-    for (uint8_t i = 0; i < 4; i++) {
+    for (uint8_t i = 0; i < LH2_VALID_MM_LEN; i++) {
         valid_mm_absent = valid_mm_absent && (valid_mm[i] == UINT32_MAX);
     }
     memcpy(_valid_mm, valid_mm_absent ? _valid_mm_default : valid_mm, sizeof(_valid_mm));
