@@ -355,10 +355,8 @@ int main(void) {
             _app_vars.notification_buffer[length++] = ipc_shared_data.status;
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.battery_level, sizeof(uint16_t));
             length += sizeof(uint16_t);
-            // Held because the secure side writes x and y under this mutex.
-            // Without it the two halves can come from different solves, and
-            // since solves are no longer displacement-bounded the result can be
-            // a position neither solve produced.
+            // x and y are written together under this mutex by the secure side;
+            // read them under it so both halves come from the same solve.
             mutex_lock();
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.current_position, sizeof(position_2d_t));
             mutex_unlock();
@@ -689,10 +687,8 @@ int main(void) {
         if (_app_vars.data_received) {
             _app_vars.data_received = false;
             mutex_lock();
-            // Interrupts off so a packet landing mid-copy cannot tear the staged payload.
-            // This masks mari's TIMER2 and the radio too, 5-10 us typically and 24 us at
-            // worst: inside mari's 100 us desync threshold and 140 us rx guard, but it
-            // jitters one slot's timestamp, which mari stamps in software at ISR entry.
+            // Interrupts off for the copy only (at most UINT8_MAX bytes): it delays the
+            // radio and mari timer ISRs, so nothing else goes inside this window.
             uint32_t primask = __get_PRIMASK();
             __disable_irq();
             ipc_shared_data.rx_pdu.length = _app_vars.rx_length;
