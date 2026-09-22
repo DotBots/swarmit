@@ -22,7 +22,8 @@ void mutex_unlock(void) {
 
 void ipc_network_call(ipc_req_t req) {
     if (req != IPC_REQ_NONE) {
-        ipc_shared_data.req                 = req;
+        ipc_shared_data.req = req;
+        __DMB();
         NRF_IPC_S->TASKS_SEND[IPC_CHAN_REQ] = 1;
     }
     while (!ipc_shared_data.net_ack) {}
