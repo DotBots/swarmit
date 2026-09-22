@@ -6,6 +6,8 @@
 #include "localization.h"
 #include "lh2_calibration.h"
 
+_Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_BASESTATION_COUNT, "localization.h and lh2.h must agree on the basestation ceiling");
+
 /// Rectangle used when the calibration carries none. A solve outside the
 /// rectangle is dropped; nothing else filters the stream.
 static const uint32_t _valid_mm_default[LH2_VALID_MM_LEN] = { 0, 0, LH2_VALID_MM_MAX_DEFAULT, LH2_VALID_MM_MAX_DEFAULT };
