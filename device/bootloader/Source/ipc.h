@@ -124,10 +124,10 @@ typedef struct __attribute__((packed)) {
 
 /// The uplink this node gets on the schedule it adopted at join
 typedef struct __attribute__((packed)) {
-    uint16_t budget_cpps;   ///< Uplink packets per second x 100; 0 = not joined
+    uint32_t interval_us;   ///< Least time between two of this node's uplink sends: the slotframe duration in microseconds; 0 = not joined
     uint8_t  schedule_id;   ///< Schedule adopted from the beacon; 0 = not joined
-    uint8_t  reserved;
-} ipc_uplink_budget_t;
+    uint8_t  reserved[3];
+} ipc_uplink_t;
 
 typedef struct __attribute__((packed,aligned(8))) {
     bool                    net_ready;          ///< Network core is ready
@@ -147,8 +147,8 @@ typedef struct __attribute__((packed,aligned(8))) {
     ipc_device_info_t       device_info;        ///< What this bot is running
     ipc_crash_report_t      crash_report;       ///< Cause of the most recent reset
     uint8_t                 net_result;         ///< ipc_net_result_t of the latest request, written by the network core before the ack
-    uint8_t                 reserved;           ///< Word-aligns uplink_budget after the 30-byte crash_report
-    ipc_uplink_budget_t     uplink_budget;      ///< Written by the network core on join and disconnect
+    uint8_t                 reserved;           ///< Word-aligns uplink after the 30-byte crash_report
+    ipc_uplink_t            uplink;             ///< Written by the network core on join and disconnect
     uint32_t                ipc_timeouts;       ///< Requests the application core stopped waiting on, since its boot
 } ipc_shared_data_t;
 
@@ -175,10 +175,10 @@ _Static_assert(offsetof(ipc_shared_data_t, device_info) % 4 == 0,
                "device_info must be 4-byte aligned");
 _Static_assert(offsetof(ipc_shared_data_t, crash_report) % 4 == 0,
                "crash_report must be 4-byte aligned");
-_Static_assert(sizeof(ipc_uplink_budget_t) == 4,
-               "ipc_uplink_budget_t size must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, uplink_budget) % 4 == 0,
-               "uplink_budget must be 4-byte aligned");
+_Static_assert(sizeof(ipc_uplink_t) == 8,
+               "ipc_uplink_t size must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, uplink) % 4 == 0,
+               "uplink must be 4-byte aligned");
 
 // Exact offsets, identical in both cores' copies, so a layout change made to
 // only one copy fails to compile.
@@ -200,8 +200,8 @@ _Static_assert(offsetof(ipc_shared_data_t, device_info) == 1540, "ipc_shared_dat
 _Static_assert(offsetof(ipc_shared_data_t, crash_report) == 1692, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, net_result) == 1722, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, reserved) == 1723, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, uplink_budget) == 1724, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, ipc_timeouts) == 1728, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, uplink) == 1724, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, ipc_timeouts) == 1732, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(sizeof(ipc_shared_data_t) == 1736, "ipc_shared_data_t layout must match the other core's copy");
 
 void mutex_lock(void);

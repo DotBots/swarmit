@@ -44,8 +44,6 @@ _Static_assert(sizeof(SWRMT_FW_VERSION) <= SWRMT_INFO_STRING_LEN,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
 #define LH2_BASESTATION_COUNT_MAX           (16)
-#define US_PER_S                            (1000000UL)
-#define CPPS_SCALE                          (100UL)     // budget_cpps is packets per second x 100
 
 //=========================== variables =========================================
 
@@ -148,11 +146,9 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
 
 // A joined node owns one uplink cell per slotframe, so its budget is one
 // packet per slotframe duration.
-static void _publish_uplink_budget(bool connected) {
-    uint32_t slotframe_us = connected ? mr_scheduler_get_duration_us() : 0;
-    uint32_t budget_cpps  = slotframe_us ? (US_PER_S * CPPS_SCALE) / slotframe_us : 0;
-    ipc_shared_data.uplink_budget.budget_cpps = (budget_cpps > UINT16_MAX) ? UINT16_MAX : (uint16_t)budget_cpps;
-    ipc_shared_data.uplink_budget.schedule_id = connected ? mr_scheduler_get_active_schedule_id() : 0;
+static void _publish_uplink(bool connected) {
+    ipc_shared_data.uplink.interval_us = connected ? mr_scheduler_get_duration_us() : 0;
+    ipc_shared_data.uplink.schedule_id = connected ? mr_scheduler_get_active_schedule_id() : 0;
 }
 
 static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
@@ -165,13 +161,13 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
         case MARI_CONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Connected to gateway %016llX\n", gateway_id);
-            _publish_uplink_budget(true);
+            _publish_uplink(true);
             break;
         }
         case MARI_DISCONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Disconnected from gateway %016llX, reason: %u\n", gateway_id, event_data.tag);
-            _publish_uplink_budget(false);
+            _publish_uplink(false);
             break;
         }
         case MARI_ERROR:
@@ -338,7 +334,7 @@ int main(void) {
     mr_gpio_set(&_debug1); mr_gpio_clear(&_debug1);
     // mr_gpio_set(&_debug2); mr_gpio_clear(&_debug2);
 
-    _publish_uplink_budget(false);
+    _publish_uplink(false);
 
     // Network core must remain on
     ipc_shared_data.net_ready = true;

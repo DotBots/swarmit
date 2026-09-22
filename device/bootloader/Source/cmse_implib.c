@@ -125,8 +125,8 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_get_battery_level(uint16_t *b
     *battery = ipc_shared_data.battery_level;
 }
 
-__attribute__((cmse_nonsecure_entry)) uint16_t swarmit_get_uplink_budget(void) {
-    return ipc_shared_data.uplink_budget.budget_cpps;
+__attribute__((cmse_nonsecure_entry)) uint32_t swarmit_get_uplink_interval_us(void) {
+    return ipc_shared_data.uplink.interval_us;
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_localization_get_position(position_2d_t *position) {
