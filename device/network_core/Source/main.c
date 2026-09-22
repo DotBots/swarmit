@@ -230,7 +230,7 @@ static void _load_config(void) {
     // Reported as part of the device inventory. Position alone cannot answer
     // this: (0, 0) reads the same for "uncalibrated" and "at the origin".
     ipc_shared_data.device_info.lh2_homography_count = calibrated ? (uint8_t)_app_vars.config.homography_count : 0;
-    ipc_shared_data.device_info.lh2_flags = SWRMT_LH2_FLAG_FLOAT32 | (calibrated ? (SWRMT_LH2_FLAG_VALID | SWRMT_LH2_FLAG_FROM_FLASH) : 0);
+    ipc_shared_data.device_info.lh2_flags = calibrated ? (SWRMT_LH2_FLAG_VALID | SWRMT_LH2_FLAG_FROM_FLASH) : 0;
 
     if (calibrated) {
         // copy homography matrices to shared memory without casting away volatile

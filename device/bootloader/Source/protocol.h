@@ -78,7 +78,6 @@ typedef enum {
 /// Bits of swrmt_device_info_pkt_t.lh2_flags.
 #define SWRMT_LH2_FLAG_VALID        (1U << 0)   ///< a usable homography set is loaded
 #define SWRMT_LH2_FLAG_FROM_FLASH   (1U << 1)   ///< it came from the provisioned config page
-#define SWRMT_LH2_FLAG_FLOAT32      (1U << 2)   ///< homographies are float32 on the wire and in the config page
 
 /// Generic one-shot query. Modelled on MAVLink's MAV_CMD_REQUEST_MESSAGE
 /// (512), which superseded ~15 bespoke MAV_CMD_REQUEST_* commands: a future
