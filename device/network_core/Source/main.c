@@ -143,8 +143,7 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     _app_vars.data_received = true;
 }
 
-// A joined node owns one uplink cell per slotframe, so its budget is one
-// packet per slotframe duration.
+// A joined node owns one uplink cell per slotframe, so its uplink interval is the slotframe duration.
 static void _publish_uplink(bool connected) {
     ipc_shared_data.uplink.interval_us = connected ? mr_scheduler_get_duration_us() : 0;
     ipc_shared_data.uplink.schedule_id = connected ? mr_scheduler_get_active_schedule_id() : 0;
