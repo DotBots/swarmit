@@ -632,8 +632,6 @@ int main(void) {
                 ipc_shared_data.current_position.y = position.y;
                 mutex_unlock();
                 printf("Position (%u,%u)\n", position.x, position.y);
-            } else {
-                printf("Invalid position (%u,%u)\n", position.x, position.y);
             }
             _bootloader_vars.position_update = false;
         }
