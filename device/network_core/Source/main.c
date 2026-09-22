@@ -641,6 +641,7 @@ int main(void) {
                     }
                 } break;
                 case SWRMT_MSG_LH2_CAPTURE:
+                    // DEPRECATED: the calibrate app's button capture replaces this READY-mode capture request.
                     // Raw LH2 capture only makes sense while the secure bootloader owns
                     // the main loop (READY). In RUNNING the secure side has jumped to the
                     // non-secure image and never services this channel.

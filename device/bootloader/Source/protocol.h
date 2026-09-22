@@ -36,6 +36,7 @@
 
 /// First byte of a raw LH2 capture sample carried inside a LOG_EVENT payload.
 /// Lets the host tell a calibration sample apart from a regular text log line.
+/// DEPRECATED: the reply to the READY-mode capture request; the calibrate app replaces it.
 #define SWRMT_LH2_CALIB_TAG         (0xCAU)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.

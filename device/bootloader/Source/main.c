@@ -462,6 +462,7 @@ int main(void) {
             _load_calibration();
         }
 
+        // DEPRECATED: the calibrate app's button capture replaces this READY-mode capture request.
         if (_bootloader_vars.lh2_capture_request) {
             _bootloader_vars.lh2_capture_request = false;
             localization_start();  // idempotent: starts LH2 even when no calibration is loaded
@@ -600,9 +601,10 @@ int main(void) {
         // Process available lighthouse data
         bool data_available = localization_process_data();
 
-        // Raw LH2 capture for OTA calibration: drain the freshest counts and ship
-        // them to the host inside a LOG_EVENT. Cap samples so 1 tag + the wire
-        // record per sample fits in ipc_shared_data.log.data (INT8_MAX bytes).
+        // DEPRECATED with the capture request above. Raw LH2 capture for OTA
+        // calibration: drain the freshest counts and ship them to the host
+        // inside a LOG_EVENT. Cap samples so 1 tag + the wire record per
+        // sample fits in ipc_shared_data.log.data (INT8_MAX bytes).
         if (_bootloader_vars.lh2_capturing && data_available) {
             const uint8_t  max_samples = (INT8_MAX - 1) / LH2_RAW_SAMPLE_WIRE_SIZE;
             lh2_raw_sample_t samples[LH2_BASESTATION_COUNT_MAX] = { 0 };

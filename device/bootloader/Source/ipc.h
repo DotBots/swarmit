@@ -40,7 +40,7 @@ typedef enum {
     IPC_CHAN_OTA_START          = 6,    ///< Channel used for starting an OTA process
     IPC_CHAN_OTA_CHUNK          = 7,    ///< Channel used for writing a non secure image chunk
     IPC_CHAN_CALIBRATION_DATA   = 8,    ///< Channel used for sending calibration data
-    IPC_CHAN_LH2_CAPTURE        = 9,    ///< Channel used to trigger a raw LH2 capture (READY mode only)
+    IPC_CHAN_LH2_CAPTURE        = 9,    ///< Channel used to trigger a raw LH2 capture (READY mode only; DEPRECATED)
     IPC_CHAN_OTA_FINALIZE       = 10,   ///< Channel used to verify the whole image SHA256 (block OTA)
 } ipc_channels_t;
 
