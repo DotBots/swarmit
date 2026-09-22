@@ -1,8 +1,10 @@
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <arm_cmse.h>
 #include <nrf.h>
 
 #include "battery.h"
@@ -23,6 +25,13 @@ static __attribute__((aligned(4))) volatile uint32_t _localization_data_availabl
 static __attribute__((aligned(4))) uint32_t _localization_fix_sequence = 0;
 
 extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_shared_data;
+
+/// True when the caller may write [ptr, ptr + size) from non-secure state
+/// and ptr is aligned to @p align. The TT lookup answers from the SPU, so a
+/// secure peripheral alias, the PPB, secure flash and secure RAM all fail.
+static bool _ns_writable(void *ptr, size_t size, size_t align) {
+    return ((uintptr_t)ptr % align) == 0 && cmse_check_address_range(ptr, size, CMSE_NONSECURE | CMSE_MPU_READWRITE) != NULL;
+}
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
     NRF_WDT0_S->RR[0] = WDT_RR_RR_Reload << WDT_RR_RR_Pos;
@@ -118,13 +127,7 @@ __attribute__((cmse_nonsecure_entry)) uint32_t swarmit_localization_get_fix(posi
 }
 
 __attribute__((cmse_nonsecure_entry)) uint8_t swarmit_localization_get_raw_counts(lh2_raw_sample_t *samples, uint8_t max) {
-    // Reject a buffer that reaches into secure RAM or secure flash
-    uintptr_t start = (uintptr_t)samples;
-    uintptr_t end   = start + (uintptr_t)max * sizeof(lh2_raw_sample_t);
-    if (max == 0 || end < start || (start % __alignof__(lh2_raw_sample_t)) != 0) {
-        return 0;
-    }
-    if ((start < 0x20008000 && end > 0x20000000) || start < 0x0000ff00) {
+    if (max == 0 || !_ns_writable(samples, (size_t)max * sizeof(lh2_raw_sample_t), __alignof__(lh2_raw_sample_t))) {
         return 0;
     }
 
