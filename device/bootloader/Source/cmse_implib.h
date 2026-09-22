@@ -20,6 +20,13 @@
 
 typedef void (*ipc_isr_cb_t)(const uint8_t *, size_t) __attribute__((cmse_nonsecure_call));
 
+// Every pointer the caller passes is checked against non-secure memory, and an
+// out-pointer also against its type's alignment: a veneer that fails the check
+// does nothing and returns 0 where it returns anything.
+// Veneers that read or publish the position or the log take the shared-memory
+// mutex, so they are called from thread context, never from an interrupt
+// handler.
+
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_keep_alive(void);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_send_data_packet(const uint8_t *packet, uint8_t length);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_send_raw_data(const uint8_t *packet, uint8_t length);
@@ -30,12 +37,8 @@ __attribute__((cmse_nonsecure_entry, aligned)) uint64_t swarmit_read_device_id(v
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_log_data(uint8_t *data, size_t length);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_get_battery_level(uint16_t *battery);
 
-// Every veneer that writes through a caller pointer leaves it untouched, and
-// returns 0 where it returns anything, unless the whole object is in memory
-// the caller can write from non-secure state and is naturally aligned.
-
 /// Uplink packets per second x 100 this node gets on the schedule it joined
-/// with (377 on huge); 0 when not joined.
+/// with; 0 when not joined.
 __attribute__((cmse_nonsecure_entry, aligned)) uint16_t swarmit_get_uplink_budget(void);
 
 // Lighthouse 2 functions exposed to user image
@@ -50,7 +53,9 @@ __attribute__((cmse_nonsecure_entry, aligned)) uint32_t swarmit_localization_get
 /// Start LH2 if needed and drain the raw counts of every basestation with both
 /// sweeps decoded into @p samples, at most @p max of them. Returns the number
 /// written; 0 when none is ready, or the buffer is misaligned or not in
-/// non-secure memory.
+/// non-secure memory. Consumes the sweeps the position solver would use, so
+/// poll one or the other. Starts LH2 on the first call: the caller's SPIM4
+/// handler must call swarmit_localization_handle_isr().
 __attribute__((cmse_nonsecure_entry, aligned)) uint8_t swarmit_localization_get_raw_counts(lh2_raw_sample_t *samples, uint8_t max);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_handle_isr(void);
 
