@@ -129,7 +129,8 @@ class PayloadType(IntEnum):
 
     # SwarmIT calibration data
     SWARMIT_LH2_CALIBRATION = 0xA1
-    # Host -> node: trigger a raw LH2 capture (READY mode only)
+    # Host -> node: trigger a raw LH2 capture (READY mode only). DEPRECATED: the
+    # calibrate app's button capture replaces it.
     SWARMIT_LH2_CAPTURE = 0xA2
 
     # Marilib metrics probe
@@ -151,7 +152,8 @@ OTA_PROTOCOL_VERSION_BLOCK = 2
 # First byte of a raw LH2 capture sample carried inside a SWARMIT_EVENT_LOG
 # payload. Mirrors SWRMT_LH2_CALIB_TAG in the swarmit bootloader firmware; lets
 # the host tell a calibration sample apart from a regular text log line. Each
-# sample that follows is [lh_index:1][count1:4 LE][count2:4 LE].
+# sample that follows is [lh_index:1][count1:4 LE][count2:4 LE]. DEPRECATED
+# with SWARMIT_LH2_CAPTURE, whose reply it tags.
 LH2_CALIB_TAG = 0xCA
 
 

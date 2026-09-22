@@ -1601,6 +1601,8 @@ class Controller:
     def request_lh2_capture(self, device_addr: str):
         """Trigger a single raw LH2 capture on one device.
 
+        DEPRECATED: the calibrate app's button capture replaces it.
+
         The bot replies (only while READY) with a SWARMIT_EVENT_LOG whose
         payload starts with LH2_CALIB_TAG. Delivery is best-effort: callers
         await that log event and re-issue on timeout rather than relying on
