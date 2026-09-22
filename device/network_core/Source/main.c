@@ -667,7 +667,11 @@ int main(void) {
                     }
                     break;
                 case IPC_MARI_NODE_TX_REQ: {
-                    while (!mari_node_is_connected()) {}
+                    // Not joined: drop. The ack only means the frame was taken,
+                    // so never block here.
+                    if (!mari_node_is_connected()) {
+                        break;
+                    }
                     // forward user-image data as DOTBOT_APP, but keep the bootloader's
                     // messages when user image is not running
                     bool user_running = (ipc_shared_data.status == SWRMT_APPLICATION_RUNNING ||
