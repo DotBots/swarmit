@@ -79,13 +79,9 @@ bool localization_get_position(position_2d_t *position) {
         }
         db_lh2_start();
 
-        // No basestation had both sweeps decoded, so coordinates[] still holds
-        // the previous solve. Publishing it would stamp a duplicate with a new
-        // sequence number, which is exactly what the sequence exists to rule
-        // out; on the first call it would publish the zero-initialised (0,0).
-        // A sweep can be withdrawn after it was flagged available, when a later
-        // raw sample for the same basestation fails to decode, so this is
-        // reachable rather than defensive.
+        // No basestation had both sweeps decoded: coordinates[] still holds
+        // the previous solve (zero before the first), which must not be
+        // published under a new sequence number.
         if (!solved) {
             return false;
         }
