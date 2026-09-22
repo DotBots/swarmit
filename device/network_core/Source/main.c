@@ -66,6 +66,8 @@ typedef struct {
     bool        data_received;
     bool        send_status;
     uint8_t     req_buffer[255];
+    uint8_t     rx_buffer[UINT8_MAX];   ///< user-data payload staged by the radio ISR for the main loop
+    uint8_t     rx_length;
     uint8_t     req_length;     ///< bytes actually received into req_buffer; fields appended to a message later than its first release are only present when the length says so
     uint32_t    uptime_s;       ///< incremented by the 1 Hz status tick
     uint8_t     notification_buffer[255];
@@ -132,10 +134,11 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
         return;
     }
 
-    mutex_lock();
-    ipc_shared_data.rx_pdu.length = length;
-    memcpy((uint8_t *)ipc_shared_data.rx_pdu.buffer, packet, length);
-    mutex_unlock();
+    // Staged rather than published: this runs in the radio ISR, and the
+    // shared-memory mutex is held from thread mode on this core, so spinning
+    // on it here can never return.
+    _app_vars.rx_length = length;
+    memcpy(_app_vars.rx_buffer, packet, length);
     _app_vars.data_received = true;
 }
 
@@ -687,6 +690,17 @@ int main(void) {
 
         if (_app_vars.data_received) {
             _app_vars.data_received = false;
+            mutex_lock();
+            // Interrupts off so a packet landing mid-copy cannot tear the staged payload.
+            // This masks mari's TIMER2 and the radio too, 5-10 us typically and 24 us at
+            // worst: inside mari's 100 us desync threshold and 140 us rx guard, but it
+            // jitters one slot's timestamp, which mari stamps in software at ISR entry.
+            uint32_t primask = __get_PRIMASK();
+            __disable_irq();
+            ipc_shared_data.rx_pdu.length = _app_vars.rx_length;
+            memcpy((uint8_t *)ipc_shared_data.rx_pdu.buffer, _app_vars.rx_buffer, _app_vars.rx_length);
+            __set_PRIMASK(primask);
+            mutex_unlock();
             NRF_IPC_NS->TASKS_SEND[IPC_CHAN_RADIO_RX] = 1;
         }
 
