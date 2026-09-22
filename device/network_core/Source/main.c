@@ -109,12 +109,11 @@ static const mari_tx_config_t SWARMIT_TX_DOTBOT_FORWARD = {
 //=========================== functions =========================================
 
 static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length) {
-    memcpy(_app_vars.req_buffer, packet, length);
-    uint8_t *ptr = _app_vars.req_buffer;
-    uint8_t packet_type = (uint8_t)*ptr++;
+    uint8_t packet_type = packet[0];
 
     if (packet_type == MARI_PAYLOAD_TYPE_METRICS_PROBE) {
         if (length >= sizeof(mr_metrics_payload_t)) {
+            memcpy(_app_vars.req_buffer, packet, length);
             _app_vars.metrics_received = true;
         }
         return;
@@ -123,6 +122,7 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     if (((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) || (packet_type == SWRMT_MSG_LH2_CALIBRATION) || (packet_type == SWRMT_MSG_LH2_CAPTURE) ||
         (packet_type == SWRMT_MSG_OTA_BLOCK_REPORT_REQ) || (packet_type == SWRMT_MSG_OTA_FINALIZE) ||
         (packet_type == SWRMT_MSG_REQUEST_MESSAGE)) {
+        memcpy(_app_vars.req_buffer, packet, length);
         _app_vars.req_length = length;
         _app_vars.req_received = true;
         return;
