@@ -44,6 +44,8 @@ _Static_assert(sizeof(SWRMT_FW_VERSION) <= SWRMT_INFO_STRING_LEN,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
 #define LH2_BASESTATION_COUNT_MAX           (16)
+#define US_PER_S                            (1000000UL)
+#define CPPS_SCALE                          (100UL)     // budget_cpps is packets per second x 100
 
 //=========================== variables =========================================
 
@@ -146,9 +148,9 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
 // packet per slotframe duration.
 static void _publish_uplink_budget(bool connected) {
     uint32_t slotframe_us = connected ? mr_scheduler_get_duration_us() : 0;
-    uint32_t budget_cpps  = slotframe_us ? 100000000UL / slotframe_us : 0;
+    uint32_t budget_cpps  = slotframe_us ? (US_PER_S * CPPS_SCALE) / slotframe_us : 0;
     ipc_shared_data.uplink_budget.budget_cpps = (budget_cpps > UINT16_MAX) ? UINT16_MAX : (uint16_t)budget_cpps;
-    ipc_shared_data.uplink_budget.schedule_id = budget_cpps ? mr_scheduler_get_active_schedule_id() : 0;
+    ipc_shared_data.uplink_budget.schedule_id = connected ? mr_scheduler_get_active_schedule_id() : 0;
 }
 
 static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
