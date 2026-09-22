@@ -108,6 +108,15 @@ def test_site_fields_a_robot_cannot_store_are_refused(tmp_path, edit, match):
         )
 
 
+def test_a_declared_id_is_sent_as_is(tmp_path):
+    """The low-level packer trusts metadata.id; PyDotBot is where it is checked."""
+    edited = FIXTURE_TOML.replace(
+        'id = "ac893d2d85e3068c"', 'id = "0123456789abcdef"'
+    )
+    payload = read_lh2_calibration_payload(_write(tmp_path, edited))
+    assert payload[76:84] == bytes.fromhex("0123456789abcdef")
+
+
 def test_schema_1_file_is_refused(tmp_path):
     path = _write(
         tmp_path, 'schema_version = 1\n[calibration]\ndata_hex = "00"\n'

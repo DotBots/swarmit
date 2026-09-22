@@ -717,7 +717,9 @@ def calibrate_lh2(ctx, lh2_calibration_file):
     """Send LH2 calibration data to the robots.
 
     Takes a schema 2 calibration TOML; the wire payload is built from its
-    [[station]].homography tables at send time.
+    [[station]].homography tables at send time. The file's metadata.id is
+    sent as declared, without checking it against the content; `dotbot swarm
+    calibrate-lh2 push` checks it.
     """
     console = Console()
     settings = ctx.obj["settings"]

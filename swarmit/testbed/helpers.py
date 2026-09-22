@@ -70,7 +70,9 @@ def site_fields(data, path=""):
     """valid_mm, site name and calibration id: the 40 bytes after a matrix.
 
     PyDotBot's `site_fields_as_bytes` packs the same bytes; the fixture test
-    in each repo pins them for the same file.
+    in each repo pins them for the same file. metadata.id is packed as the
+    file declares it, never checked against the content; PyDotBot refuses a
+    file whose id is not its content's own.
     """
     valid_mm = [
         int(v)
