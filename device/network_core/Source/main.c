@@ -44,7 +44,6 @@ _Static_assert(sizeof(SWRMT_FW_VERSION) <= SWRMT_INFO_STRING_LEN,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
 #define LH2_BASESTATION_COUNT_MAX           (16)
-#define SWRMT_RADIO_BUFFER_LEN              (UINT8_MAX) // one mari payload
 #define US_PER_S                            (1000000UL)
 #define CPPS_SCALE                          (100UL)     // budget_cpps is packets per second x 100
 
@@ -68,12 +67,12 @@ typedef struct {
     bool        req_received;
     bool        data_received;
     bool        send_status;
-    uint8_t     req_buffer[SWRMT_RADIO_BUFFER_LEN];
-    uint8_t     rx_buffer[SWRMT_RADIO_BUFFER_LEN];   ///< user-data payload staged by the radio ISR for the main loop
+    uint8_t     req_buffer[255];
+    uint8_t     rx_buffer[UINT8_MAX];   ///< user-data payload staged by the radio ISR for the main loop
     uint8_t     rx_length;
     uint8_t     req_length;     ///< bytes actually received into req_buffer; fields appended to a message later than its first release are only present when the length says so
     uint32_t    uptime_s;       ///< incremented by the 1 Hz status tick
-    uint8_t     notification_buffer[SWRMT_RADIO_BUFFER_LEN];
+    uint8_t     notification_buffer[255];
     ipc_req_t   ipc_req;
     bool        ipc_log_received;
     uint8_t     gpio_event_idx;
