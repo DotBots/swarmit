@@ -412,12 +412,8 @@ class PayloadStatus(Payload):
             PayloadFieldMetadata(name="device", disp="dev."),
             PayloadFieldMetadata(name="status", disp="st."),
             PayloadFieldMetadata(name="battery", disp="bat.", length=2),
-            PayloadFieldMetadata(
-                name="pos_x", disp="pos x", length=4, signed=True
-            ),
-            PayloadFieldMetadata(
-                name="pos_y", disp="pos y", length=4, signed=True
-            ),
+            PayloadFieldMetadata(name="pos_x", disp="pos x", length=4),
+            PayloadFieldMetadata(name="pos_y", disp="pos y", length=4),
             # Crash report. Inventory rather than state - latched once at boot
             # and unchanged for the rest of the run - so by the split rule that
             # sends image and firmware versions on request instead, it does not
