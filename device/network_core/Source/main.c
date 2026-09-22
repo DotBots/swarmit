@@ -689,7 +689,6 @@ int main(void) {
         }
 
         if (_app_vars.data_received) {
-            _app_vars.data_received = false;
             mutex_lock();
             // Interrupts off for the copy only (at most UINT8_MAX bytes): it delays the
             // radio and mari timer ISRs, so nothing else goes inside this window.
@@ -697,6 +696,7 @@ int main(void) {
             __disable_irq();
             ipc_shared_data.rx_pdu.length = _app_vars.rx_length;
             memcpy((uint8_t *)ipc_shared_data.rx_pdu.buffer, _app_vars.rx_buffer, _app_vars.rx_length);
+            _app_vars.data_received = false;
             __set_PRIMASK(primask);
             mutex_unlock();
             NRF_IPC_NS->TASKS_SEND[IPC_CHAN_RADIO_RX] = 1;
