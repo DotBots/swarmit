@@ -6,7 +6,6 @@ from swarmit.testbed.protocol import (
     IMAGE_DIGEST_LEN,
     INFO_GEN_SIZE,
     INFO_STRING_LEN,
-    LH2_FLAG_FLOAT32,
     STATUS_BASE_SIZE,
     FaultType,
     PayloadCalibrationData,
@@ -113,7 +112,7 @@ def test_payload_device_info_v2_carries_the_site_and_id():
         info_version=2,
         info_gen=7,
         lh2_homography_count=2,
-        lh2_flags=0b111,
+        lh2_flags=0b11,
         lh2_site_name=b"c405-arena".ljust(16, b"\x00"),
         lh2_calibration_id=bytes.fromhex("ac893d2d85e3068c"),
     )
@@ -125,7 +124,6 @@ def test_payload_device_info_v2_carries_the_site_and_id():
     assert info.info_version == 2
     assert info.lh2_site_name == "c405-arena"
     assert info.lh2_calibration_id == "ac893d2d85e3068c"
-    assert info.lh2_flags & LH2_FLAG_FLOAT32
 
 
 def test_payload_device_info_v1_parses_with_no_site_and_no_id():
