@@ -1588,18 +1588,18 @@ class Controller:
                     "between messages"
                 )
 
-        targets = (
+        ready_devices = (
             [device.upper() for device in devices]
             if devices
             else self.ready_devices
         )
-        if not targets:
+        if not ready_devices:
             print(
                 f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}..."
             )
         else:
             print(
-                f"Sending {homography_count} calibration matrix/matrices to {len(targets)} devices: {str(targets)}..."
+                f"Sending {homography_count} calibration matrix/matrices to {len(ready_devices)} devices: {str(ready_devices)}..."
             )
 
         for payload in payloads:
@@ -1609,10 +1609,10 @@ class Controller:
                 print(Packet.from_payload(payload).to_bytes())
             for _ in range(COMMAND_MAX_ATTEMPTS):
                 # simple strategy to bypass non-reliable link layer, just send the payload multiple times
-                if not targets:
+                if not ready_devices:
                     self.send_payload(BROADCAST_ADDRESS, payload)
                 else:
-                    for device_addr in targets:
+                    for device_addr in ready_devices:
                         self.send_payload(int(device_addr, 16), payload)
                 time.sleep(
                     0.3
