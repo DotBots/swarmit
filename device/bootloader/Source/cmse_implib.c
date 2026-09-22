@@ -57,23 +57,31 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_keep_alive(void) {
     }
 }
 
-__attribute__((cmse_nonsecure_entry)) void swarmit_send_data_packet(const uint8_t *packet, uint8_t length) {
+/// Maps a TX request's outcome to the caller's result.
+static swarmit_result_t _tx_result(bool acked) {
+    if (!acked) {
+        return SWARMIT_ERR_TIMEOUT;
+    }
+    return (ipc_shared_data.net_result == IPC_NET_NOT_JOINED) ? SWARMIT_ERR_NOT_JOINED : SWARMIT_OK;
+}
+
+__attribute__((cmse_nonsecure_entry)) swarmit_result_t swarmit_send_data_packet(const uint8_t *packet, uint8_t length) {
     if (length > sizeof(_tx_data_buffer) - 2 || !_ns_readable(packet, length)) {
-        return;
+        return SWARMIT_ERR_ARG;
     }
     size_t pos = 0;
     _tx_data_buffer[pos++] = PACKET_DATA;
     _tx_data_buffer[pos++] = length;
     memcpy(_tx_data_buffer + pos, packet, length);
     pos += length;
-    mari_node_tx(_tx_data_buffer, pos);
+    return _tx_result(mari_node_tx(_tx_data_buffer, pos));
 }
 
-__attribute__((cmse_nonsecure_entry)) void swarmit_send_raw_data(const uint8_t *packet, uint8_t length) {
+__attribute__((cmse_nonsecure_entry)) swarmit_result_t swarmit_send_raw_data(const uint8_t *packet, uint8_t length) {
     if (!_ns_readable(packet, length)) {
-        return;
+        return SWARMIT_ERR_ARG;
     }
-    mari_node_tx(packet, length);
+    return _tx_result(mari_node_tx(packet, length));
 }
 
 __attribute__((cmse_nonsecure_entry)) void swarmit_ipc_isr(ipc_isr_cb_t cb) {
@@ -83,15 +91,15 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_ipc_isr(ipc_isr_cb_t cb) {
     }
 }
 
-__attribute__((cmse_nonsecure_entry)) void swarmit_init_rng(void) {
-    rng_init();
+__attribute__((cmse_nonsecure_entry)) swarmit_result_t swarmit_init_rng(void) {
+    return rng_init() ? SWARMIT_OK : SWARMIT_ERR_TIMEOUT;
 }
 
-__attribute__((cmse_nonsecure_entry)) void swarmit_read_rng(uint8_t *value) {
+__attribute__((cmse_nonsecure_entry)) swarmit_result_t swarmit_read_rng(uint8_t *value) {
     if (!_ns_writable(value, sizeof(*value), __alignof__(*value))) {
-        return;
+        return SWARMIT_ERR_ARG;
     }
-    rng_read(value);
+    return rng_read(value) ? SWARMIT_OK : SWARMIT_ERR_TIMEOUT;
 }
 
 __attribute__((cmse_nonsecure_entry)) uint64_t swarmit_read_device_id(void) {

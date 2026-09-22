@@ -491,7 +491,7 @@ int main(void) {
             size_t length = 0;
             _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_OTA_START_ACK;
             _bootloader_vars.notification_buffer[length++] = SWRMT_OTA_PROTOCOL_VERSION;
-            mari_node_tx(_bootloader_vars.notification_buffer, length);
+            (void)mari_node_tx(_bootloader_vars.notification_buffer, length);
         }
 
         if (_bootloader_vars.ota_chunk_request) {
@@ -566,7 +566,7 @@ int main(void) {
             size_t length = 0;
             _bootloader_vars.notification_buffer[length++] = SWRMT_MSG_OTA_FINALIZE_RESP;
             _bootloader_vars.notification_buffer[length++] = ok;
-            mari_node_tx(_bootloader_vars.notification_buffer, length);
+            (void)mari_node_tx(_bootloader_vars.notification_buffer, length);
         }
 
         if (_bootloader_vars.start_application) {

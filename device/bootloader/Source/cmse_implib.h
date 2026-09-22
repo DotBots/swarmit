@@ -20,19 +20,27 @@
 
 typedef void (*ipc_isr_cb_t)(const uint8_t *, size_t) __attribute__((cmse_nonsecure_call));
 
+/// Result of a call that goes through the network core.
+typedef enum {
+    SWARMIT_OK             = 0,  ///< handed to the network core (not a delivery guarantee)
+    SWARMIT_ERR_ARG        = 1,  ///< pointer or length refused at the secure boundary
+    SWARMIT_ERR_TIMEOUT    = 2,  ///< the network core did not ack within the IPC timeout
+    SWARMIT_ERR_NOT_JOINED = 3,  ///< dropped by the network core: the bot is not joined
+} swarmit_result_t;
+
 // Every pointer the caller passes is checked against non-secure memory, and an
 // out-pointer also against its type's alignment: a veneer that fails the check
-// does nothing and returns 0 where it returns anything.
+// does nothing and returns SWARMIT_ERR_ARG, or 0 where it returns a value.
 // Veneers that read or publish the position or the log take the shared-memory
 // mutex, so they are called from thread context, never from an interrupt
 // handler.
 
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_keep_alive(void);
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_send_data_packet(const uint8_t *packet, uint8_t length);
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_send_raw_data(const uint8_t *packet, uint8_t length);
+__attribute__((cmse_nonsecure_entry, aligned)) swarmit_result_t swarmit_send_data_packet(const uint8_t *packet, uint8_t length);
+__attribute__((cmse_nonsecure_entry, aligned)) swarmit_result_t swarmit_send_raw_data(const uint8_t *packet, uint8_t length);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_ipc_isr(ipc_isr_cb_t cb);
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_init_rng(void);
-__attribute__((cmse_nonsecure_entry, aligned)) void swarmit_read_rng(uint8_t *value);
+__attribute__((cmse_nonsecure_entry, aligned)) swarmit_result_t swarmit_init_rng(void);
+__attribute__((cmse_nonsecure_entry, aligned)) swarmit_result_t swarmit_read_rng(uint8_t *value);
 __attribute__((cmse_nonsecure_entry, aligned)) uint64_t swarmit_read_device_id(void);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_log_data(uint8_t *data, size_t length);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_get_battery_level(uint16_t *battery);

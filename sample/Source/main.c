@@ -23,8 +23,17 @@ typedef struct __attribute__((packed)) {
     uint8_t content[UINT8_MAX];
 } msg_packet_t;
 
+/// Result of a swarmit call that hands a frame to the network core; mirrors
+/// swarmit_result_t in the bootloader's cmse_implib.h.
+typedef enum {
+    SWARMIT_OK             = 0,  ///< handed to the network core (not a delivery guarantee)
+    SWARMIT_ERR_ARG        = 1,  ///< pointer or length refused at the secure boundary
+    SWARMIT_ERR_TIMEOUT    = 2,  ///< the network core did not ack within the IPC timeout
+    SWARMIT_ERR_NOT_JOINED = 3,  ///< dropped by the network core: the bot is not joined
+} swarmit_result_t;
+
 void swarmit_keep_alive(void);
-void swarmit_send_data_packet(const uint8_t *packet, uint8_t length);
+swarmit_result_t swarmit_send_data_packet(const uint8_t *packet, uint8_t length);
 void swarmit_ipc_isr(ipc_isr_cb_t cb);
 void swarmit_log_data(uint8_t *data, size_t length);
 static bool _timer_running = false;
@@ -59,7 +68,7 @@ int main(void) {
     while (1) {
         delay_ms(500);
         swarmit_keep_alive();
-        swarmit_send_data_packet((uint8_t *)"Hello", 5);
+        (void)swarmit_send_data_packet((uint8_t *)"Hello", 5);
         swarmit_log_data((uint8_t *)"Logging", 7);
         // Crash on purpose
         //uint32_t *addr = 0x0;

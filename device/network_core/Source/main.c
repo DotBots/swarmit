@@ -85,6 +85,7 @@ typedef struct {
     uint32_t    metrics_rx_counter;
     uint32_t    metrics_tx_counter;
     volatile bool metrics_received;
+    uint32_t    tx_dropped;         ///< TX requests dropped while not joined, since boot
     swarmit_config_t config;
     volatile bool lh2_calibration_ready;
 } swrmt_app_data_t;
@@ -377,11 +378,16 @@ int main(void) {
             // stops holding, nothing else keeps this here.
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.crash_report, sizeof(ipc_crash_report_t));
             length += sizeof(ipc_crash_report_t);
-            // Appended last so a host that predates this field still parses
-            // the frame positionally. One byte is what makes the whole device
-            // info exchange event-driven: the controller compares it against
-            // its cache and only asks when it differs.
+            // One byte is what makes the whole device info exchange
+            // event-driven: the controller compares it against its cache and
+            // only asks when it differs.
             _app_vars.notification_buffer[length++] = ipc_shared_data.device_info.info_gen;
+            // Drop counters, both since boot: the application core's IPC
+            // timeouts and this core's not-joined drops.
+            memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.ipc_timeouts, sizeof(uint32_t));
+            length += sizeof(uint32_t);
+            memcpy(&_app_vars.notification_buffer[length], &_app_vars.tx_dropped, sizeof(uint32_t));
+            length += sizeof(uint32_t);
             mari_node_tx_payload(_app_vars.notification_buffer, length, &SWARMIT_TX_DEFAULT);
         }
 
@@ -657,7 +663,8 @@ int main(void) {
 
         ipc_req_t ipc_req = _app_vars.ipc_req;
         if (ipc_req != IPC_REQ_NONE) {
-            ipc_shared_data.net_ack = false;
+            ipc_shared_data.net_ack    = false;
+            ipc_shared_data.net_result = IPC_NET_OK;
             switch (ipc_req) {
                 // Mira node functions
                 case IPC_MARI_INIT_REQ:
@@ -670,6 +677,8 @@ int main(void) {
                     // Not joined: drop. The ack only means the frame was taken,
                     // so never block here.
                     if (!mari_node_is_connected()) {
+                        ipc_shared_data.net_result = IPC_NET_NOT_JOINED;
+                        _app_vars.tx_dropped++;
                         break;
                     }
                     // forward user-image data as DOTBOT_APP, but keep the bootloader's

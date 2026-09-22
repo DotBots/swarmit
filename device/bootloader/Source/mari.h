@@ -30,6 +30,8 @@ void mari_init(void);
  * @param[in] length Number of bytes to send
  *
  */
-void mari_node_tx(const uint8_t *packet, uint8_t length);
+/// Hand a frame to the network core. False when it did not ack in time;
+/// true says the frame was taken, not that it was sent.
+bool mari_node_tx(const uint8_t *packet, uint8_t length);
 
 #endif

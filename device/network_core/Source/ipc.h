@@ -33,6 +33,12 @@ typedef enum {
     IPC_RNG_READ_REQ,                ///< Request for rng read
 } ipc_req_t;
 
+/// Outcome of the latest request, reported by the network core alongside the ack
+typedef enum {
+    IPC_NET_OK         = 0,
+    IPC_NET_NOT_JOINED = 1,  ///< TX request dropped: the node is not joined
+} ipc_net_result_t;
+
 typedef enum {
     IPC_CHAN_REQ                = 0,    ///< Channel used for request events
     IPC_CHAN_RADIO_RX           = 1,    ///< Channel used for radio RX events
@@ -133,7 +139,7 @@ typedef struct __attribute__((packed)) {
     uint8_t  reserved;
 } ipc_uplink_budget_t;
 
-typedef struct __attribute__((packed)) {
+typedef struct __attribute__((packed,aligned(8))) {
     bool                    net_ready;          ///< Network core is ready
     bool                    net_ack;            ///< Network core acked the latest request
     ipc_req_t               req;                ///< IPC network request
@@ -150,8 +156,10 @@ typedef struct __attribute__((packed)) {
     ipc_lh2_calibration_t    lh2_calibration;     ///< LH2 calibration data
     ipc_device_info_t       device_info;        ///< What this bot is running
     ipc_crash_report_t      crash_report;       ///< Cause of the most recent reset
-    uint8_t                 reserved[2];        ///< Word-aligns uplink_budget after the 30-byte crash_report
+    uint8_t                 net_result;         ///< ipc_net_result_t of the latest request, written by the network core before the ack
+    uint8_t                 reserved;           ///< Word-aligns uplink_budget after the 30-byte crash_report
     ipc_uplink_budget_t     uplink_budget;      ///< Written by the network core on join and disconnect
+    uint32_t                ipc_timeouts;       ///< Requests the application core stopped waiting on, since its boot
 } ipc_shared_data_t;
 
 // This layout must stay identical to the app core's copy in
@@ -199,9 +207,11 @@ _Static_assert(offsetof(ipc_shared_data_t, rx_pdu) == 664, "ipc_shared_data_t la
 _Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) == 920, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, device_info) == 1540, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, crash_report) == 1692, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, reserved) == 1722, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, net_result) == 1722, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, reserved) == 1723, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, uplink_budget) == 1724, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(sizeof(ipc_shared_data_t) == 1728, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, ipc_timeouts) == 1728, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(sizeof(ipc_shared_data_t) == 1736, "ipc_shared_data_t layout must match the other core's copy");
 
 /**
  * @brief Lock the mutex, blocks until the mutex is locked
