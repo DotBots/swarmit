@@ -626,9 +626,16 @@ class PayloadCalibrationData(Payload):
     )
 
     @property
-    def site_fields(self) -> bytes:
-        """Everything after the matrix, identical across one push."""
-        return bytes(self.to_bytes())[44:]
+    def site_fields(self) -> tuple:
+        """The validity rectangle, site name and id, identical across one push."""
+        return (
+            self.valid_x_min,
+            self.valid_y_min,
+            self.valid_x_max,
+            self.valid_y_max,
+            self.site_name,
+            self.calibration_id,
+        )
 
 
 @dataclass
