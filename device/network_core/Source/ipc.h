@@ -181,6 +181,28 @@ _Static_assert(sizeof(ipc_uplink_budget_t) == 4,
 _Static_assert(offsetof(ipc_shared_data_t, uplink_budget) % 4 == 0,
                "uplink_budget must be 4-byte aligned");
 
+// Exact offsets, identical in both cores' copies, so a layout change made to
+// only one copy fails to compile.
+_Static_assert(offsetof(ipc_shared_data_t, net_ready) == 0, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, net_ack) == 1, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, req) == 2, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, status) == 3, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, battery_level) == 4, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, device_type) == 6, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, log) == 7, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, rng) == 135, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, ota) == 136, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, target_position) == 392, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, current_position) == 400, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, tx_pdu) == 408, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, rx_pdu) == 664, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) == 920, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, device_info) == 1540, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, crash_report) == 1692, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, reserved) == 1722, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, uplink_budget) == 1724, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(sizeof(ipc_shared_data_t) == 1728, "ipc_shared_data_t layout must match the other core's copy");
+
 /**
  * @brief Lock the mutex, blocks until the mutex is locked
  */
