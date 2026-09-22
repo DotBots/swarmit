@@ -22,13 +22,13 @@
 /**
  * @brief Configure the random number generator (RNG)
  */
-bool rng_init(void);
+void rng_init(void);
 
 /**
  * @brief Read a random value (8 bits)
  *
  * @param[out] value address of the output value
  */
-bool rng_read(uint8_t *value);
+void rng_read(uint8_t *value);
 
 #endif

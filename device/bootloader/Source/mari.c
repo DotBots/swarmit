@@ -30,11 +30,11 @@ void mari_init(void) {
     tz_configure_periph_non_secure(NRF_APPLICATION_PERIPH_ID_MUTEX);
 
     // Initialize TDMA client drv in the net-core
-    (void)ipc_network_call(IPC_MARI_INIT_REQ);
+    ipc_network_call(IPC_MARI_INIT_REQ);
 }
 
-bool mari_node_tx(const uint8_t *packet, uint8_t length) {
+void mari_node_tx(const uint8_t *packet, uint8_t length) {
     ipc_shared_data.tx_pdu.length = length;
     memcpy((void *)ipc_shared_data.tx_pdu.buffer, packet, length);
-    return ipc_network_call(IPC_MARI_NODE_TX_REQ);
+    ipc_network_call(IPC_MARI_NODE_TX_REQ);
 }

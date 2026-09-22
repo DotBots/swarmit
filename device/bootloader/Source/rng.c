@@ -21,14 +21,11 @@ extern volatile __attribute__((section(".shared_data"))) ipc_shared_data_t ipc_s
 
 //=========================== public ===========================================
 
-bool rng_init(void) {
-    return ipc_network_call(IPC_RNG_INIT_REQ);
+void rng_init(void) {
+    ipc_network_call(IPC_RNG_INIT_REQ);
 }
 
-bool rng_read(uint8_t *value) {
-    if (!ipc_network_call(IPC_RNG_READ_REQ)) {
-        return false;
-    }
+void rng_read(uint8_t *value) {
+    ipc_network_call(IPC_RNG_READ_REQ);
     *value = ipc_shared_data.rng.value;
-    return true;
 }
