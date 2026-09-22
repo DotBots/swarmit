@@ -64,17 +64,18 @@ _Static_assert(sizeof(swarmit_config_t) == 632,
                "swarmit_config_t is the layout the host writes to the config page");
 
 typedef struct {
-    bool        req_received;
-    bool        data_received;
-    bool        send_status;
+    // The flags below are set from ISR context and consumed by the main loop.
+    volatile bool req_received;
+    volatile bool data_received;
+    volatile bool send_status;
     uint8_t     req_buffer[255];
     uint8_t     rx_buffer[UINT8_MAX];   ///< user-data payload staged by the radio ISR for the main loop
     uint8_t     rx_length;
     uint8_t     req_length;     ///< bytes actually received into req_buffer; fields appended to a message later than its first release are only present when the length says so
     uint32_t    uptime_s;       ///< incremented by the 1 Hz status tick
     uint8_t     notification_buffer[255];
-    ipc_req_t   ipc_req;
-    bool        ipc_log_received;
+    volatile ipc_req_t ipc_req;
+    volatile bool ipc_log_received;
     uint8_t     gpio_event_idx;
     crypto_sha256_ctx_t sha256_ctx;
     uint8_t     computed_hash[SWRMT_OTA_SHA256_LENGTH];
@@ -83,9 +84,9 @@ typedef struct {
     bool        mari_initialized;
     uint32_t    metrics_rx_counter;
     uint32_t    metrics_tx_counter;
-    bool        metrics_received;
+    volatile bool metrics_received;
     swarmit_config_t config;
-    bool        lh2_calibration_ready;
+    volatile bool lh2_calibration_ready;
 } swrmt_app_data_t;
 
 static swrmt_app_data_t _app_vars = { 0 };
@@ -654,9 +655,10 @@ int main(void) {
             }
         }
 
-        if (_app_vars.ipc_req != IPC_REQ_NONE) {
+        ipc_req_t ipc_req = _app_vars.ipc_req;
+        if (ipc_req != IPC_REQ_NONE) {
             ipc_shared_data.net_ack = false;
-            switch (_app_vars.ipc_req) {
+            switch (ipc_req) {
                 // Mira node functions
                 case IPC_MARI_INIT_REQ:
                     if (!_app_vars.mari_initialized) {
@@ -683,8 +685,11 @@ int main(void) {
                 default:
                     break;
             }
+            // Clear before acking: the app core's next request may land in
+            // ipc_req right after the ack.
+            _app_vars.ipc_req = IPC_REQ_NONE;
+            __DMB();
             ipc_shared_data.net_ack = true;
-            _app_vars.ipc_req      = IPC_REQ_NONE;
         }
 
         if (_app_vars.data_received) {
