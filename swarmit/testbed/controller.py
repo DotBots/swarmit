@@ -1525,12 +1525,15 @@ class Controller:
                     continue
                 self._send_message(int(addr, 16), message)
 
-    def send_lh2_calibration(self, messages: bytes):
+    def send_lh2_calibration(
+        self, messages: bytes, devices: list[str] | None = None
+    ):
         """Send a calibration: one 84-byte message per station, concatenated.
 
         The messages come packed by `helpers.read_lh2_calibration_payload`
         (or PyDotBot's packer); this checks they form one consistent push
-        before anything goes out.
+        before anything goes out. With `devices`, each goes unicast to
+        exactly those addresses and nothing is broadcast.
         """
         size = PayloadCalibrationData().size
         if not messages or len(messages) % size != 0:
@@ -1566,7 +1569,11 @@ class Controller:
                     "between messages"
                 )
 
-        ready_devices = self.ready_devices
+        ready_devices = (
+            [device.upper() for device in devices]
+            if devices
+            else self.ready_devices
+        )
         if not ready_devices:
             print(
                 f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}..."

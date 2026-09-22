@@ -258,10 +258,12 @@ class Lh2CalibrationRequest(BaseModel):
 
     `calibration_b64` is the base64-encoded blob in the format expected by
     Controller.send_lh2_calibration: one 84-byte calibration message per
-    station, concatenated in index order.
+    station, concatenated in index order. `devices`, when given, are the
+    only addresses it is sent to (unicast, never broadcast).
     """
 
     calibration_b64: str
+    devices: list[str] | None = None
 
 
 class CaptureRequest(BaseModel):
@@ -660,7 +662,9 @@ async def lh2_calibration(request: Request, payload: Lh2CalibrationRequest):
     async with controller_lock:
         try:
             await run_in_threadpool(
-                controller.send_lh2_calibration, bytearray(blob)
+                controller.send_lh2_calibration,
+                bytearray(blob),
+                payload.devices,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))

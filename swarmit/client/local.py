@@ -208,8 +208,10 @@ class LocalSwarmitClient:
     def message(self, text: str) -> None:
         self._controller.send_message(text)
 
-    def send_lh2_calibration(self, blob: bytes) -> None:
-        self._controller.send_lh2_calibration(bytearray(blob))
+    def send_lh2_calibration(
+        self, blob: bytes, devices: list[str] | None = None
+    ) -> None:
+        self._controller.send_lh2_calibration(bytearray(blob), devices)
 
     def request_lh2_capture(self, device_addr: str) -> None:
         self._controller.request_lh2_capture(device_addr)

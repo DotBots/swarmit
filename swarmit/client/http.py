@@ -205,9 +205,12 @@ class HTTPSwarmitClient:
     def message(self, text: str) -> None:
         self._request("POST", "/message", body={"message": text})
 
-    def send_lh2_calibration(self, blob: bytes) -> None:
+    def send_lh2_calibration(
+        self, blob: bytes, devices: list[str] | None = None
+    ) -> None:
         body = {
-            "calibration_b64": base64.b64encode(bytes(blob)).decode("ascii")
+            "calibration_b64": base64.b64encode(bytes(blob)).decode("ascii"),
+            "devices": list(devices) if devices else None,
         }
         self._request("POST", "/lh2_calibration", body=body)
 

@@ -467,20 +467,36 @@ def _calibration_messages():
     return [bytes.fromhex(h) for h in MESSAGE_HEX]
 
 
-def _send_calibration(blob):
+def _send_calibration(blob, ready=("00000001",), devices=None):
     controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
     try:
         with patch.object(
             type(controller),
             "ready_devices",
             new_callable=PropertyMock,
-            return_value=["00000001"],
+            return_value=list(ready),
         ):
             with patch.object(controller, "send_payload") as send_payload_mock:
-                controller.send_lh2_calibration(blob)
+                controller.send_lh2_calibration(blob, devices)
     finally:
         controller.terminate()
     return send_payload_mock
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_sends_calibration_only_to_the_devices_named():
+    # No READY device, which would otherwise mean a broadcast.
+    send_payload_mock = _send_calibration(
+        b"".join(_calibration_messages()), ready=(), devices=["0000000a"]
+    )
+
+    assert [call.args[0] for call in send_payload_mock.call_args_list] == [
+        0xA,
+        0xA,
+    ]
 
 
 @patch(
