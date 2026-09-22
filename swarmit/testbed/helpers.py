@@ -1,13 +1,17 @@
 import struct
 import tomllib
 
+from swarmit.testbed.protocol import (
+    LH2_CALIBRATION_ID_LEN,
+    LH2_SITE_NAME_LEN,
+    PayloadCalibrationData,
+)
+
 # Bump in lockstep with the writer in PyDotBot's
 # dotbot/calibration/lighthouse2.py (CALIBRATION_SCHEMA_VERSION).
 CALIBRATION_SCHEMA_VERSION = 2
 
 LH2_BASESTATION_COUNT_MAX = 16
-LH2_SITE_NAME_LEN = 16
-LH2_CALIBRATION_ID_LEN = 8
 # What PyDotBot's reader assumes for a file without [validity]; keep in step.
 VALID_MM_DEFAULT = (0, 0, 4000, 4500)
 SITE_DEFAULT = "default"
@@ -67,7 +71,7 @@ def reference_points(data):
 
 
 def site_fields(data, path=""):
-    """valid_mm, site name and calibration id: the 40 bytes after a matrix.
+    """valid_mm, site name and calibration id, as `PayloadCalibrationData` fields.
 
     PyDotBot's `site_fields_as_bytes` packs the same bytes; the fixture test
     in each repo pins them for the same file. metadata.id is packed as the
@@ -110,11 +114,14 @@ def site_fields(data, path=""):
             f"{path}: metadata.id {calibration_id!r} is shorter than "
             f"{2 * LH2_CALIBRATION_ID_LEN} hex characters"
         )
-    return (
-        struct.pack("<4I", *valid_mm)
-        + raw_name.ljust(LH2_SITE_NAME_LEN, b"\x00")
-        + raw_id
-    )
+    return {
+        "valid_x_min": valid_mm[0],
+        "valid_y_min": valid_mm[1],
+        "valid_x_max": valid_mm[2],
+        "valid_y_max": valid_mm[3],
+        "site_name": raw_name.ljust(LH2_SITE_NAME_LEN, b"\x00"),
+        "calibration_id": raw_id,
+    }
 
 
 def read_lh2_calibration_payload(path):
@@ -133,7 +140,7 @@ def read_lh2_calibration_payload(path):
             f"{path}: stations must be numbered from zero without gaps to be "
             f"pushed, got {got}"
         )
-    tail = site_fields(data, path)
+    fields = site_fields(data, path)
     payload = bytearray()
     for station in stations:
         flat = [float(v) for row in station["homography"] for v in row]
@@ -141,7 +148,10 @@ def read_lh2_calibration_payload(path):
             raise ValueError(
                 f"{path}: station {station['index']} homography is not 3x3"
             )
-        payload += struct.pack("<II", len(stations), int(station["index"]))
-        payload += struct.pack("<9f", *flat)
-        payload += tail
+        payload += PayloadCalibrationData(
+            homography_count=len(stations),
+            homography_index=int(station["index"]),
+            homography=struct.pack("<9f", *flat),
+            **fields,
+        ).to_bytes()
     return bytes(payload)
