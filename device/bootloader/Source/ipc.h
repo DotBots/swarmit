@@ -116,12 +116,12 @@ typedef struct __attribute__((packed)) {
     uint32_t psr;           ///< Stacked xPSR; IPSR field names the active exception, 0 for thread mode
 } ipc_crash_report_t;
 
-/// The uplink this node gets on the schedule it adopted at join
+/// The node's network information, published by the network core for sandboxed apps
 typedef struct __attribute__((packed)) {
-    uint32_t interval_us;   ///< Least time between two of this node's uplink sends: the slotframe duration in microseconds; 0 = not joined
-    uint8_t  schedule_id;   ///< Schedule adopted from the beacon; 0 = not joined
+    uint32_t uplink_interval_us;    ///< Least time between two of this node's uplink sends: the slotframe duration in microseconds; 0 = not joined
+    uint8_t  mari_schedule_id;      ///< Schedule adopted from the beacon; 0 = not joined
     uint8_t  reserved[3];
-} ipc_uplink_t;
+} ipc_network_info_t;
 
 typedef struct __attribute__((packed,aligned(8))) {
     bool                    net_ready;          ///< Network core is ready
@@ -140,8 +140,8 @@ typedef struct __attribute__((packed,aligned(8))) {
     ipc_lh2_calibration_t  lh2_calibration;     ///< LH2 calibration data
     ipc_device_info_t       device_info;        ///< What this bot is running
     ipc_crash_report_t      crash_report;       ///< Cause of the most recent reset
-    uint8_t                 reserved[2];        ///< Word-aligns uplink after the 30-byte crash_report
-    ipc_uplink_t            uplink;             ///< Written by the network core on join and disconnect
+    uint8_t                 reserved[2];        ///< Word-aligns network_info after the 30-byte crash_report
+    ipc_network_info_t      network_info;       ///< Written by the network core on join and disconnect
 } ipc_shared_data_t;
 
 // ipc_shared_data_t is packed, so every member's offset is the running sum of
@@ -167,10 +167,10 @@ _Static_assert(offsetof(ipc_shared_data_t, device_info) % 4 == 0,
                "device_info must be 4-byte aligned");
 _Static_assert(offsetof(ipc_shared_data_t, crash_report) % 4 == 0,
                "crash_report must be 4-byte aligned");
-_Static_assert(sizeof(ipc_uplink_t) == 8,
-               "ipc_uplink_t size must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, uplink) % 4 == 0,
-               "uplink must be 4-byte aligned");
+_Static_assert(sizeof(ipc_network_info_t) == 8,
+               "ipc_network_info_t size must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, network_info) % 4 == 0,
+               "network_info must be 4-byte aligned");
 
 // Exact offsets, identical in both cores' copies, so a layout change made to
 // only one copy fails to compile.
@@ -191,7 +191,7 @@ _Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) == 920, "ipc_shared_
 _Static_assert(offsetof(ipc_shared_data_t, device_info) == 1540, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, crash_report) == 1692, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, reserved) == 1722, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, uplink) == 1724, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, network_info) == 1724, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(sizeof(ipc_shared_data_t) == 1736, "ipc_shared_data_t layout must match the other core's copy");
 
 void mutex_lock(void);
