@@ -14,9 +14,13 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define LH2_BASESTATION_COUNT_MAX (16)
+
+#define LH2_VALID_MM_LEN          (4U)       ///< x_min, y_min, x_max, y_max
+#define LH2_VALID_MM_MAX_DEFAULT  (100000U)  ///< mm; x_max and y_max when the calibration carries no rectangle
 
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {
@@ -24,19 +28,36 @@ typedef struct __attribute__((packed)) {
     uint32_t y;  ///< Y coordinate in mm
 } position_2d_t;
 
+/// The veneers store x and y as words, so a caller's position_2d_t must sit at this alignment.
+#define POSITION_2D_ALIGN (4U)
+
 typedef struct __attribute__((packed)) {
     uint8_t basestation_index;        ///< which LH basestation is this homography for?
-    int32_t homography_matrix[3][3];  ///< homography matrix, each element multiplied by 1e3
+    float   homography_matrix[3][3];  ///< homography matrix, float32 in mm
 } localization_homography_t;
 
-/// Raw LH2 LFSR counts for a single basestation (both sweeps), used for OTA calibration capture
-typedef struct __attribute__((packed)) {
-    uint8_t  lh_index;  ///< basestation index
+/// Raw LH2 LFSR counts for a single basestation (both sweeps), used for OTA calibration capture.
+/// Naturally aligned: the secure side stores into it through a veneer with the
+/// unaligned-access trap enabled, so the user image must pass a 4-byte-aligned buffer.
+typedef struct {
     uint32_t count1;    ///< sweep 0 LFSR count
     uint32_t count2;    ///< sweep 1 LFSR count
+    uint8_t  lh_index;  ///< basestation index
+    uint8_t  _pad[3];
 } lh2_raw_sample_t;
 
-void localization_init(int32_t homographies[][3][3], uint32_t homography_count);
+_Static_assert(sizeof(lh2_raw_sample_t) == 12, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(offsetof(lh2_raw_sample_t, count1) == 0, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(offsetof(lh2_raw_sample_t, count2) == 4, "lh2_raw_sample_t is part of the NSC ABI");
+_Static_assert(offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is part of the NSC ABI");
+
+/// Size of one sample on the wire: [lh_index:1][count1:4 LE][count2:4 LE]
+#define LH2_RAW_SAMPLE_WIRE_SIZE (9U)
+_Static_assert(LH2_RAW_SAMPLE_WIRE_SIZE == sizeof(uint8_t) + 2 * sizeof(uint32_t), "wire record is lh_index, count1, count2");
+
+/// Load the homographies and the rectangle outside which a solve is dropped
+/// (x_min, y_min, x_max, y_max in mm; all 0xFF selects 0 to LH2_VALID_MM_MAX_DEFAULT).
+void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[LH2_VALID_MM_LEN]);
 
 /// Start the LH2 driver without loading any calibration (idempotent). Used for raw capture in READY mode.
 void localization_start(void);

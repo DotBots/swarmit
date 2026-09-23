@@ -205,9 +205,12 @@ class HTTPSwarmitClient:
     def message(self, text: str) -> None:
         self._request("POST", "/message", body={"message": text})
 
-    def send_lh2_calibration(self, blob: bytes) -> None:
+    def send_lh2_calibration(
+        self, blob: bytes, devices: list[str] | None = None
+    ) -> None:
         body = {
-            "calibration_b64": base64.b64encode(bytes(blob)).decode("ascii")
+            "calibration_b64": base64.b64encode(bytes(blob)).decode("ascii"),
+            "devices": list(devices) if devices else None,
         }
         self._request("POST", "/lh2_calibration", body=body)
 
@@ -299,6 +302,8 @@ def _parse_node_status(d: dict) -> NodeStatus:
         sfsr=d.get("sfsr", 0),
         pc=d.get("pc", 0),
         lr=d.get("lr", 0),
+        sp=d.get("sp", 0),
+        psr=d.get("psr", 0),
         raw=d.get("raw", ""),
         last_updated_at=d["last_updated_at"],
         info_gen=d.get("info_gen", 0),

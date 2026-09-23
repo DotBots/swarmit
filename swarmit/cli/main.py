@@ -38,7 +38,11 @@ from swarmit.testbed.helpers import (
     reference_points,
 )
 from swarmit.testbed.logger import setup_logging
-from swarmit.testbed.protocol import StatusType
+from swarmit.testbed.protocol import (
+    PayloadCalibrationData,
+    StatusType,
+    decode_string_field,
+)
 
 
 def _print_log_event(event: dict) -> None:
@@ -713,7 +717,9 @@ def calibrate_lh2(ctx, lh2_calibration_file):
     """Send LH2 calibration data to the robots.
 
     Takes a schema 2 calibration TOML; the wire payload is built from its
-    [[station]].homography tables at send time.
+    [[station]].homography tables at send time. The file's metadata.id is
+    sent as declared, without checking it against the content; `dotbot swarm
+    calibrate-lh2 push` checks it.
     """
     console = Console()
     settings = ctx.obj["settings"]
@@ -731,13 +737,15 @@ def calibrate_lh2(ctx, lh2_calibration_file):
         console.print("[bold red]Error:[/] Calibration file is empty.")
         raise click.Abort()
 
-    # Format: 1-byte count + N x 36B matrices. Read the count client-side so
-    # there is visible output in daemon mode too — over HTTP the controller's
-    # own progress prints run in the server process, not this terminal.
-    homography_count = blob[0]
+    # One message per station. Report client-side so there is visible output
+    # in daemon mode too: over HTTP the controller's own progress prints run
+    # in the server process, not this terminal.
+    first = PayloadCalibrationData().from_bytes(blob)
     console.print(
-        f"Sending [bold cyan]{homography_count}[/] calibration "
-        f"matrix/matrices ([bold]{len(blob)}B[/]) to the swarm..."
+        f"Sending [bold cyan]{first.homography_count}[/] calibration "
+        f"matrix/matrices ([bold]{len(blob)}B[/], site "
+        f"[bold]{decode_string_field(first.site_name)}[/], id "
+        f"[bold]{bytes(first.calibration_id).hex()}[/]) to the swarm..."
     )
     with build_client(settings, no_server=ctx.obj["no_server"]) as client:
         try:

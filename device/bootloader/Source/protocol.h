@@ -36,10 +36,11 @@
 
 /// First byte of a raw LH2 capture sample carried inside a LOG_EVENT payload.
 /// Lets the host tell a calibration sample apart from a regular text log line.
+/// DEPRECATED: the reply to the READY-mode capture request; the calibrate app replaces it.
 #define SWRMT_LH2_CALIB_TAG         (0xCAU)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.
-#define SWRMT_DEVICE_INFO_VERSION   (1U)
+#define SWRMT_DEVICE_INFO_VERSION   (2U)
 
 /// Ceiling for identity strings, including the NUL terminator. Matter
 /// (VendorName/ProductName/SerialNumber), Zigbee (ManufacturerName/
@@ -50,6 +51,10 @@
 /// keeps all 32; a truncated digest is only ever compared, never trusted as a
 /// signature.
 #define SWRMT_IMAGE_DIGEST_LEN      (8U)
+
+/// Fixed widths of the site identity a calibration carries.
+#define SWRMT_LH2_SITE_NAME_LEN         (16U)   ///< ASCII, NUL-padded, not necessarily NUL-terminated
+#define SWRMT_LH2_CALIBRATION_ID_LEN    (8U)    ///< leading bytes of the calibration file's id
 
 /// Image lifecycle, LwM2M Object 5 resource 3 (State).
 typedef enum {
@@ -100,9 +105,11 @@ typedef struct __attribute__((packed)) {
     char     image_version[SWRMT_INFO_STRING_LEN];  ///< LwM2M Object 5 res 7 PkgVersion, display only
     uint8_t  lh2_homography_count;                  ///< 0 = uncalibrated
     uint8_t  lh2_flags;                             ///< SWRMT_LH2_FLAG_*
+    char     lh2_site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< site of the loaded calibration, all zero if none
+    uint8_t  lh2_calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< id of the loaded calibration, all zero if none
 } swrmt_device_info_pkt_t;
 
-_Static_assert(sizeof(swrmt_device_info_pkt_t) == 154,
+_Static_assert(sizeof(swrmt_device_info_pkt_t) == 178,
                "swrmt_device_info_pkt_t is a wire format; its size is part of the contract");
 
 typedef struct __attribute__((packed)) {

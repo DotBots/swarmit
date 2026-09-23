@@ -27,6 +27,7 @@
 #include "models.h"
 #include "mac.h"
 #include "mari.h"
+#include "scheduler.h"
 
 // The version string is reported over the air in a fixed 32-byte field, so a
 // tag that does not fit must fail the build rather than truncate on the wire.
@@ -38,7 +39,7 @@ _Static_assert(sizeof(SWRMT_FW_VERSION) <= SWRMT_INFO_STRING_LEN,
 
 #define SWARMIT_NET_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
 #define SWARMIT_NET_CONFIG_PAGE             (127)       // page index for config (last page)
-#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524D) // "SWRM" - matches mari + dotbot-provision
+#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524E) // "SWRN" - float32 homographies; mari's gateway page keeps 0x5753524D
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
@@ -51,19 +52,28 @@ typedef struct __attribute__((packed)) {
     uint32_t has_net_id;                                    ///< 1 if net_id is provisioned; otherwise fall back to SWARMIT_DEFAULT_NET_ID
     uint32_t net_id;                                        ///< Mari network ID, meaningful only when has_net_id == 1
     uint32_t homography_count;                              ///< number of LH2 homography matrices (0 if no calibration baked in)
-    int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization
+    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization, float32 in mm
+    uint32_t valid_mm[4];                                   ///< x_min, y_min, x_max, y_max in mm; all 0xFF when absent
+    char     site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< all 0xFF when absent
+    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< all 0xFF when absent
 } swarmit_config_t;
 
+_Static_assert(sizeof(swarmit_config_t) == 632,
+               "swarmit_config_t is the layout the host writes to the config page");
+
 typedef struct {
-    bool        req_received;
-    bool        data_received;
-    bool        send_status;
+    // The flags below are set from ISR context and consumed by the main loop.
+    volatile bool req_received;
+    volatile bool data_received;
+    volatile bool send_status;
     uint8_t     req_buffer[255];
+    uint8_t     rx_buffer[UINT8_MAX];   ///< user-data payload staged by the radio ISR for the main loop
+    uint8_t     rx_length;
     uint8_t     req_length;     ///< bytes actually received into req_buffer; fields appended to a message later than its first release are only present when the length says so
     uint32_t    uptime_s;       ///< incremented by the 1 Hz status tick
     uint8_t     notification_buffer[255];
-    ipc_req_t   ipc_req;
-    bool        ipc_log_received;
+    volatile ipc_req_t ipc_req;
+    volatile bool ipc_log_received;
     uint8_t     gpio_event_idx;
     crypto_sha256_ctx_t sha256_ctx;
     uint8_t     computed_hash[SWRMT_OTA_SHA256_LENGTH];
@@ -72,9 +82,9 @@ typedef struct {
     bool        mari_initialized;
     uint32_t    metrics_rx_counter;
     uint32_t    metrics_tx_counter;
-    bool        metrics_received;
+    volatile bool metrics_received;
     swarmit_config_t config;
-    bool        lh2_calibration_ready;
+    volatile bool lh2_calibration_ready;
 } swrmt_app_data_t;
 
 static swrmt_app_data_t _app_vars = { 0 };
@@ -97,12 +107,11 @@ static const mari_tx_config_t SWARMIT_TX_DOTBOT_FORWARD = {
 //=========================== functions =========================================
 
 static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length) {
-    memcpy(_app_vars.req_buffer, packet, length);
-    uint8_t *ptr = _app_vars.req_buffer;
-    uint8_t packet_type = (uint8_t)*ptr++;
+    uint8_t packet_type = packet[0];
 
     if (packet_type == MARI_PAYLOAD_TYPE_METRICS_PROBE) {
         if (length >= sizeof(mr_metrics_payload_t)) {
+            memcpy(_app_vars.req_buffer, packet, length);
             _app_vars.metrics_received = true;
         }
         return;
@@ -111,6 +120,7 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     if (((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) || (packet_type == SWRMT_MSG_LH2_CALIBRATION) || (packet_type == SWRMT_MSG_LH2_CAPTURE) ||
         (packet_type == SWRMT_MSG_OTA_BLOCK_REPORT_REQ) || (packet_type == SWRMT_MSG_OTA_FINALIZE) ||
         (packet_type == SWRMT_MSG_REQUEST_MESSAGE)) {
+        memcpy(_app_vars.req_buffer, packet, length);
         _app_vars.req_length = length;
         _app_vars.req_received = true;
         return;
@@ -125,11 +135,18 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
         return;
     }
 
-    mutex_lock();
-    ipc_shared_data.rx_pdu.length = length;
-    memcpy((uint8_t *)ipc_shared_data.rx_pdu.buffer, packet, length);
-    mutex_unlock();
+    // Staged rather than published: this runs in the radio ISR, and the
+    // shared-memory mutex is held from thread mode on this core, so spinning
+    // on it here can never return.
+    _app_vars.rx_length = length;
+    memcpy(_app_vars.rx_buffer, packet, length);
     _app_vars.data_received = true;
+}
+
+// Publishes the network info for sandboxed apps; a joined node owns one uplink cell per slotframe, so its minimum TX interval is the slotframe duration.
+static void _publish_network_info(bool joined) {
+    ipc_shared_data.network_info.min_tx_interval_us = joined ? mr_scheduler_get_duration_us() : 0;
+    ipc_shared_data.network_info.mari_schedule_id = joined ? mr_scheduler_get_active_schedule_id() : 0;
 }
 
 static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
@@ -142,11 +159,13 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
         case MARI_CONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Connected to gateway %016llX\n", gateway_id);
+            _publish_network_info(true);
             break;
         }
         case MARI_DISCONNECTED: {
             uint64_t gateway_id = event_data.data.gateway_info.gateway_id;
             printf("Disconnected from gateway %016llX, reason: %u\n", gateway_id, event_data.tag);
+            _publish_network_info(false);
             break;
         }
         case MARI_ERROR:
@@ -155,6 +174,16 @@ static void mari_event_callback(mr_event_t event, mr_event_data_t event_data) {
         default:
             break;
     }
+}
+
+static bool _is_erased(const void *field, size_t length) {
+    const uint8_t *bytes = field;
+    for (size_t i = 0; i < length; i++) {
+        if (bytes[i] != 0xFF) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static void _load_config(void) {
@@ -174,9 +203,31 @@ static void _load_config(void) {
     }
 
     // set lighthouse calibration data (only trust the matrix bytes if magic gates the whole page)
-    if (cfg_flash->magic == SWARMIT_CONFIG_MAGIC_VALUE
+    bool calibrated = cfg_flash->magic == SWARMIT_CONFIG_MAGIC_VALUE
         && _app_vars.config.homography_count > 0
-        && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX) {
+        && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX;
+
+    // Shared memory survives resets, so every calibration field is written
+    // either way: an erased value is reported as absent (zero), the rectangle
+    // keeps its erased 0xFF so the app core falls back to its default.
+    bool site_name_erased = _is_erased(_app_vars.config.site_name, sizeof(_app_vars.config.site_name));
+    bool calibration_id_erased = _is_erased(_app_vars.config.calibration_id, sizeof(_app_vars.config.calibration_id));
+    for (size_t i = 0; i < 4; i++) {
+        ipc_shared_data.lh2_calibration.valid_mm[i] = calibrated ? _app_vars.config.valid_mm[i] : UINT32_MAX;
+    }
+    for (size_t i = 0; i < SWRMT_LH2_SITE_NAME_LEN; i++) {
+        ipc_shared_data.lh2_calibration.site_name[i] = (calibrated && !site_name_erased) ? _app_vars.config.site_name[i] : '\0';
+    }
+    for (size_t i = 0; i < SWRMT_LH2_CALIBRATION_ID_LEN; i++) {
+        ipc_shared_data.lh2_calibration.calibration_id[i] = (calibrated && !calibration_id_erased) ? _app_vars.config.calibration_id[i] : 0;
+    }
+    ipc_shared_data.lh2_calibration.homography_count = 0;
+    // Reported as part of the device inventory. Position alone cannot answer
+    // this: (0, 0) reads the same for "uncalibrated" and "at the origin".
+    ipc_shared_data.device_info.lh2_homography_count = calibrated ? (uint8_t)_app_vars.config.homography_count : 0;
+    ipc_shared_data.device_info.lh2_flags = calibrated ? (SWRMT_LH2_FLAG_VALID | SWRMT_LH2_FLAG_FROM_FLASH) : 0;
+
+    if (calibrated) {
         // copy homography matrices to shared memory without casting away volatile
         for (uint32_t idx = 0; idx < _app_vars.config.homography_count; idx++) {
             for (uint32_t row = 0; row < 3; row++) {
@@ -188,12 +239,6 @@ static void _load_config(void) {
         }
         ipc_shared_data.lh2_calibration.homography_count = _app_vars.config.homography_count;
         _app_vars.lh2_calibration_ready = true;
-
-        // Report calibration as part of the device inventory. Position alone
-        // cannot answer this: (0, 0) reads the same for "uncalibrated" and
-        // "at the origin".
-        ipc_shared_data.device_info.lh2_homography_count = (uint8_t)_app_vars.config.homography_count;
-        ipc_shared_data.device_info.lh2_flags = SWRMT_LH2_FLAG_VALID | SWRMT_LH2_FLAG_FROM_FLASH;
     }
 }
 
@@ -287,6 +332,8 @@ int main(void) {
     mr_gpio_set(&_debug1); mr_gpio_clear(&_debug1);
     // mr_gpio_set(&_debug2); mr_gpio_clear(&_debug2);
 
+    _publish_network_info(false);
+
     // Network core must remain on
     ipc_shared_data.net_ready = true;
 
@@ -306,7 +353,11 @@ int main(void) {
             _app_vars.notification_buffer[length++] = ipc_shared_data.status;
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.battery_level, sizeof(uint16_t));
             length += sizeof(uint16_t);
+            // x and y are written together under this mutex by the secure side;
+            // read them under it so both halves come from the same solve.
+            mutex_lock();
             memcpy(&_app_vars.notification_buffer[length], (void *)&ipc_shared_data.current_position, sizeof(position_2d_t));
+            mutex_unlock();
             length += sizeof(position_2d_t);
             // The crash report is inventory by the same rule that puts image
             // and firmware versions in DEVICE_INFO instead: it is latched once
@@ -518,6 +569,12 @@ int main(void) {
                     _copy_from_shared(info.image_version, ipc_shared_data.device_info.image_version, SWRMT_INFO_STRING_LEN);
                     info.lh2_homography_count = ipc_shared_data.device_info.lh2_homography_count;
                     info.lh2_flags = ipc_shared_data.device_info.lh2_flags;
+                    for (size_t i = 0; i < SWRMT_LH2_SITE_NAME_LEN; i++) {
+                        info.lh2_site_name[i] = ipc_shared_data.lh2_calibration.site_name[i];
+                    }
+                    for (size_t i = 0; i < SWRMT_LH2_CALIBRATION_ID_LEN; i++) {
+                        info.lh2_calibration_id[i] = ipc_shared_data.lh2_calibration.calibration_id[i];
+                    }
 
                     size_t length = 0;
                     _app_vars.notification_buffer[length++] = SWRMT_MSG_DEVICE_INFO_RESP;
@@ -532,6 +589,9 @@ int main(void) {
                         break;
                     }
 
+                    if (_app_vars.req_length < 1 + sizeof(swrmt_lh2_calibration_data_t)) {
+                        break;
+                    }
                     const swrmt_lh2_calibration_data_t *pkt = (const swrmt_lh2_calibration_data_t *)req->data;
                     if (pkt->homography_index >= LH2_BASESTATION_COUNT_MAX) {
                         // printf("Invalid calibration index %u\n", pkt->homography_index);
@@ -566,12 +626,17 @@ int main(void) {
 
                     // mr_gpio_set(&_debug1);
 
-                    /* User-defined protocol: last matrix index triggers flash commit + reboot. */
+                    /* User-defined protocol: last matrix index triggers flash commit + reboot.
+                       The site fields are identical in every message of a push. */
                     if (pkt->homography_index == (pkt->homography_count - 1)) {
+                        memcpy(_app_vars.config.valid_mm, pkt->valid_mm, sizeof(_app_vars.config.valid_mm));
+                        memcpy(_app_vars.config.site_name, pkt->site_name, sizeof(_app_vars.config.site_name));
+                        memcpy(_app_vars.config.calibration_id, pkt->calibration_id, sizeof(_app_vars.config.calibration_id));
                         _commit_config_and_reboot();
                     }
                 } break;
                 case SWRMT_MSG_LH2_CAPTURE:
+                    // DEPRECATED: the calibrate app's button capture replaces this READY-mode capture request.
                     // Raw LH2 capture only makes sense while the secure bootloader owns
                     // the main loop (READY). In RUNNING the secure side has jumped to the
                     // non-secure image and never services this channel.
@@ -585,9 +650,10 @@ int main(void) {
             }
         }
 
-        if (_app_vars.ipc_req != IPC_REQ_NONE) {
+        ipc_req_t ipc_req = _app_vars.ipc_req;
+        if (ipc_req != IPC_REQ_NONE) {
             ipc_shared_data.net_ack = false;
-            switch (_app_vars.ipc_req) {
+            switch (ipc_req) {
                 // Mira node functions
                 case IPC_MARI_INIT_REQ:
                     if (!_app_vars.mari_initialized) {
@@ -596,7 +662,11 @@ int main(void) {
                     }
                     break;
                 case IPC_MARI_NODE_TX_REQ: {
-                    while (!mari_node_is_connected()) {}
+                    // Not joined: drop. The ack only means the frame was taken,
+                    // so never block here.
+                    if (!mari_node_is_connected()) {
+                        break;
+                    }
                     // forward user-image data as DOTBOT_APP, but keep the bootloader's
                     // messages when user image is not running
                     bool user_running = (ipc_shared_data.status == SWRMT_APPLICATION_RUNNING ||
@@ -614,12 +684,24 @@ int main(void) {
                 default:
                     break;
             }
+            // Clear before acking: the app core's next request may land in
+            // ipc_req right after the ack.
+            _app_vars.ipc_req = IPC_REQ_NONE;
+            __DMB();
             ipc_shared_data.net_ack = true;
-            _app_vars.ipc_req      = IPC_REQ_NONE;
         }
 
         if (_app_vars.data_received) {
+            mutex_lock();
+            // Interrupts off for the copy only (at most UINT8_MAX bytes): it delays the
+            // radio and mari timer ISRs, so nothing else goes inside this window.
+            uint32_t primask = __get_PRIMASK();
+            __disable_irq();
+            ipc_shared_data.rx_pdu.length = _app_vars.rx_length;
+            memcpy((uint8_t *)ipc_shared_data.rx_pdu.buffer, _app_vars.rx_buffer, _app_vars.rx_length);
             _app_vars.data_received = false;
+            __set_PRIMASK(primask);
+            mutex_unlock();
             NRF_IPC_NS->TASKS_SEND[IPC_CHAN_RADIO_RX] = 1;
         }
 

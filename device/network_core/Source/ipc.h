@@ -43,7 +43,7 @@ typedef enum {
     IPC_CHAN_OTA_START          = 6,    ///< Channel used for starting an OTA process
     IPC_CHAN_OTA_CHUNK          = 7,    ///< Channel used for writing a non secure image chunk
     IPC_CHAN_CALIBRATION_DATA   = 8,    ///< Channel used for sending calibration data
-    IPC_CHAN_LH2_CAPTURE        = 9,    ///< Channel used to trigger a raw LH2 capture (READY mode only)
+    IPC_CHAN_LH2_CAPTURE        = 9,    ///< Channel used to trigger a raw LH2 capture (READY mode only; DEPRECATED)
     IPC_CHAN_OTA_FINALIZE       = 10,   ///< Channel used to verify the whole image SHA256 (block OTA)
 } ipc_channels_t;
 
@@ -101,7 +101,10 @@ typedef struct {
 /// LH2 calibration data
 typedef struct __attribute__((packed)) {
     uint32_t homography_count; // number of homography matrices used for localization
-    int32_t  homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization
+    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization, float32 in mm
+    uint32_t valid_mm[4]; // x_min, y_min, x_max, y_max in mm; all 0xFF when the calibration carries none
+    char     site_name[SWRMT_LH2_SITE_NAME_LEN]; // all zero when absent
+    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN]; // all zero when absent
 } ipc_lh2_calibration_t;
 
 /// DotBot protocol LH2 computed location
@@ -123,7 +126,14 @@ typedef struct __attribute__((packed)) {
     uint32_t psr;           ///< Stacked xPSR; IPSR field names the active exception, 0 for thread mode
 } ipc_crash_report_t;
 
+/// The node's network information, published by the network core for sandboxed apps
 typedef struct __attribute__((packed)) {
+    uint32_t min_tx_interval_us;    ///< Minimum time between this node's transmissions: the slotframe duration in microseconds; 0 = not joined
+    uint8_t  mari_schedule_id;      ///< Schedule adopted from the beacon; 0 = not joined
+    uint8_t  reserved[3];
+} ipc_network_info_t;
+
+typedef struct __attribute__((packed,aligned(8))) {
     bool                    net_ready;          ///< Network core is ready
     bool                    net_ack;            ///< Network core acked the latest request
     ipc_req_t               req;                ///< IPC network request
@@ -140,6 +150,8 @@ typedef struct __attribute__((packed)) {
     ipc_lh2_calibration_t    lh2_calibration;     ///< LH2 calibration data
     ipc_device_info_t       device_info;        ///< What this bot is running
     ipc_crash_report_t      crash_report;       ///< Cause of the most recent reset
+    uint8_t                 reserved[2];        ///< Word-aligns network_info after the 30-byte crash_report
+    ipc_network_info_t      network_info;       ///< Written by the network core on join and disconnect
 } ipc_shared_data_t;
 
 // This layout must stay identical to the app core's copy in
@@ -156,12 +168,40 @@ _Static_assert(offsetof(ipc_shared_data_t, current_position) % 4 == 0,
                "current_position must be 4-byte aligned");
 _Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) % 4 == 0,
                "lh2_calibration must be 4-byte aligned");
+_Static_assert(sizeof(ipc_lh2_calibration_t) == 620,
+               "ipc_lh2_calibration_t size must match the other core's copy");
 _Static_assert(sizeof(ipc_device_info_t) % 4 == 0,
                "ipc_device_info_t size must be a multiple of 4");
 _Static_assert(offsetof(ipc_shared_data_t, device_info) % 4 == 0,
                "device_info must be 4-byte aligned");
 _Static_assert(offsetof(ipc_shared_data_t, crash_report) % 4 == 0,
                "crash_report must be 4-byte aligned");
+_Static_assert(sizeof(ipc_network_info_t) == 8,
+               "ipc_network_info_t size must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, network_info) % 4 == 0,
+               "network_info must be 4-byte aligned");
+
+// Exact offsets, identical in both cores' copies, so a layout change made to
+// only one copy fails to compile.
+_Static_assert(offsetof(ipc_shared_data_t, net_ready) == 0, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, net_ack) == 1, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, req) == 2, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, status) == 3, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, battery_level) == 4, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, device_type) == 6, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, log) == 7, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, rng) == 135, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, ota) == 136, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, target_position) == 392, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, current_position) == 400, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, tx_pdu) == 408, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, rx_pdu) == 664, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) == 920, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, device_info) == 1540, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, crash_report) == 1692, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, reserved) == 1722, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, network_info) == 1724, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(sizeof(ipc_shared_data_t) == 1736, "ipc_shared_data_t layout must match the other core's copy");
 
 /**
  * @brief Lock the mutex, blocks until the mutex is locked

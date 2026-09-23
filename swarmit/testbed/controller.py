@@ -28,6 +28,7 @@ from swarmit.testbed.adapter import (
     MarilibEdgeAdapter,
     derive_block_settings,
 )
+from swarmit.testbed.helpers import LH2_BASESTATION_COUNT_MAX
 from swarmit.testbed.logger import LOGGER
 from swarmit.testbed.ota import BLOCK_SIZE_DEFAULT, BlockTransfer
 from swarmit.testbed.protocol import (
@@ -126,6 +127,9 @@ class StaleBootloaderError(Exception):
         )
 
 
+FIRMWARE_TOO_OLD = "firmware too old: reflash"
+
+
 @dataclass
 class DeviceInfo:
     """What a bot reports it is running, decoded for display.
@@ -148,6 +152,8 @@ class DeviceInfo:
     image_version: str = ""
     lh2_homography_count: int = 0
     lh2_flags: int = 0
+    lh2_site_name: str = ""  # "" when the bot holds none
+    lh2_calibration_id: str = ""  # 16 hex characters, "" when none
     raw: str = ""  # hex of the full device-info packet as received
 
     @classmethod
@@ -168,6 +174,12 @@ class DeviceInfo:
             image_version=decode_string_field(payload.image_version),
             lh2_homography_count=payload.lh2_homography_count,
             lh2_flags=payload.lh2_flags,
+            lh2_site_name=decode_string_field(payload.lh2_site_name),
+            lh2_calibration_id=(
+                bytes(payload.lh2_calibration_id).hex()
+                if any(payload.lh2_calibration_id)
+                else ""
+            ),
         )
 
     @property
@@ -179,6 +191,11 @@ class DeviceInfo:
         whose digest happens to be zero".
         """
         return self.image_size > 0 or self.image_digest.strip("0") != ""
+
+    @property
+    def too_old(self) -> bool:
+        """Whether the bot runs firmware older than this host, to reflash."""
+        return 0 < self.info_version < DEVICE_INFO_VERSION
 
     @property
     def image_label(self) -> str:
@@ -211,6 +228,8 @@ class DeviceInfo:
 
     @property
     def lh2_summary(self) -> str:
+        if self.too_old:
+            return FIRMWARE_TOO_OLD
         if not self.lh2_homography_count:
             return "uncalibrated"
         # One homography is stored per basestation index, so the count is the
@@ -466,6 +485,8 @@ def format_sandbox_fw(info: DeviceInfo | None) -> str:
     """
     if info is None:
         return "-"
+    if info.too_old:
+        return f"[red]{FIRMWARE_TOO_OLD}"
     bl, net = info.bl_version, info.net_version
     if not bl and not net:
         return "-"
@@ -498,6 +519,24 @@ def format_lh2_calibration(info: DeviceInfo | None) -> str:
     return info.lh2_summary
 
 
+def format_lh2_site(info: DeviceInfo | None) -> str:
+    """The site the bot's calibration was captured in."""
+    if info is None:
+        return "-"
+    if info.too_old:
+        return FIRMWARE_TOO_OLD
+    return info.lh2_site_name or "none"
+
+
+def format_lh2_id(info: DeviceInfo | None) -> str:
+    """The id of the calibration file the bot holds."""
+    if info is None:
+        return "-"
+    if info.too_old:
+        return FIRMWARE_TOO_OLD
+    return info.lh2_calibration_id or "none"
+
+
 def format_lh2_cell(info: DeviceInfo | None) -> str:
     """The compact form of the calibration state, for the fleet table.
 
@@ -510,6 +549,8 @@ def format_lh2_cell(info: DeviceInfo | None) -> str:
     """
     if info is None:
         return "-"
+    if info.too_old:
+        return "too old"
     if not info.lh2_homography_count:
         return "none"
     return str(info.lh2_homography_count)
@@ -745,7 +786,13 @@ def generate_info(status_data, devices=[], show_raw=False):
             age = max(0.0, time.time() - d.last_updated_at)
             table.add_row("Last update", f"{age:.1f}s ago")
 
-        if d.info is not None:
+        if d.info is not None and d.info.too_old:
+            table.add_row("", "")
+            table.add_row(
+                "Device info",
+                f"[red]v{d.info.info_version}, {FIRMWARE_TOO_OLD}",
+            )
+        elif d.info is not None:
             info = d.info
             table.add_row("", "")
             table.add_row("Image", info.image_label)
@@ -780,6 +827,8 @@ def generate_info(status_data, devices=[], show_raw=False):
         # still gets a calibration line, saying so, rather than none at all.
         table.add_row("", "")
         table.add_row("LH2 calibration", format_lh2_calibration(d.info))
+        table.add_row("  site", format_lh2_site(d.info))
+        table.add_row("  id", format_lh2_id(d.info))
 
         table.add_row("", "")
         table.add_row(
@@ -1495,38 +1544,55 @@ class Controller:
                     continue
                 self._send_message(int(addr, 16), message)
 
-    def send_lh2_calibration(self, calibration_file: bytes):
-        matrix_size = 3 * 3 * 4  # 3x3, each element is 4 bytes
-        if not calibration_file:
-            raise ValueError("Calibration file is empty")
+    def send_lh2_calibration(
+        self, messages: bytes, devices: list[str] | None = None
+    ):
+        """Send a calibration: one 84-byte message per station, concatenated.
 
-        # Supported format: 1-byte count + N * 36 bytes
-        if (
-            len(calibration_file) < 1
-            or (len(calibration_file) - 1) % matrix_size != 0
-        ):
+        The messages come packed by `helpers.read_lh2_calibration_payload`
+        (or PyDotBot's packer); this checks they form one consistent push
+        before anything goes out. With `devices`, each goes unicast to
+        exactly those addresses and nothing is broadcast.
+        """
+        size = PayloadCalibrationData().size
+        if not messages or len(messages) % size != 0:
             raise ValueError(
-                f"Invalid calibration file size: expected 1+N*{matrix_size} bytes (count byte + matrices)"
+                f"Invalid calibration payload: expected N x {size} bytes, "
+                f"got {len(messages or b'')}"
             )
+        payloads = [
+            PayloadCalibrationData().from_bytes(bytes(messages[i : i + size]))
+            for i in range(0, len(messages), size)
+        ]
+        homography_count = len(payloads)
+        if homography_count > LH2_BASESTATION_COUNT_MAX:
+            raise ValueError(
+                "Invalid calibration payload: homography count exceeds LH2 "
+                f"limit ({LH2_BASESTATION_COUNT_MAX})"
+            )
+        for index, payload in enumerate(payloads):
+            if payload.homography_count != homography_count:
+                raise ValueError(
+                    "Invalid calibration payload: message count field "
+                    f"{payload.homography_count} does not match the "
+                    f"{homography_count} messages sent"
+                )
+            if payload.homography_index != index:
+                raise ValueError(
+                    "Invalid calibration payload: messages must carry "
+                    "indices 0 to N-1 in order"
+                )
+            if payload.site_fields != payloads[0].site_fields:
+                raise ValueError(
+                    "Invalid calibration payload: the site fields differ "
+                    "between messages"
+                )
 
-        homography_count = calibration_file[0]
-        matrices_bytes = calibration_file[1:]
-        expected_count = len(matrices_bytes) // matrix_size
-        if homography_count != expected_count:
-            raise ValueError(
-                "Invalid calibration file: count byte does not match matrix payload length"
-            )
-        if homography_count == 0:
-            raise ValueError(
-                "Invalid calibration file: homography count cannot be zero"
-            )
-
-        if homography_count > 16:
-            raise ValueError(
-                "Invalid calibration file: homography count exceeds LH2 limit (16)"
-            )
-
-        ready_devices = self.ready_devices
+        ready_devices = (
+            [device.upper() for device in devices]
+            if devices
+            else self.ready_devices
+        )
         if not ready_devices:
             print(
                 f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}..."
@@ -1536,15 +1602,8 @@ class Controller:
                 f"Sending {homography_count} calibration matrix/matrices to {len(ready_devices)} devices: {str(ready_devices)}..."
             )
 
-        for homography_index in range(homography_count):
-            print(f"Sending calibration matrix {homography_index}...")
-            start = homography_index * matrix_size
-            end = start + matrix_size
-            payload = PayloadCalibrationData(
-                homography_count=homography_count,
-                homography_index=homography_index,
-                homography=matrices_bytes[start:end],
-            )
+        for payload in payloads:
+            print(f"Sending calibration matrix {payload.homography_index}...")
             if self.settings.verbose:
                 print(payload)
                 print(Packet.from_payload(payload).to_bytes())
@@ -1561,6 +1620,8 @@ class Controller:
 
     def request_lh2_capture(self, device_addr: str):
         """Trigger a single raw LH2 capture on one device.
+
+        DEPRECATED: the calibrate app's button capture replaces it.
 
         The bot replies (only while READY) with a SWARMIT_EVENT_LOG whose
         payload starts with LH2_CALIB_TAG. Delivery is best-effort: callers

@@ -257,12 +257,13 @@ class Lh2CalibrationRequest(BaseModel):
     """Send LH2 calibration data to the swarm.
 
     `calibration_b64` is the base64-encoded blob in the format expected by
-    Controller.send_lh2_calibration: a 1-byte station count followed by one
-    36-byte record per station, nine little-endian int32 row-major, each the
-    value times 1e3.
+    Controller.send_lh2_calibration: one 84-byte calibration message per
+    station, concatenated in index order. `devices`, when given, are the
+    only addresses it is sent to (unicast, never broadcast).
     """
 
     calibration_b64: str
+    devices: list[str] | None = None
 
 
 class CaptureRequest(BaseModel):
@@ -661,7 +662,9 @@ async def lh2_calibration(request: Request, payload: Lh2CalibrationRequest):
     async with controller_lock:
         try:
             await run_in_threadpool(
-                controller.send_lh2_calibration, bytearray(blob)
+                controller.send_lh2_calibration,
+                bytearray(blob),
+                payload.devices,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))

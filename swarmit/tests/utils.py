@@ -265,7 +265,7 @@ class SwarmitNode(threading.Thread):
             self.send_packet(
                 Packet().from_payload(
                     PayloadDeviceInfo(
-                        info_version=1,
+                        info_version=2,
                         info_gen=self.info_gen,
                         boot_count=self.boot_count,
                         uptime_s=42,

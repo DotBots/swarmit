@@ -68,10 +68,16 @@ class SwarmitClient(Protocol):
 
     def message(self, text: str) -> None: ...
 
-    def send_lh2_calibration(self, blob: bytes) -> None: ...
+    def send_lh2_calibration(
+        self, blob: bytes, devices: list[str] | None = None
+    ) -> None:
+        """Send a calibration; with `devices`, unicast to exactly those."""
+        ...
 
     def request_lh2_capture(self, device_addr: str) -> None:
         """Trigger a raw LH2 capture on one device (READY mode only).
+
+        DEPRECATED: the calibrate app's button capture replaces it.
 
         The bot answers with a SWARMIT_EVENT_LOG whose payload starts with
         LH2_CALIB_TAG; callers consume it via watch_log_events().

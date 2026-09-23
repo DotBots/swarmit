@@ -320,6 +320,8 @@ def test_parse_node_status_ignores_server_fields_the_client_does_not_know():
             "pos_x": 0,
             "pos_y": 0,
             "last_updated_at": 0.0,
+            "sp": 0x2003FF00,
+            "psr": 0x2B,
             # Computed server-side, not fields of NodeStatus / DeviceInfo.
             "reset_cause": "stopped",
             "fault_name": "NoFault",
@@ -339,6 +341,9 @@ def test_parse_node_status_ignores_server_fields_the_client_does_not_know():
     )
 
     assert node.battery == 2300
+    # Every raw status field the daemon sends reaches the client, including
+    # the crash report's stack registers.
+    assert (node.sp, node.psr) == (0x2003FF00, 0x2B)
     assert node.info is not None
     assert node.info.image_name == "dotbot-sandbox-dotbot-v3.bin"
     # The property still derives it locally from the raw fields.

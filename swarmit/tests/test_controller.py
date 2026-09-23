@@ -461,122 +461,97 @@ def test_controller_send_message_broadcast(capsys):
         assert f"Node {node} received message: Hello robot!" in out
 
 
+def _calibration_messages():
+    from swarmit.tests.lh2_wire_fixture import MESSAGE_HEX
+
+    return [bytes.fromhex(h) for h in MESSAGE_HEX]
+
+
+def _send_calibration(blob, ready=("00000001",), devices=None):
+    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
+    try:
+        with patch.object(
+            type(controller),
+            "ready_devices",
+            new_callable=PropertyMock,
+            return_value=list(ready),
+        ):
+            with patch.object(controller, "send_payload") as send_payload_mock:
+                controller.send_lh2_calibration(blob, devices)
+    finally:
+        controller.terminate()
+    return send_payload_mock
+
+
 @patch(
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_lh2_calibration_from_file_bytes():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
-    matrix_0 = bytes(range(36))
-    matrix_1 = bytes(range(36, 72))
-    calibration_file = bytes([2]) + matrix_0 + matrix_1
+def test_controller_sends_calibration_only_to_the_devices_named():
+    # No READY device, which would otherwise mean a broadcast.
+    send_payload_mock = _send_calibration(
+        b"".join(_calibration_messages()), ready=(), devices=["0000000a"]
+    )
 
-    with patch.object(
-        type(controller),
-        "ready_devices",
-        new_callable=PropertyMock,
-        return_value=["00000001"],
-    ):
-        with patch.object(controller, "send_payload") as send_payload_mock:
-            controller.send_lh2_calibration(calibration_file)
+    assert [call.args[0] for call in send_payload_mock.call_args_list] == [
+        0xA,
+        0xA,
+    ]
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_sends_one_calibration_message_per_station():
+    messages = _calibration_messages()
+
+    send_payload_mock = _send_calibration(b"".join(messages))
 
     assert send_payload_mock.call_count == 2
-    first_call = send_payload_mock.call_args_list[0].args
-    second_call = send_payload_mock.call_args_list[1].args
-
-    # ready_devices is set so the controller sends unicast to each device,
-    # not broadcast. "00000001" → 0x1.
-    assert first_call[0] == 0x1
-    assert first_call[1].homography_count == 2
-    assert first_call[1].homography_index == 0
-    assert first_call[1].homography == matrix_0
-
-    assert second_call[0] == 0x1
-    assert second_call[1].homography_count == 2
-    assert second_call[1].homography_index == 1
-    assert second_call[1].homography == matrix_1
-    controller.terminate()
+    for call, message in zip(send_payload_mock.call_args_list, messages):
+        # ready_devices is set, so unicast to "00000001" -> 0x1.
+        assert call.args[0] == 0x1
+        assert bytes(call.args[1].to_bytes()) == message
+    first = send_payload_mock.call_args_list[0].args[1]
+    assert first.homography_count == 2
+    assert (first.valid_x_max, first.valid_y_max) == (3330, 4000)
+    assert first.site_name == b"c405-arena" + bytes(6)
+    assert bytes(first.calibration_id).hex() == "ac893d2d85e3068c"
 
 
 @patch(
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_lh2_calibration_from_legacy_out_format():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
-    matrix = bytes(range(36))
-    calibration_file = bytes([1]) + matrix
-
-    with patch.object(
-        type(controller),
-        "ready_devices",
-        new_callable=PropertyMock,
-        return_value=["00000001"],
-    ):
-        with patch.object(controller, "send_payload") as send_payload_mock:
-            controller.send_lh2_calibration(calibration_file)
-
-    assert send_payload_mock.call_count == 1
-    call = send_payload_mock.call_args_list[0].args
-    # ready_devices is set → unicast to "00000001" → 0x1.
-    assert call[0] == 0x1
-    assert call[1].homography_count == 1
-    assert call[1].homography_index == 0
-    assert call[1].homography == matrix
-    controller.terminate()
+@pytest.mark.parametrize(
+    "blob, match",
+    [
+        (b"\x00" * 83, "expected N x 84 bytes"),
+        # The retired int32 format, a count byte and one matrix.
+        (bytes([1]) + bytes(36), "expected N x 84 bytes"),
+        (b"", "expected N x 84 bytes"),
+    ],
+    ids=["short", "int32-format", "empty"],
+)
+def test_controller_refuses_a_calibration_of_the_wrong_size(blob, match):
+    with pytest.raises(ValueError, match=match):
+        _send_calibration(blob)
 
 
 @patch(
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_lh2_calibration_invalid_size():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
-    with patch.object(
-        type(controller),
-        "ready_devices",
-        new_callable=PropertyMock,
-        return_value=["00000001"],
-    ):
-        with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
-            controller.send_lh2_calibration(b"\x00" * 35)
-    controller.terminate()
-
-
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_lh2_calibration_legacy_count_mismatch():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
-    calibration_file = bytes([2]) + bytes(range(36))
-    with patch.object(
-        type(controller),
-        "ready_devices",
-        new_callable=PropertyMock,
-        return_value=["00000001"],
-    ):
-        with pytest.raises(ValueError, match="count byte does not match"):
-            controller.send_lh2_calibration(calibration_file)
-    controller.terminate()
-
-
-@patch(
-    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
-)
-@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_send_lh2_calibration_raw_format_rejected():
-    controller = Controller(ControllerSettings(adapter_wait_timeout=0.1))
-    raw_matrix_only = bytes(range(36))
-    with patch.object(
-        type(controller),
-        "ready_devices",
-        new_callable=PropertyMock,
-        return_value=["00000001"],
-    ):
-        with pytest.raises(ValueError, match="expected 1\\+N\\*36 bytes"):
-            controller.send_lh2_calibration(raw_matrix_only)
-    controller.terminate()
+def test_controller_refuses_messages_that_are_not_one_push():
+    first, second = _calibration_messages()
+    with pytest.raises(ValueError, match="count field"):
+        _send_calibration(first)
+    with pytest.raises(ValueError, match="indices 0 to N-1"):
+        _send_calibration(second + first)
+    other_site = second[:60] + b"elsewhere".ljust(16, b"\x00") + second[76:]
+    with pytest.raises(ValueError, match="site fields differ"):
+        _send_calibration(first + other_site)
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
@@ -1054,7 +1029,7 @@ def test_device_info_reply_survives_a_concurrent_timeout():
 
     header = MagicMock()
     header.source = 0x22
-    packet = Packet.from_payload(PayloadDeviceInfo(info_version=1, info_gen=3))
+    packet = Packet.from_payload(PayloadDeviceInfo(info_version=2, info_gen=3))
     # status_data is deliberately empty: the device timed out between the
     # request going out and this reply arriving.
     controller.on_frame_received(header, packet)
@@ -1230,7 +1205,7 @@ def test_matching_generation_clears_the_backoff():
     header.source = 0x44
     controller.on_frame_received(
         header,
-        Packet.from_payload(PayloadDeviceInfo(info_version=1, info_gen=7)),
+        Packet.from_payload(PayloadDeviceInfo(info_version=2, info_gen=7)),
     )
 
     assert controller._device_info["00000044"].info_gen == 7
@@ -1346,7 +1321,7 @@ def test_info_panel_always_names_the_calibration_state():
         generate_info(never_asked, [])
     )
 
-    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=1))}
+    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=2))}
     out = _render(generate_info(uncalibrated, []))
     assert "LH2 calibration" in out
     assert "uncalibrated" in out
@@ -1354,7 +1329,7 @@ def test_info_panel_always_names_the_calibration_state():
     calibrated = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         )
     }
@@ -1363,8 +1338,33 @@ def test_info_panel_always_names_the_calibration_state():
     )
 
 
+def test_info_panel_always_shows_the_site_and_the_id():
+    held = {
+        "AA": NodeStatus(
+            info=DeviceInfo(
+                info_version=2,
+                lh2_homography_count=2,
+                lh2_site_name="c405-arena",
+                lh2_calibration_id="ac893d2d85e3068c",
+            )
+        )
+    }
+    out = _render(generate_info(held, []))
+    assert "c405-arena" in out
+    assert "ac893d2d85e3068c" in out
+
+    empty = {"AA": NodeStatus(info=DeviceInfo(info_version=2))}
+    out = _render(generate_info(empty, []))
+    assert "site" in out and "none" in out
+
+    old = {"AA": NodeStatus(info=DeviceInfo(info_version=1))}
+    out = _render(generate_info(old, []))
+    assert "firmware too old: reflash" in out
+    assert "Sandbox fw" not in out
+
+
 def test_a_single_basestation_is_not_pluralised():
-    info = DeviceInfo(info_version=1, lh2_homography_count=1, lh2_flags=0b01)
+    info = DeviceInfo(info_version=2, lh2_homography_count=1, lh2_flags=0b01)
     assert info.lh2_summary == "1 basestation (valid)"
 
 
@@ -1392,7 +1392,7 @@ def test_position_tells_uncalibrated_apart_from_a_missing_fix():
     would have changed the cell. Device info already says which it is, so the
     cell says it too, in the same word as the `LH2 calibration` row.
     """
-    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=1))}
+    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=2))}
     out = _render(generate_info(uncalibrated, []))
     assert "uncalibrated" in out
     assert "no fix" not in out
@@ -1401,10 +1401,10 @@ def test_position_tells_uncalibrated_apart_from_a_missing_fix():
     # named in the header line and the Position cell is the only place the
     # word can come from.
     fleet = {
-        "AA": NodeStatus(info=DeviceInfo(info_version=1)),
+        "AA": NodeStatus(info=DeviceInfo(info_version=2)),
         "BB": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         ),
     }
@@ -1431,7 +1431,7 @@ def test_status_collapses_calibration_when_the_fleet_agrees():
     Same treatment as the sandbox-firmware column: spending table width to
     repeat one string per row is what stops the fleet laying out side by side.
     """
-    info = DeviceInfo(info_version=1, lh2_homography_count=2, lh2_flags=0b11)
+    info = DeviceInfo(info_version=2, lh2_homography_count=2, lh2_flags=0b11)
     fleet = {
         "AA": NodeStatus(info=info),
         "BB": NodeStatus(info=info),
@@ -1454,10 +1454,10 @@ def test_status_shows_the_calibration_column_when_the_fleet_disagrees():
     fleet = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         ),
-        "BB": NodeStatus(info=DeviceInfo(info_version=1)),
+        "BB": NodeStatus(info=DeviceInfo(info_version=2)),
         "CC": NodeStatus(info=None),
     }
     out = _render(generate_status(fleet))
@@ -1477,12 +1477,12 @@ def test_status_compares_calibration_on_the_summary_not_the_count():
     fleet = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b11
+                info_version=2, lh2_homography_count=2, lh2_flags=0b11
             )
         ),
         "BB": NodeStatus(
             info=DeviceInfo(
-                info_version=1, lh2_homography_count=2, lh2_flags=0b01
+                info_version=2, lh2_homography_count=2, lh2_flags=0b01
             )
         ),
     }

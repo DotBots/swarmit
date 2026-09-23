@@ -129,7 +129,8 @@ class PayloadType(IntEnum):
 
     # SwarmIT calibration data
     SWARMIT_LH2_CALIBRATION = 0xA1
-    # Host -> node: trigger a raw LH2 capture (READY mode only)
+    # Host -> node: trigger a raw LH2 capture (READY mode only). DEPRECATED: the
+    # calibrate app's button capture replaces it.
     SWARMIT_LH2_CAPTURE = 0xA2
 
     # Marilib metrics probe
@@ -151,7 +152,8 @@ OTA_PROTOCOL_VERSION_BLOCK = 2
 # First byte of a raw LH2 capture sample carried inside a SWARMIT_EVENT_LOG
 # payload. Mirrors SWRMT_LH2_CALIB_TAG in the swarmit bootloader firmware; lets
 # the host tell a calibration sample apart from a regular text log line. Each
-# sample that follows is [lh_index:1][count1:4 LE][count2:4 LE].
+# sample that follows is [lh_index:1][count1:4 LE][count2:4 LE]. DEPRECATED
+# with SWARMIT_LH2_CAPTURE, whose reply it tags.
 LH2_CALIB_TAG = 0xCA
 
 
@@ -298,8 +300,13 @@ INFO_GEN_SIZE = 1
 INFO_STRING_LEN = 32
 # Bytes of the image SHA256 carried on the wire (the device keeps all 32).
 IMAGE_DIGEST_LEN = 8
-# Schema version this host understands in SWARMIT_DEVICE_INFO_RESP.
-DEVICE_INFO_VERSION = 1
+# Schema version this host understands in SWARMIT_DEVICE_INFO_RESP. A bot
+# reporting an older one runs firmware to reflash.
+DEVICE_INFO_VERSION = 2
+# The LH2 site name and calibration id, as the calibration message, the
+# config page and device info v2 carry them.
+LH2_SITE_NAME_LEN = 16
+LH2_CALIBRATION_ID_LEN = 8
 
 
 class ImageState(Enum):
@@ -568,7 +575,12 @@ class PayloadOTAChunk(Payload):
 
 @dataclass
 class PayloadCalibrationData(Payload):
-    """Dataclass that holds a calibration data packet."""
+    """One station's LH2 homography, `swrmt_lh2_calibration_data_t`.
+
+    The matrix is nine little-endian float32, row-major. The validity
+    rectangle, site name and calibration id are the same in every message of
+    one push.
+    """
 
     metadata: list[PayloadFieldMetadata] = dataclasses.field(
         default_factory=lambda: [
@@ -581,16 +593,50 @@ class PayloadCalibrationData(Payload):
             PayloadFieldMetadata(
                 name="homography", type_=bytes, length=3 * 3 * 4
             ),
+            PayloadFieldMetadata(name="valid_x_min", disp="x0", length=4),
+            PayloadFieldMetadata(name="valid_y_min", disp="y0", length=4),
+            PayloadFieldMetadata(name="valid_x_max", disp="x1", length=4),
+            PayloadFieldMetadata(name="valid_y_max", disp="y1", length=4),
+            PayloadFieldMetadata(
+                name="site_name",
+                disp="site",
+                type_=bytes,
+                length=LH2_SITE_NAME_LEN,
+            ),
+            PayloadFieldMetadata(
+                name="calibration_id",
+                disp="id",
+                type_=bytes,
+                length=LH2_CALIBRATION_ID_LEN,
+            ),
         ]
     )
 
-    homography_count: int = (
-        0  # number of homography matrices used for localization
+    homography_count: int = 0
+    homography_index: int = 0
+    homography: bytes = dataclasses.field(default_factory=lambda: bytes(36))
+    valid_x_min: int = 0
+    valid_y_min: int = 0
+    valid_x_max: int = 0
+    valid_y_max: int = 0
+    site_name: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_SITE_NAME_LEN)
     )
-    homography_index: int = 0  # index of the homography matrix to be sent
-    homography: bytes = dataclasses.field(
-        default_factory=lambda: bytearray
-    )  # 9x4 bytes of the homography matrix
+    calibration_id: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_CALIBRATION_ID_LEN)
+    )
+
+    @property
+    def site_fields(self) -> tuple:
+        """The validity rectangle, site name and id, identical across one push."""
+        return (
+            self.valid_x_min,
+            self.valid_y_min,
+            self.valid_x_max,
+            self.valid_y_max,
+            self.site_name,
+            self.calibration_id,
+        )
 
 
 @dataclass
@@ -768,6 +814,18 @@ class PayloadDeviceInfo(Payload):
             ),
             PayloadFieldMetadata(name="lh2_homography_count", disp="lh2"),
             PayloadFieldMetadata(name="lh2_flags", disp="lh2f"),
+            PayloadFieldMetadata(
+                name="lh2_site_name",
+                disp="site",
+                type_=bytes,
+                length=LH2_SITE_NAME_LEN,
+            ),
+            PayloadFieldMetadata(
+                name="lh2_calibration_id",
+                disp="cal.",
+                type_=bytes,
+                length=LH2_CALIBRATION_ID_LEN,
+            ),
         ]
     )
 
@@ -795,13 +853,20 @@ class PayloadDeviceInfo(Payload):
     )
     lh2_homography_count: int = 0
     lh2_flags: int = 0
+    lh2_site_name: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_SITE_NAME_LEN)
+    )
+    lh2_calibration_id: bytes = dataclasses.field(
+        default_factory=lambda: bytes(LH2_CALIBRATION_ID_LEN)
+    )
 
-    # No from_bytes override, for the same reason PayloadStatus has none: a
-    # reply that is not this shape comes from a bot too old to talk to, and
-    # zero-filling it invented a record rather than reporting nothing. It now
-    # raises, the adapter drops the frame, and the cached info simply does not
-    # update. Trailing bytes from a newer schema need no handling either - the
-    # base parser consumes the fields it knows and ignores the rest.
+    def from_bytes(self, bytes_):
+        """Parse a reply; one older than DEVICE_INFO_VERSION keeps only its
+        version and generation, enough to tell the operator to reflash."""
+        if len(bytes_) >= 2 and 0 < bytes_[0] < DEVICE_INFO_VERSION:
+            self.info_version, self.info_gen = bytes_[0], bytes_[1]
+            return self
+        return super().from_bytes(bytes_)
 
 
 @dataclass

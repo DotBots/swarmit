@@ -1,12 +1,16 @@
 import pytest
 
 from swarmit.testbed.helpers import (
-    MATRIX_BYTES,
-    homography_as_bytes,
     load_toml_config,
     read_calibration,
     read_lh2_calibration_payload,
     reference_points,
+)
+from swarmit.tests.lh2_wire_fixture import (
+    DEFAULTS_FIXTURE_TOML,
+    DEFAULTS_MESSAGE_HEX,
+    FIXTURE_TOML,
+    MESSAGE_HEX,
 )
 
 TEST_CONFIG_TOML = """
@@ -16,8 +20,7 @@ baudrate = 1000000
 devices = ""
 """
 
-# A schema 2 calibration, in the shape PyDotBot's writer emits. The same
-# fixture is pinned on that side, so the two packers cannot drift.
+# A schema 2 calibration, for the tests that read its tables.
 CALIBRATION_TOML = """\
 schema_version = 2
 
@@ -50,15 +53,6 @@ residual_mm = 0.0
 homography = [[1523.4, -38.2, 1012.7], [41.9, 1531.8, 988.3], [0.2134, -0.0871, 1.0]]
 """
 
-# The fixture's homography through the int32 x 1e3 shim: 1523400, -38200,
-# 1012700, 41900, 1531800, 988300, 213, -87, 1000 as little-endian int32.
-# PyDotBot pins the same bytes for the same matrix.
-EXPECTED_MATRIX_BYTES = bytes.fromhex(
-    "c83e1700c86affffdc730f00"
-    "aca30000985f17008c140f00"
-    "d5000000a9ffffffe8030000"
-)
-
 
 def _write(tmp_path, text, name="calibration.toml"):
     path = tmp_path / name
@@ -81,21 +75,58 @@ def test_load_toml_config_empty():
     assert cfg == {}
 
 
-def test_schema_2_matrices_pack_to_the_expected_int32_payload(tmp_path):
-    """Byte-for-byte against the int32 x 1e3 encoding PyDotBot's packer pins."""
-    payload = read_lh2_calibration_payload(_write(tmp_path, CALIBRATION_TOML))
+def test_the_calibration_messages_are_pinned(tmp_path):
+    """Byte for byte the messages PyDotBot's packer pins for the same file."""
+    payload = read_lh2_calibration_payload(_write(tmp_path, FIXTURE_TOML))
 
-    assert payload == bytes([1]) + EXPECTED_MATRIX_BYTES
-    assert len(payload) == 1 + MATRIX_BYTES
+    assert payload == b"".join(bytes.fromhex(h) for h in MESSAGE_HEX)
+    assert len(payload) == 2 * 84
 
 
-def test_the_shim_truncates_towards_zero_and_zeroes_on_overflow():
-    """Quantisation is int32 x 1e3 truncated, and a value too large zeroes the record."""
-    packed = homography_as_bytes([1.0009, -1.0009] + [0.0] * 7)
+def test_a_file_without_site_or_validity_takes_pydotbots_defaults(tmp_path):
+    payload = read_lh2_calibration_payload(
+        _write(tmp_path, DEFAULTS_FIXTURE_TOML)
+    )
+    assert payload == b"".join(bytes.fromhex(h) for h in DEFAULTS_MESSAGE_HEX)
 
-    assert packed[0:4] == (1000).to_bytes(4, "little", signed=True)
-    assert packed[4:8] == (-1000).to_bytes(4, "little", signed=True)
-    assert homography_as_bytes([1e9] + [0.0] * 8) == bytes(MATRIX_BYTES)
+
+def test_a_gap_in_the_station_numbering_is_refused(tmp_path):
+    gapped = FIXTURE_TOML.replace(
+        "index = 1\nsolved_from", "index = 2\nsolved_from"
+    )
+    with pytest.raises(ValueError, match="without gaps"):
+        read_lh2_calibration_payload(_write(tmp_path, gapped))
+
+
+@pytest.mark.parametrize(
+    "edit, match",
+    [
+        (
+            ('name = "c405-arena"', 'name = "a-name-too-long-for-16"'),
+            "1 to 16",
+        ),
+        (('id = "ac893d2d85e3068c"', 'id = "ac89"'), "shorter than 16"),
+        (
+            ("valid_mm = [0, 0, 3330, 4000]", "valid_mm = [0, 0, -1, 4000]"),
+            "valid_mm",
+        ),
+    ],
+    ids=["long-site", "short-id", "negative-valid-mm"],
+)
+def test_site_fields_a_robot_cannot_store_are_refused(tmp_path, edit, match):
+    with pytest.raises(ValueError, match=match):
+        read_lh2_calibration_payload(
+            _write(tmp_path, FIXTURE_TOML.replace(*edit))
+        )
+
+
+def test_a_declared_id_is_sent_as_is(tmp_path):
+    """The low-level packer trusts metadata.id; PyDotBot is where it is checked."""
+    edited = FIXTURE_TOML.replace(
+        'id = "ac893d2d85e3068c"', 'id = "0123456789abcdef"'
+    )
+    payload = read_lh2_calibration_payload(_write(tmp_path, edited))
+    assert payload[76:84] == bytes.fromhex("0123456789abcdef")
 
 
 def test_schema_1_file_is_refused(tmp_path):

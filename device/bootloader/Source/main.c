@@ -265,8 +265,26 @@ static void _update_position(void) {
     _bootloader_vars.position_update = true;
 }
 
+/// Store @p value little-endian at @p dst and return the bytes written.
+static uint8_t _put_u32_le(volatile uint8_t *dst, uint32_t value) {
+    for (uint8_t shift = 0; shift < 32; shift += 8) {
+        *dst++ = (uint8_t)(value >> shift);
+    }
+    return sizeof(value);
+}
+
 static void _read_battery(void) {
     _bootloader_vars.battery_update = true;
+}
+
+/// Load the calibration the net core published, when it holds one.
+static void _load_calibration(void) {
+    uint32_t homography_count = ipc_shared_data.lh2_calibration.homography_count;
+    if (homography_count == 0 || homography_count > LH2_BASESTATION_COUNT_MAX) {
+        printf("Initializing without LH2 calibration data, homography count: %u\n", homography_count);
+        return;
+    }
+    localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, homography_count, (const uint32_t *)ipc_shared_data.lh2_calibration.valid_mm);
 }
 
 int main(void) {
@@ -397,12 +415,7 @@ int main(void) {
         // Experiment is running
         ipc_shared_data.status = SWRMT_APPLICATION_RUNNING;
 
-        // ensure LH2 localization is initialized
-        if (ipc_shared_data.lh2_calibration.homography_count > 0 && ipc_shared_data.lh2_calibration.homography_count <= LH2_BASESTATION_COUNT_MAX) {
-            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
-        } else {
-            printf("Initializing without LH2 calibration data, homography count: %u\n", ipc_shared_data.lh2_calibration.homography_count);
-        }
+        _load_calibration();
 
         // Initialize watchdog and non secure access
         setup_ns_user();
@@ -446,9 +459,10 @@ int main(void) {
 
         if (_bootloader_vars.lh2_calibration_ready) {
             _bootloader_vars.lh2_calibration_ready = false;
-            localization_init((int32_t (*)[3][3])ipc_shared_data.lh2_calibration.homographies, ipc_shared_data.lh2_calibration.homography_count);
+            _load_calibration();
         }
 
+        // DEPRECATED: the calibrate app's button capture replaces this READY-mode capture request.
         if (_bootloader_vars.lh2_capture_request) {
             _bootloader_vars.lh2_capture_request = false;
             localization_start();  // idempotent: starts LH2 even when no calibration is loaded
@@ -587,11 +601,12 @@ int main(void) {
         // Process available lighthouse data
         bool data_available = localization_process_data();
 
-        // Raw LH2 capture for OTA calibration: drain the freshest counts and ship
-        // them to the host inside a LOG_EVENT. Cap samples so 1 tag + 9 bytes/sample
-        // fits in ipc_shared_data.log.data (INT8_MAX bytes).
+        // DEPRECATED with the capture request above. Raw LH2 capture for OTA
+        // calibration: drain the freshest counts and ship them to the host
+        // inside a LOG_EVENT. Cap samples so 1 tag + the wire record per
+        // sample fits in ipc_shared_data.log.data (INT8_MAX bytes).
         if (_bootloader_vars.lh2_capturing && data_available) {
-            const uint8_t  max_samples = (INT8_MAX - 1) / 9;
+            const uint8_t  max_samples = (INT8_MAX - 1) / LH2_RAW_SAMPLE_WIRE_SIZE;
             lh2_raw_sample_t samples[LH2_BASESTATION_COUNT_MAX] = { 0 };
             uint8_t count = localization_get_raw_counts(samples, max_samples < LH2_BASESTATION_COUNT_MAX ? max_samples : LH2_BASESTATION_COUNT_MAX);
             if (count > 0) {
@@ -600,10 +615,8 @@ int main(void) {
                 ipc_shared_data.log.data[length++] = SWRMT_LH2_CALIB_TAG;
                 for (uint8_t i = 0; i < count; i++) {
                     ipc_shared_data.log.data[length++] = samples[i].lh_index;
-                    memcpy((void *)&ipc_shared_data.log.data[length], &samples[i].count1, sizeof(uint32_t));
-                    length += sizeof(uint32_t);
-                    memcpy((void *)&ipc_shared_data.log.data[length], &samples[i].count2, sizeof(uint32_t));
-                    length += sizeof(uint32_t);
+                    length += _put_u32_le(&ipc_shared_data.log.data[length], samples[i].count1);
+                    length += _put_u32_le(&ipc_shared_data.log.data[length], samples[i].count2);
                 }
                 ipc_shared_data.log.length = length;
                 mutex_unlock();
@@ -621,8 +634,6 @@ int main(void) {
                 ipc_shared_data.current_position.y = position.y;
                 mutex_unlock();
                 printf("Position (%u,%u)\n", position.x, position.y);
-            } else {
-                printf("Invalid position (%u,%u)\n", position.x, position.y);
             }
             _bootloader_vars.position_update = false;
         }

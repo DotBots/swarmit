@@ -20,7 +20,7 @@
 #define SWRMT_OTA_PROTOCOL_VERSION  (2U)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.
-#define SWRMT_DEVICE_INFO_VERSION   (1U)
+#define SWRMT_DEVICE_INFO_VERSION   (2U)
 
 /// Ceiling for identity strings, including the NUL terminator. Matter
 /// (VendorName/ProductName/SerialNumber), Zigbee (ManufacturerName/
@@ -31,6 +31,10 @@
 /// keeps all 32; a truncated digest is only ever compared, never trusted as a
 /// signature.
 #define SWRMT_IMAGE_DIGEST_LEN      (8U)
+
+/// Fixed widths of the site identity a calibration carries.
+#define SWRMT_LH2_SITE_NAME_LEN         (16U)   ///< ASCII, NUL-padded, not necessarily NUL-terminated
+#define SWRMT_LH2_CALIBRATION_ID_LEN    (8U)    ///< leading bytes of the calibration file's id
 
 /// Image lifecycle, LwM2M Object 5 resource 3 (State).
 typedef enum {
@@ -93,7 +97,7 @@ typedef enum {
     // for the moment, I am just appending SWRMT_MSG_LH2_CALIBRATION after SWRMT_MESSAGE.
     SWRMT_MESSAGE = 0xA0, // custom message type
     SWRMT_MSG_LH2_CALIBRATION = 0xA1,
-    SWRMT_MSG_LH2_CAPTURE = 0xA2, // host -> node: capture one raw LH2 sample (READY mode only)
+    SWRMT_MSG_LH2_CAPTURE = 0xA2, // host -> node: capture one raw LH2 sample (READY mode only). DEPRECATED: the calibrate app replaces it.
 } swrmt_message_type_t;
 
 /// Protocol packet type
@@ -166,9 +170,11 @@ typedef struct __attribute__((packed)) {
     char     image_version[SWRMT_INFO_STRING_LEN];  ///< LwM2M Object 5 res 7 PkgVersion, display only
     uint8_t  lh2_homography_count;                  ///< 0 = uncalibrated
     uint8_t  lh2_flags;                             ///< SWRMT_LH2_FLAG_*
+    char     lh2_site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< site of the loaded calibration, all zero if none
+    uint8_t  lh2_calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< id of the loaded calibration, all zero if none
 } swrmt_device_info_pkt_t;
 
-_Static_assert(sizeof(swrmt_device_info_pkt_t) == 154,
+_Static_assert(sizeof(swrmt_device_info_pkt_t) == 178,
                "swrmt_device_info_pkt_t is a wire format; its size is part of the contract");
 
 typedef struct __attribute__((packed)) {
@@ -200,8 +206,14 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint32_t homography_count;              ///< number of homography matrices used for localization
     uint32_t homography_index;              ///< index of the homography matrix to use for localization
-    int32_t homography[3][3];               ///< homography matrix for localization
+    float    homography[3][3];              ///< homography matrix for localization, float32 in mm
+    uint32_t valid_mm[4];                   ///< x_min, y_min, x_max, y_max of plausible positions, in mm
+    char     site_name[SWRMT_LH2_SITE_NAME_LEN];
+    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];
 } swrmt_lh2_calibration_data_t;
+
+_Static_assert(sizeof(swrmt_lh2_calibration_data_t) == 84,
+               "swrmt_lh2_calibration_data_t is a wire format; its size is part of the contract");
 
 typedef struct __attribute__((packed)) {
     uint8_t port;  ///< Port number of the GPIO
