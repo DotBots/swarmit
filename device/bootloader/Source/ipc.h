@@ -118,7 +118,7 @@ typedef struct __attribute__((packed)) {
 
 /// The node's network information, published by the network core for sandboxed apps
 typedef struct __attribute__((packed)) {
-    uint32_t uplink_interval_us;    ///< Least time between two of this node's uplink sends: the slotframe duration in microseconds; 0 = not joined
+    uint32_t min_tx_interval_us;    ///< Minimum time between this node's transmissions: the slotframe duration in microseconds; 0 = not joined
     uint8_t  mari_schedule_id;      ///< Schedule adopted from the beacon; 0 = not joined
     uint8_t  reserved[3];
 } ipc_network_info_t;

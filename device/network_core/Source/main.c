@@ -143,9 +143,9 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
     _app_vars.data_received = true;
 }
 
-// Publishes the network info for sandboxed apps; a joined node owns one uplink cell per slotframe, so its uplink interval is the slotframe duration.
+// Publishes the network info for sandboxed apps; a joined node owns one uplink cell per slotframe, so its minimum TX interval is the slotframe duration.
 static void _publish_network_info(bool joined) {
-    ipc_shared_data.network_info.uplink_interval_us = joined ? mr_scheduler_get_duration_us() : 0;
+    ipc_shared_data.network_info.min_tx_interval_us = joined ? mr_scheduler_get_duration_us() : 0;
     ipc_shared_data.network_info.mari_schedule_id = joined ? mr_scheduler_get_active_schedule_id() : 0;
 }
 

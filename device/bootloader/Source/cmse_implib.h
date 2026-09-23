@@ -37,9 +37,9 @@ __attribute__((cmse_nonsecure_entry, aligned)) uint64_t swarmit_read_device_id(v
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_log_data(uint8_t *data, size_t length);
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_get_battery_level(uint16_t *battery);
 
-/// Least time between two of this node's uplink sends, in microseconds: the
-/// slotframe duration of the schedule it joined with; 0 when not joined.
-__attribute__((cmse_nonsecure_entry, aligned)) uint32_t swarmit_get_uplink_interval_us(void);
+/// Minimum time between this node's transmissions, in microseconds: the
+/// slotframe duration of the schedule it joined; 0 when not joined.
+__attribute__((cmse_nonsecure_entry, aligned)) uint32_t swarmit_get_min_tx_interval_us(void);
 
 // Lighthouse 2 functions exposed to user image
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_get_position(position_2d_t *position);
