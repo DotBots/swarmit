@@ -59,6 +59,15 @@ def test_payload_status_round_trip():
     assert parsed.lr == 0x0001_2340
 
 
+def test_payload_status_position_is_unsigned():
+    """The device sends `position_2d_t`, two uint32 in mm."""
+    raw = bytearray(PayloadStatus(device=1, status=0).to_bytes())
+    raw[4:8] = (0xFFFF_FFF0).to_bytes(4, "little")
+    raw[8:12] = (0x8000_0000).to_bytes(4, "little")
+    parsed = PayloadStatus().from_bytes(bytes(raw))
+    assert (parsed.pos_x, parsed.pos_y) == (0xFFFF_FFF0, 0x8000_0000)
+
+
 def test_payload_status_truncated_frame_raises():
     with pytest.raises(ValueError):
         PayloadStatus().from_bytes(bytes(5))
