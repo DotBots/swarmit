@@ -740,6 +740,8 @@ def test_controller_ota_refuses_stale_bootloader():
         controller.transfer(firmware, ota_data["acked"])
     assert "00000001" in str(exc.value)
     assert "flash-swarmit-sandbox" in str(exc.value)
+    assert "dotbot fw build swarmit" in str(exc.value)
+    assert "flash-swarmit-sandbox -f local" in str(exc.value)
     # Aborted before any chunk went on the wire.
     assert node.received_chunks == set()
 
