@@ -419,7 +419,7 @@ async def flash_stream(payload: FlashRequest, request: Request):
                             f"every target ({len(stale)}) runs a bootloader "
                             f"older than the block OTA protocol: {stale}. "
                             "Re-provision them with 'dotbot device "
-                            "flash-swarmit-sandbox'."
+                            "flash swarmit-sandbox'."
                         ),
                     }
                 )
@@ -431,7 +431,7 @@ async def flash_stream(payload: FlashRequest, request: Request):
                         f"skipping {len(stale)} device(s) on a bootloader "
                         f"older than the block OTA protocol: {stale}. "
                         "Re-provision them with 'dotbot device "
-                        "flash-swarmit-sandbox'."
+                        "flash swarmit-sandbox'."
                     ),
                 }
             )

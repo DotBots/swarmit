@@ -8,6 +8,7 @@ import time
 from typing import Iterator
 
 from swarmit.testbed.controller import (
+    REPROVISION_HINT,
     STATUS_TIMEOUT,
     Controller,
     ControllerSettings,
@@ -125,8 +126,8 @@ class LocalSwarmitClient:
                     "type": "error",
                     "message": (
                         f"every target ({len(stale)}) runs a bootloader older "
-                        f"than the block OTA protocol: {stale}. Re-provision "
-                        "them with 'dotbot device flash-swarmit-sandbox'."
+                        f"than the block OTA protocol: {stale}. "
+                        f"{REPROVISION_HINT}"
                     ),
                 }
                 return
@@ -134,8 +135,7 @@ class LocalSwarmitClient:
                 "type": "warning",
                 "message": (
                     f"skipping {len(stale)} device(s) on a bootloader older "
-                    f"than the block OTA protocol: {stale}. Re-provision them "
-                    "with 'dotbot device flash-swarmit-sandbox'."
+                    f"than the block OTA protocol: {stale}. {REPROVISION_HINT}"
                 ),
             }
             start_data["acked"] = remaining

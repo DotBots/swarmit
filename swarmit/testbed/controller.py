@@ -110,20 +110,27 @@ def _test_drop_chunks() -> set[int]:
     return {int(x) for x in raw.split(",") if x.strip().lstrip("-").isdigit()}
 
 
+# How to replace a bootloader that predates the block OTA protocol.
+REPROVISION_HINT = (
+    "Re-provision them over J-Link with 'dotbot device flash swarmit-sandbox' "
+    "(the pinned release), or with a bootloader built from your swarmit "
+    "source folder: 'dotbot fw build swarmit-sandbox', then "
+    "'dotbot device flash swarmit-sandbox -f local'."
+)
+
+
 class StaleBootloaderError(Exception):
     """Raised when a target bot's bootloader predates the block OTA protocol.
 
     Such a bot only speaks the retired per-chunk protocol, so it cannot be
-    flashed over the air. Re-provision it over J-Link with
-    ``dotbot device flash-swarmit-sandbox``.
+    flashed over the air; `REPROVISION_HINT` says how to replace it.
     """
 
     def __init__(self, devices):
         self.devices = list(devices)
         super().__init__(
             f"{len(self.devices)} device(s) run a bootloader older than the "
-            f"block OTA protocol: {', '.join(self.devices)}. Re-provision "
-            "them with 'dotbot device flash-swarmit-sandbox'."
+            f"block OTA protocol: {', '.join(self.devices)}. {REPROVISION_HINT}"
         )
 
 
