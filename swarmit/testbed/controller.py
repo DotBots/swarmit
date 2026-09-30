@@ -112,10 +112,10 @@ def _test_drop_chunks() -> set[int]:
 
 # How to replace a bootloader that predates the block OTA protocol.
 REPROVISION_HINT = (
-    "Re-provision them over J-Link with 'dotbot device flash-swarmit-sandbox' "
+    "Re-provision them over J-Link with 'dotbot device flash swarmit-sandbox' "
     "(the pinned release), or with a bootloader built from your swarmit "
-    "checkout: 'dotbot fw build swarmit', then "
-    "'dotbot device flash-swarmit-sandbox -f local'."
+    "source folder: 'dotbot fw build swarmit-sandbox', then "
+    "'dotbot device flash swarmit-sandbox -f local'."
 )
 
 
