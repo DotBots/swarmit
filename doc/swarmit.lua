@@ -41,8 +41,8 @@ local MSG = {
     [0x8E] = "REQUEST_MESSAGE",
     [0x8F] = "DEVICE_INFO_RESP",
     [0xA0] = "MESSAGE",
-    [0xA1] = "LH2_CALIBRATION",
     [0xA2] = "LH2_CAPTURE",
+    [0xA3] = "LH2_CALIBRATION",
 }
 
 local DEVICE_TYPE = {
@@ -162,7 +162,10 @@ f.gpio_value = ProtoField.uint8("swarmit.gpio_value", "GPIO value", base.DEC)
 -- LH2 calibration
 f.homography_count = ProtoField.uint32("swarmit.homography_count", "Homography count", base.DEC)
 f.homography_index = ProtoField.uint32("swarmit.homography_index", "Homography index", base.DEC)
-f.homography = ProtoField.bytes("swarmit.homography", "Homography matrix (3x3 int32)")
+f.homography = ProtoField.bytes("swarmit.homography", "Homography matrix (3x3 float32)")
+f.valid_mm = ProtoField.bytes("swarmit.valid_mm", "Valid rectangle (4x uint32, mm)")
+f.site_name = ProtoField.stringz("swarmit.site_name", "Site name")
+f.calibration_id = ProtoField.bytes("swarmit.calibration_id", "Calibration id")
 
 -- LH2 raw-capture samples ride inside EVENT_LOG behind this tag byte.
 local LH2_CALIB_TAG = 0xCA
@@ -401,11 +404,14 @@ local function dissect_message(buf, pinfo, root)
             tree:add(f.text, body(1, count))
         end
         consumed = 1 + math.min(count, body_len - 1)
-    elseif msg_type == 0xA1 and body_len >= 44 then
+    elseif msg_type == 0xA3 and body_len >= 84 then
         tree:add_le(f.homography_count, body(0, 4))
         tree:add_le(f.homography_index, body(4, 4))
         tree:add(f.homography, body(8, 36))
-        consumed = 44
+        tree:add(f.valid_mm, body(44, 16))
+        tree:add(f.site_name, body(60, 16))
+        tree:add(f.calibration_id, body(76, 8))
+        consumed = 84
     else
         -- START / STOP / LH2_CAPTURE have no body, and a retired or truncated
         -- message falls through here.

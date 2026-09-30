@@ -46,8 +46,8 @@ corrupt frame - see "Compatibility" below.
 
 ## Message types
 
-`0x80`-`0x8F` is the core range; `0xA0`-`0xA2` were appended later for
-custom messages and LH2 calibration. Direction is `H->D` for host to device
+`0x80`-`0x8F` is the core range; `0xA0`-`0xA3` were appended later for
+custom messages and LH2 calibration (`0xA1` is reserved and never accepted). Direction is `H->D` for host to device
 and `D->H` for device to host.
 
 | ID | Name | Dir | Body | Purpose |
@@ -69,8 +69,8 @@ and `D->H` for device to host.
 | `0x8E` | `REQUEST_MESSAGE` | H->D | 2 B | emit one message, once |
 | `0x8F` | `DEVICE_INFO_RESP` | D->H | 154 B | what this device is running |
 | `0xA0` | `MESSAGE` | H->D | 1..N B | opaque text to the user image |
-| `0xA1` | `LH2_CALIBRATION` | H->D | 44 B | one homography matrix |
 | `0xA2` | `LH2_CAPTURE` | H->D | 0 B | capture one raw LH2 sample |
+| `0xA3` | `LH2_CALIBRATION` | H->D | 84 B | one station's homography |
 
 Mari's own metrics probes share the link but are **not** SwarmIT messages:
 they are tagged `MARI_NEXT_PROTO_MARI_INTERNAL` and are claimed by payload
@@ -313,13 +313,16 @@ Deliberately **not** carried, so nobody adds them by reflex:
   we knowingly diverge from Matter, Zigbee, Thread and OCF, which all expose
   every version twice.
 
-### `0xA1` LH2_CALIBRATION
+### `0xA3` LH2_CALIBRATION
 
 | Offset | Field | Size | Notes |
 |---|---|---|---|
 | 0 | `homography_count` | 4 | total matrices in this session |
 | 4 | `homography_index` | 4 | 0-based |
-| 8 | `homography` | 36 | 3x3 of `int32` |
+| 8 | `homography` | 36 | 3x3 of little-endian `float32`, row-major, mapping the pinhole camera point to mm |
+| 44 | `valid_mm` | 16 | `x_min, y_min, x_max, y_max` of plausible positions, `uint32` mm |
+| 60 | `site_name` | 16 | NUL-padded |
+| 76 | `calibration_id` | 8 | leading bytes of the calibration file's id |
 
 The device accumulates matrices in RAM and commits to flash when
 `homography_index == homography_count - 1`, then resets the SoC so both cores
