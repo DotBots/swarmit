@@ -80,6 +80,34 @@ jobs:
           name: artifacts-mari-gateway
           path: stage/
 
+  build-mari-gateway-schedules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - name: Build one mari gateway net-core image per schedule
+        run: BUILD_CONFIG=Debug DOCKER_TARGETS=mari-gateway-schedules make docker
+      - name: Check each schedule produced a distinct image
+        working-directory: mari/firmware/Output/schedules
+        run: |
+          sha256sum 03app_gateway_net-*.hex | tee SHA256SUMS
+          for s in tiny medium big huge; do
+            test -f "03app_gateway_net-$s.hex" || { echo "missing 03app_gateway_net-$s.hex"; exit 1; }
+          done
+          total=$(wc -l < SHA256SUMS)
+          unique=$(cut -d' ' -f1 SHA256SUMS | sort -u | wc -l)
+          if [ "$unique" -ne "$total" ]; then
+            echo "schedule images are not all distinct ($unique unique of $total)"
+            exit 1
+          fi
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-mari-gateway-schedules
+          path: mari/firmware/Output/schedules/03app_gateway_net-*.hex
+
   swarmit-check:
     name: swarmit-check (${{ matrix.os }}, python-${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
@@ -134,6 +162,7 @@ jobs:
       - build-netcore
       - build-bootloader-and-sample
       - build-mari-gateway
+      - build-mari-gateway-schedules
       - swarmit-check
     if: >-
       github.event_name == 'push' &&
@@ -180,6 +209,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: artifacts-mari-gateway
+          path: ./artifacts
+      - name: Download mari gateway schedule artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts-mari-gateway-schedules
           path: ./artifacts
       - name: Release
         uses: ncipollo/release-action@v1

@@ -6,7 +6,7 @@ BUILD_CONFIG ?= Release
 # other possible build targets are "dotbot-v2" and "nrf5340dk"
 BUILD_TARGET ?= dotbot-v3
 
-.PHONY: bootloader netcore sample clean-bootloader clean-netcore clean-sample clean distclean docker
+.PHONY: bootloader netcore sample mari-gateway-schedules clean-bootloader clean-netcore clean-sample clean distclean docker
 
 all: bootloader netcore sample
 
@@ -23,6 +23,13 @@ netcore:
 sample: bootloader
 	@echo "\e[1mBuilding $@ application\e[0m"
 	"$(SEGGER_DIR)/bin/emBuild" swarmit-sample-$(BUILD_TARGET).emProject -project $@ -config $(BUILD_CONFIG) $(PACKAGES_DIR_OPT) -rebuild -verbose
+	@echo "\e[1mDone\e[0m\n"
+
+# One Mari gateway net-core image per schedule, each a full rebuild, into
+# mari/firmware/Output/schedules/03app_gateway_net-<schedule>.hex
+mari-gateway-schedules:
+	@echo "\e[1mBuilding $@\e[0m"
+	SEGGER_DIR="$(SEGGER_DIR)" BUILD_CONFIG="$(BUILD_CONFIG)" PACKAGES_DIR_OPT="$(PACKAGES_DIR_OPT)" mari/firmware/build-schedules.sh
 	@echo "\e[1mDone\e[0m\n"
 
 clean-bootloader:
