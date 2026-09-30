@@ -303,9 +303,9 @@ INFO_STRING_LEN = 32
 IMAGE_DIGEST_LEN = 8
 # Schema version this host understands in SWARMIT_DEVICE_INFO_RESP. A bot
 # reporting an older one runs firmware to reflash.
-DEVICE_INFO_VERSION = 2
+DEVICE_INFO_VERSION = 3
 # The LH2 site name and calibration id, as the calibration message, the
-# config page and device info v2 carry them.
+# config page and device info carry them.
 LH2_SITE_NAME_LEN = 16
 LH2_CALIBRATION_ID_LEN = 8
 
