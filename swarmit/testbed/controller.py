@@ -110,9 +110,7 @@ def _test_drop_chunks() -> set[int]:
     return {int(x) for x in raw.split(",") if x.strip().lstrip("-").isdigit()}
 
 
-# How to replace a bootloader that predates the block OTA protocol. The
-# pinned release can itself predate the protocol on main, so the local build
-# is named alongside it.
+# How to replace a bootloader that predates the block OTA protocol.
 REPROVISION_HINT = (
     "Re-provision them over J-Link with 'dotbot device flash-swarmit-sandbox' "
     "(the pinned release), or with a bootloader built from your swarmit "
