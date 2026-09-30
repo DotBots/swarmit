@@ -128,7 +128,8 @@ class PayloadType(IntEnum):
     SWARMIT_MESSAGE = 0xA0
 
     # SwarmIT calibration data
-    SWARMIT_LH2_CALIBRATION = 0xA1
+    # 0xA1 is reserved: it carried homographies for the non-pinhole camera model.
+    SWARMIT_LH2_CALIBRATION = 0xA3
     # Host -> node: trigger a raw LH2 capture (READY mode only). DEPRECATED: the
     # calibrate app's button capture replaces it.
     SWARMIT_LH2_CAPTURE = 0xA2

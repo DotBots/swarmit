@@ -20,9 +20,9 @@ baudrate = 1000000
 devices = ""
 """
 
-# A schema 2 calibration, for the tests that read its tables.
+# A schema 3 calibration, for the tests that read its tables.
 CALIBRATION_TOML = """\
-schema_version = 2
+schema_version = 3
 
 [metadata]
 created_at = "2026-09-10T09:12:00Z"
@@ -105,7 +105,7 @@ def test_a_gap_in_the_station_numbering_is_refused(tmp_path):
             ('name = "c405-arena"', 'name = "a-name-too-long-for-16"'),
             "1 to 16",
         ),
-        (('id = "ac893d2d85e3068c"', 'id = "ac89"'), "shorter than 16"),
+        (('id = "19ed0cdb738cdfe5"', 'id = "19ed"'), "shorter than 16"),
         (
             ("valid_mm = [0, 0, 3330, 4000]", "valid_mm = [0, 0, -1, 4000]"),
             "valid_mm",
@@ -123,7 +123,7 @@ def test_site_fields_a_robot_cannot_store_are_refused(tmp_path, edit, match):
 def test_a_declared_id_is_sent_as_is(tmp_path):
     """The low-level packer trusts metadata.id; PyDotBot is where it is checked."""
     edited = FIXTURE_TOML.replace(
-        'id = "ac893d2d85e3068c"', 'id = "0123456789abcdef"'
+        'id = "19ed0cdb738cdfe5"', 'id = "0123456789abcdef"'
     )
     payload = read_lh2_calibration_payload(_write(tmp_path, edited))
     assert payload[76:84] == bytes.fromhex("0123456789abcdef")

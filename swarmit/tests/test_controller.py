@@ -517,7 +517,7 @@ def test_controller_sends_one_calibration_message_per_station():
     assert first.homography_count == 2
     assert (first.valid_x_max, first.valid_y_max) == (3330, 4000)
     assert first.site_name == b"c405-arena" + bytes(6)
-    assert bytes(first.calibration_id).hex() == "ac893d2d85e3068c"
+    assert bytes(first.calibration_id).hex() == "19ed0cdb738cdfe5"
 
 
 @patch(

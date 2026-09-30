@@ -39,7 +39,7 @@ _Static_assert(sizeof(SWRMT_FW_VERSION) <= SWRMT_INFO_STRING_LEN,
 
 #define SWARMIT_NET_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
 #define SWARMIT_NET_CONFIG_PAGE             (127)       // page index for config (last page)
-#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524E) // "SWRN" - float32 homographies; mari's gateway page keeps 0x5753524D
+#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524F) // "SWRO" - float32 pinhole-model homographies; mari's gateway page keeps 0x5753524D
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
