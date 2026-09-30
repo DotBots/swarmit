@@ -157,6 +157,12 @@ def test_a_device_info_v2_reply_reads_as_firmware_to_reflash():
     assert info.too_old
 
 
+def test_lh2_calibration_travels_as_0xa3_and_0xa1_stays_retired():
+    # Mirrors SWRMT_MSG_LH2_CALIBRATION in the net core's protocol.h.
+    assert PayloadType.SWARMIT_LH2_CALIBRATION == 0xA3
+    assert 0xA1 not in {member.value for member in PayloadType}
+
+
 def test_an_all_zero_id_reads_as_none():
     parsed = PayloadDeviceInfo().from_bytes(
         bytes(PayloadDeviceInfo(info_version=3).to_bytes())
