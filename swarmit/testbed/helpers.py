@@ -9,7 +9,7 @@ from swarmit.testbed.protocol import (
 
 # Bump in lockstep with the writer in PyDotBot's
 # dotbot/calibration/lighthouse2.py (CALIBRATION_SCHEMA_VERSION).
-CALIBRATION_SCHEMA_VERSION = 2
+CALIBRATION_SCHEMA_VERSION = 3
 
 LH2_BASESTATION_COUNT_MAX = 16
 # What PyDotBot's reader assumes for a file without [validity]; keep in step.
@@ -25,7 +25,7 @@ def load_toml_config(path):
 
 
 def read_calibration(path):
-    """Parse a schema 2 LH2 calibration file into its tables.
+    """Parse a schema 3 LH2 calibration file into its tables.
 
     Raises ValueError for bad TOML, an unknown schema version, or a file with
     no solved station, so the CLI can report it rather than passing garbage

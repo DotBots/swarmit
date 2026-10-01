@@ -116,9 +116,9 @@ def test_calibration_data_matches_firmware_wire_size():
     assert PayloadCalibrationData().size == 84
 
 
-def test_payload_device_info_v2_carries_the_site_and_id():
+def test_payload_device_info_carries_the_site_and_id():
     payload = PayloadDeviceInfo(
-        info_version=2,
+        info_version=3,
         info_gen=7,
         lh2_homography_count=2,
         lh2_flags=0b11,
@@ -130,7 +130,7 @@ def test_payload_device_info_v2_carries_the_site_and_id():
 
     parsed = PayloadDeviceInfo().from_bytes(raw)
     info = DeviceInfo.from_payload(parsed)
-    assert info.info_version == 2
+    assert info.info_version == 3
     assert info.lh2_site_name == "c405-arena"
     assert info.lh2_calibration_id == "ac893d2d85e3068c"
 
@@ -148,16 +148,31 @@ def test_an_older_device_info_reply_keeps_only_its_version_and_generation():
     assert info.too_old
 
 
+def test_a_device_info_v2_reply_reads_as_firmware_to_reflash():
+    # A v2 net core takes calibrations only under the retired 0xA1.
+    v2 = bytes(PayloadDeviceInfo(info_version=2, info_gen=7).to_bytes())
+
+    info = DeviceInfo.from_payload(PayloadDeviceInfo().from_bytes(v2))
+    assert info.info_version == 2
+    assert info.too_old
+
+
+def test_lh2_calibration_travels_as_0xa3_and_0xa1_stays_retired():
+    # Mirrors SWRMT_MSG_LH2_CALIBRATION in the net core's protocol.h.
+    assert PayloadType.SWARMIT_LH2_CALIBRATION == 0xA3
+    assert 0xA1 not in {member.value for member in PayloadType}
+
+
 def test_an_all_zero_id_reads_as_none():
     parsed = PayloadDeviceInfo().from_bytes(
-        bytes(PayloadDeviceInfo(info_version=2).to_bytes())
+        bytes(PayloadDeviceInfo(info_version=3).to_bytes())
     )
     assert DeviceInfo.from_payload(parsed).lh2_calibration_id == ""
 
 
 def test_payload_device_info_round_trip():
     payload = PayloadDeviceInfo(
-        info_version=2,
+        info_version=3,
         info_gen=42,
         boot_count=37,
         uptime_s=4324,
@@ -191,15 +206,15 @@ def test_payload_device_info_short_payload_raises():
     # Zero-filling it invented a device record; raising lets the adapter drop
     # the frame and leaves the cached info untouched.
     with pytest.raises(ValueError):
-        PayloadDeviceInfo().from_bytes(b"\x02\x05")
+        PayloadDeviceInfo().from_bytes(b"\x03\x05")
 
 
 def test_payload_device_info_tolerates_trailing_bytes():
     # A device on a newer schema appends fields. The known prefix still parses
     # and the rest is ignored, so the host does not need its own truncation.
-    full = bytes(PayloadDeviceInfo(info_version=2, info_gen=42).to_bytes())
+    full = bytes(PayloadDeviceInfo(info_version=3, info_gen=42).to_bytes())
     parsed = PayloadDeviceInfo().from_bytes(full + b"\xde\xad\xbe\xef")
-    assert parsed.info_version == 2
+    assert parsed.info_version == 3
     assert parsed.info_gen == 42
 
 

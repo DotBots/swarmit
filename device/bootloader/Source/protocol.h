@@ -40,7 +40,7 @@
 #define SWRMT_LH2_CALIB_TAG         (0xCAU)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.
-#define SWRMT_DEVICE_INFO_VERSION   (2U)
+#define SWRMT_DEVICE_INFO_VERSION   (3U)
 
 /// Ceiling for identity strings, including the NUL terminator. Matter
 /// (VendorName/ProductName/SerialNumber), Zigbee (ManufacturerName/

@@ -20,7 +20,7 @@
 #define SWRMT_OTA_PROTOCOL_VERSION  (2U)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.
-#define SWRMT_DEVICE_INFO_VERSION   (2U)
+#define SWRMT_DEVICE_INFO_VERSION   (3U)
 
 /// Ceiling for identity strings, including the NUL terminator. Matter
 /// (VendorName/ProductName/SerialNumber), Zigbee (ManufacturerName/
@@ -94,10 +94,12 @@ typedef enum {
     // FIXME: we need better namespacing for these messages, for example,
     // use 0x80 for SwarmIT application type, and then use an internal namespace for SwarmIT messages,
     // like 0x80.0x01 for SwarmIT status, 0x80.0x02 for SwarmIT start, etc.
-    // for the moment, I am just appending SWRMT_MSG_LH2_CALIBRATION after SWRMT_MESSAGE.
+    // for the moment, the LH2 messages follow SWRMT_MESSAGE.
     SWRMT_MESSAGE = 0xA0, // custom message type
-    SWRMT_MSG_LH2_CALIBRATION = 0xA1,
+    // 0xA1 is reserved and must never be accepted: it carries homographies for
+    // another camera model.
     SWRMT_MSG_LH2_CAPTURE = 0xA2, // host -> node: capture one raw LH2 sample (READY mode only). DEPRECATED: the calibrate app replaces it.
+    SWRMT_MSG_LH2_CALIBRATION = 0xA3,
 } swrmt_message_type_t;
 
 /// Protocol packet type

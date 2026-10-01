@@ -128,10 +128,11 @@ class PayloadType(IntEnum):
     SWARMIT_MESSAGE = 0xA0
 
     # SwarmIT calibration data
-    SWARMIT_LH2_CALIBRATION = 0xA1
+    # 0xA1 is reserved, never reuse it: it carries another camera model's homographies.
     # Host -> node: trigger a raw LH2 capture (READY mode only). DEPRECATED: the
     # calibrate app's button capture replaces it.
     SWARMIT_LH2_CAPTURE = 0xA2
+    SWARMIT_LH2_CALIBRATION = 0xA3
 
     # Marilib metrics probe
     METRICS_PROBE = MariDefaultPayloadType.METRICS_PROBE
@@ -302,9 +303,9 @@ INFO_STRING_LEN = 32
 IMAGE_DIGEST_LEN = 8
 # Schema version this host understands in SWARMIT_DEVICE_INFO_RESP. A bot
 # reporting an older one runs firmware to reflash.
-DEVICE_INFO_VERSION = 2
+DEVICE_INFO_VERSION = 3
 # The LH2 site name and calibration id, as the calibration message, the
-# config page and device info v2 carry them.
+# config page and device info carry them.
 LH2_SITE_NAME_LEN = 16
 LH2_CALIBRATION_ID_LEN = 8
 
