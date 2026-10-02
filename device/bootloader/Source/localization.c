@@ -5,12 +5,11 @@
 #include "lh2.h"
 #include "localization.h"
 #include "lh2_calibration.h"
+#include "lh2_select.h"
 
 _Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_BASESTATION_COUNT, "localization.h and lh2.h must agree on the basestation ceiling");
-
-/// Rectangle used when the calibration carries none. A solve outside the
-/// rectangle is dropped; nothing else filters the stream.
-static const uint32_t _valid_mm_default[LH2_VALID_MM_LEN] = { 0, 0, LH2_VALID_MM_MAX_DEFAULT, LH2_VALID_MM_MAX_DEFAULT };
+_Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_SELECT_STATIONS, "lh2_select covers every basestation");
+_Static_assert(LH2_VALID_MM_LEN == LH2_SELECT_RECT_LEN && LH2_VALID_MM_MAX_DEFAULT == LH2_SELECT_RECT_MAX_DEFAULT, "one rectangle layout");
 
 typedef struct {
     db_lh2_t                lh2;
@@ -19,8 +18,9 @@ typedef struct {
 } localization_data_t;
 
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
-static bool _calibration_loaded = false;
-static uint32_t _valid_mm[LH2_VALID_MM_LEN] = { 0, 0, LH2_VALID_MM_MAX_DEFAULT, LH2_VALID_MM_MAX_DEFAULT };
+static uint32_t _station_mask = 0;
+static uint32_t _valid_mm[LH2_BASESTATION_COUNT_MAX][LH2_VALID_MM_LEN] = { 0 };  ///< resolved, by slot
+static uint32_t _fence[LH2_VALID_MM_LEN] = { 0 };                                ///< union of the rectangles in the mask
 static bool _lh2_started = false;
 
 void localization_start(void) {
@@ -32,19 +32,17 @@ void localization_start(void) {
     _lh2_started = true;
 }
 
-void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[LH2_VALID_MM_LEN]) {
-    printf("Initialize localization with %u homography matrices\n", homography_count);
+void localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]) {
+    station_mask &= (1U << LH2_BASESTATION_COUNT_MAX) - 1U;
+    printf("Initialize localization with station mask 0x%04X\n", station_mask);
     localization_start();
 
-    bool valid_mm_absent = true;
-    for (uint8_t i = 0; i < LH2_VALID_MM_LEN; i++) {
-        valid_mm_absent = valid_mm_absent && (valid_mm[i] == UINT32_MAX);
-    }
-    memcpy(_valid_mm, valid_mm_absent ? _valid_mm_default : valid_mm, sizeof(_valid_mm));
-    printf("Valid positions: x in [%u, %u], y in [%u, %u] mm\n", _valid_mm[0], _valid_mm[2], _valid_mm[1], _valid_mm[3]);
-
-    for (uint8_t lh_index = 0; lh_index < homography_count; lh_index++) {
-        printf("Store homography matrix for LH%u:\n", lh_index);
+    for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT_MAX; lh_index++) {
+        if (((station_mask >> lh_index) & 1U) == 0) {
+            continue;
+        }
+        lh2_select_rect_resolve(valid_mm[lh_index], _valid_mm[lh_index]);
+        printf("Store homography matrix for LH%u, valid x in [%u, %u], y in [%u, %u] mm:\n", lh_index, _valid_mm[lh_index][0], _valid_mm[lh_index][2], _valid_mm[lh_index][1], _valid_mm[lh_index][3]);
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 printf("%f ", (double)homographies[lh_index][i][j]);
@@ -53,7 +51,8 @@ void localization_init(float homographies[][3][3], uint32_t homography_count, co
         }
         db_lh2_store_homography(&_localization_data.lh2, lh_index, homographies[lh_index]);
     }
-    _calibration_loaded = (homography_count > 0);
+    lh2_select_rect_union(_valid_mm, station_mask, _fence);
+    _station_mask = station_mask;
 }
 
 bool localization_process_data(void) {
@@ -67,7 +66,7 @@ bool localization_process_data(void) {
 }
 
 bool localization_get_position(position_2d_t *position) {
-    if (_calibration_loaded) {
+    if (_station_mask != 0) {
         bool solved = false;
         db_lh2_stop();
         for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT; lh_index++) {
@@ -90,8 +89,7 @@ bool localization_get_position(position_2d_t *position) {
 
         double x = _localization_data.coordinates[0];
         double y = _localization_data.coordinates[1];
-        // Written as a negated conjunction so a NaN coordinate is rejected
-        if (!(x >= _valid_mm[0] && x <= _valid_mm[2] && y >= _valid_mm[1] && y <= _valid_mm[3])) {
+        if (!lh2_select_rect_contains(_fence, x, y)) {
             printf("Invalid position (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
             return false;
         }
