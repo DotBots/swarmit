@@ -62,4 +62,11 @@ __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_localization_handle_
 // SAADC functions
 __attribute__((cmse_nonsecure_entry, aligned)) void swarmit_saadc_read(uint8_t channel, uint16_t *value);
 
+/// Drain up to @p max of the LH2 floor lines the solves produced since the
+/// previous call, two per station solved inside its rectangle, oldest first;
+/// at most LH2_LINES_MAX are held. Returns the number written; 0 when none, or
+/// the buffer is misaligned or not in non-secure memory. Call it from the same
+/// context as swarmit_keep_alive(), which fills the buffer it drains.
+__attribute__((cmse_nonsecure_entry, aligned)) uint8_t swarmit_localization_get_lines(db_lh2_floor_line_t *lines, uint8_t max);
+
 #endif // __CMSE_IMPLIB_H
