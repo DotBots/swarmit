@@ -1,6 +1,7 @@
 #ifndef __PROTOCOL_H
 #define __PROTOCOL_H
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -20,7 +21,7 @@
 #define SWRMT_OTA_PROTOCOL_VERSION  (2U)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.
-#define SWRMT_DEVICE_INFO_VERSION   (3U)
+#define SWRMT_DEVICE_INFO_VERSION   (4U)
 
 /// Ceiling for identity strings, including the NUL terminator. Matter
 /// (VendorName/ProductName/SerialNumber), Zigbee (ManufacturerName/
@@ -35,6 +36,7 @@
 /// Fixed widths of the site identity a calibration carries.
 #define SWRMT_LH2_SITE_NAME_LEN         (16U)   ///< ASCII, NUL-padded, not necessarily NUL-terminated
 #define SWRMT_LH2_CALIBRATION_ID_LEN    (8U)    ///< leading bytes of the calibration file's id
+#define SWRMT_LH2_STATIONS              (16U)   ///< station indices 0 to 15, one per LH2 channel
 
 /// Image lifecycle, LwM2M Object 5 resource 3 (State).
 typedef enum {
@@ -56,7 +58,7 @@ typedef enum {
 } swrmt_image_result_t;
 
 /// Bits of swrmt_device_info_pkt_t.lh2_flags.
-#define SWRMT_LH2_FLAG_VALID        (1U << 0)   // a usable homography set is loaded
+#define SWRMT_LH2_FLAG_VALID        (1U << 0)   // set exactly when lh2_station_mask is non-zero
 #define SWRMT_LH2_FLAG_FROM_FLASH   (1U << 1)   // it came from the provisioned config page
 
 typedef enum {
@@ -170,14 +172,16 @@ typedef struct __attribute__((packed)) {
     uint8_t  image_digest[SWRMT_IMAGE_DIGEST_LEN];  ///< first bytes of the image SHA256; the machine-comparable identity
     char     image_name[SWRMT_INFO_STRING_LEN];     ///< LwM2M Object 5 res 6 PkgName, display only
     char     image_version[SWRMT_INFO_STRING_LEN];  ///< LwM2M Object 5 res 7 PkgVersion, display only
-    uint8_t  lh2_homography_count;                  ///< 0 = uncalibrated
+    uint16_t lh2_station_mask;                      ///< bit i: station i calibrated; 0 = uncalibrated
     uint8_t  lh2_flags;                             ///< SWRMT_LH2_FLAG_*
     char     lh2_site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< site of the loaded calibration, all zero if none
     uint8_t  lh2_calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< id of the loaded calibration, all zero if none
 } swrmt_device_info_pkt_t;
 
-_Static_assert(sizeof(swrmt_device_info_pkt_t) == 178,
+_Static_assert(sizeof(swrmt_device_info_pkt_t) == 179,
                "swrmt_device_info_pkt_t is a wire format; its size is part of the contract");
+_Static_assert(offsetof(swrmt_device_info_pkt_t, lh2_station_mask) == 152, "swrmt_device_info_pkt_t is a wire format");
+_Static_assert(offsetof(swrmt_device_info_pkt_t, lh2_flags) == 154, "swrmt_device_info_pkt_t is a wire format");
 
 typedef struct __attribute__((packed)) {
     uint32_t index;                             ///< Index of the chunk
@@ -206,16 +210,20 @@ typedef struct __attribute__((packed)) {
 } swrmt_ota_finalize_resp_pkt_t;
 
 typedef struct __attribute__((packed)) {
-    uint32_t homography_count;              ///< number of homography matrices used for localization
-    uint32_t homography_index;              ///< index of the homography matrix to use for localization
-    float    homography[3][3];              ///< homography matrix for localization, float32 in mm
-    uint32_t valid_mm[4];                   ///< x_min, y_min, x_max, y_max of plausible positions, in mm
-    char     site_name[SWRMT_LH2_SITE_NAME_LEN];
-    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];
+    uint32_t station_mask;                  ///< bit i: station i is in this calibration; bits 16 to 31 zero, 0 invalid
+    uint32_t station_index;                 ///< the station this message carries, 0 to 15, its bit set in the mask
+    float    homography[3][3];              ///< camera point to frame mm, row-major float32
+    uint32_t valid_mm[4];                   ///< this station's rectangle: x_min, y_min, x_max, y_max, mm
+    char     site_name[SWRMT_LH2_SITE_NAME_LEN];                ///< identical in every message of a push
+    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];      ///< identical in every message of a push: the session key
 } swrmt_lh2_calibration_data_t;
 
 _Static_assert(sizeof(swrmt_lh2_calibration_data_t) == 84,
                "swrmt_lh2_calibration_data_t is a wire format; its size is part of the contract");
+_Static_assert(offsetof(swrmt_lh2_calibration_data_t, homography) == 8, "swrmt_lh2_calibration_data_t is a wire format");
+_Static_assert(offsetof(swrmt_lh2_calibration_data_t, valid_mm) == 44, "swrmt_lh2_calibration_data_t is a wire format");
+_Static_assert(offsetof(swrmt_lh2_calibration_data_t, site_name) == 60, "swrmt_lh2_calibration_data_t is a wire format");
+_Static_assert(offsetof(swrmt_lh2_calibration_data_t, calibration_id) == 76, "swrmt_lh2_calibration_data_t is a wire format");
 
 typedef struct __attribute__((packed)) {
     uint8_t port;  ///< Port number of the GPIO

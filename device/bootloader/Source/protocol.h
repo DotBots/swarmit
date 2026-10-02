@@ -13,6 +13,7 @@
  * @}
  */
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -40,7 +41,7 @@
 #define SWRMT_LH2_CALIB_TAG         (0xCAU)
 
 /// Schema version carried in every SWRMT_MSG_DEVICE_INFO_RESP.
-#define SWRMT_DEVICE_INFO_VERSION   (3U)
+#define SWRMT_DEVICE_INFO_VERSION   (4U)
 
 /// Ceiling for identity strings, including the NUL terminator. Matter
 /// (VendorName/ProductName/SerialNumber), Zigbee (ManufacturerName/
@@ -55,6 +56,7 @@
 /// Fixed widths of the site identity a calibration carries.
 #define SWRMT_LH2_SITE_NAME_LEN         (16U)   ///< ASCII, NUL-padded, not necessarily NUL-terminated
 #define SWRMT_LH2_CALIBRATION_ID_LEN    (8U)    ///< leading bytes of the calibration file's id
+#define SWRMT_LH2_STATIONS              (16U)   ///< station indices 0 to 15, one per LH2 channel
 
 /// Image lifecycle, LwM2M Object 5 resource 3 (State).
 typedef enum {
@@ -76,7 +78,7 @@ typedef enum {
 } swrmt_image_result_t;
 
 /// Bits of swrmt_device_info_pkt_t.lh2_flags.
-#define SWRMT_LH2_FLAG_VALID        (1U << 0)   ///< a usable homography set is loaded
+#define SWRMT_LH2_FLAG_VALID        (1U << 0)   ///< set exactly when lh2_station_mask is non-zero
 #define SWRMT_LH2_FLAG_FROM_FLASH   (1U << 1)   ///< it came from the provisioned config page
 
 /// Generic one-shot query. Modelled on MAVLink's MAV_CMD_REQUEST_MESSAGE
@@ -103,14 +105,16 @@ typedef struct __attribute__((packed)) {
     uint8_t  image_digest[SWRMT_IMAGE_DIGEST_LEN];  ///< first bytes of the image SHA256; the machine-comparable identity
     char     image_name[SWRMT_INFO_STRING_LEN];     ///< LwM2M Object 5 res 6 PkgName, display only
     char     image_version[SWRMT_INFO_STRING_LEN];  ///< LwM2M Object 5 res 7 PkgVersion, display only
-    uint8_t  lh2_homography_count;                  ///< 0 = uncalibrated
+    uint16_t lh2_station_mask;                      ///< bit i: station i calibrated; 0 = uncalibrated
     uint8_t  lh2_flags;                             ///< SWRMT_LH2_FLAG_*
     char     lh2_site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< site of the loaded calibration, all zero if none
     uint8_t  lh2_calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< id of the loaded calibration, all zero if none
 } swrmt_device_info_pkt_t;
 
-_Static_assert(sizeof(swrmt_device_info_pkt_t) == 178,
+_Static_assert(sizeof(swrmt_device_info_pkt_t) == 179,
                "swrmt_device_info_pkt_t is a wire format; its size is part of the contract");
+_Static_assert(offsetof(swrmt_device_info_pkt_t, lh2_station_mask) == 152, "swrmt_device_info_pkt_t is a wire format");
+_Static_assert(offsetof(swrmt_device_info_pkt_t, lh2_flags) == 154, "swrmt_device_info_pkt_t is a wire format");
 
 typedef struct __attribute__((packed)) {
     uint32_t index;                             ///< Index of the chunk
