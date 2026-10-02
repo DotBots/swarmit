@@ -279,12 +279,12 @@ static void _read_battery(void) {
 
 /// Load the calibration the net core published, when it holds one.
 static void _load_calibration(void) {
-    uint32_t homography_count = ipc_shared_data.lh2_calibration.homography_count;
-    if (homography_count == 0 || homography_count > LH2_BASESTATION_COUNT_MAX) {
-        printf("Initializing without LH2 calibration data, homography count: %u\n", homography_count);
+    uint32_t station_mask = ipc_shared_data.lh2_calibration.station_mask;
+    if (station_mask == 0 || (station_mask >> LH2_BASESTATION_COUNT_MAX) != 0) {
+        printf("No LH2 calibration, station mask 0x%08X\n", station_mask);
         return;
     }
-    localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, homography_count, (const uint32_t *)ipc_shared_data.lh2_calibration.valid_mm);
+    localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, station_mask, (const uint32_t (*)[LH2_VALID_MM_LEN])ipc_shared_data.lh2_calibration.valid_mm);
 }
 
 int main(void) {
