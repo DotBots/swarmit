@@ -13,7 +13,7 @@
     arm_linker_cmse_import_library_file_name="$(OutDir)/cmse_implib$(LIB)"
     arm_linker_heap_size="1024"
     arm_linker_process_stack_size="0"
-    arm_linker_stack_size="1024"
+    arm_linker_stack_size="2048"
     arm_linker_variant="GNU"
     arm_rtl_variant="SEGGER"
     arm_target_debug_interface_type="ADIv5"

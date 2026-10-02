@@ -170,3 +170,10 @@ __attribute__((cmse_nonsecure_entry)) void swarmit_saadc_read(uint8_t channel, u
     }
     return db_saadc_read(channel, value);
 }
+
+__attribute__((cmse_nonsecure_entry)) uint8_t swarmit_localization_get_lines(db_lh2_floor_line_t *lines, uint8_t max) {
+    if (max == 0 || !_ns_writable(lines, (size_t)max * sizeof(db_lh2_floor_line_t), __alignof__(db_lh2_floor_line_t))) {
+        return 0;
+    }
+    return localization_get_lines(lines, max);
+}

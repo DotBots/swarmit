@@ -12,6 +12,8 @@
     </folder>
     <folder Name="Source">
       <file file_name="Source/ipc.h" />
+      <file file_name="Source/lh2_session.c" />
+      <file file_name="Source/lh2_session.h" />
       <file file_name="Source/main.c" />
       <file file_name="Source/nvmc.c" />
       <file file_name="Source/nvmc.h" />
