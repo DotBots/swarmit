@@ -20,9 +20,9 @@ baudrate = 1000000
 devices = ""
 """
 
-# A schema 3 calibration, for the tests that read its tables.
+# A schema 4 calibration, for the tests that read its tables.
 CALIBRATION_TOML = """\
-schema_version = 3
+schema_version = 4
 
 [metadata]
 created_at = "2026-09-10T09:12:00Z"
@@ -50,6 +50,7 @@ index = 0
 solved_from = "direct"
 points = 4
 residual_mm = 0.0
+valid_mm = [0, 0, 4000, 4500]
 homography = [[1523.4, -38.2, 1012.7], [41.9, 1531.8, 988.3], [0.2134, -0.0871, 1.0]]
 """
 
@@ -90,12 +91,47 @@ def test_a_file_without_site_or_validity_takes_pydotbots_defaults(tmp_path):
     assert payload == b"".join(bytes.fromhex(h) for h in DEFAULTS_MESSAGE_HEX)
 
 
-def test_a_gap_in_the_station_numbering_is_refused(tmp_path):
+def test_stations_2_and_8_go_out_under_their_mask(tmp_path):
+    import struct
+
     gapped = FIXTURE_TOML.replace(
-        "index = 1\nsolved_from", "index = 2\nsolved_from"
+        "index = 0\nsolved_from", "index = 2\nsolved_from"
+    ).replace("index = 1\nsolved_from", "index = 8\nsolved_from")
+    payload = read_lh2_calibration_payload(_write(tmp_path, gapped))
+    heads = [struct.unpack_from("<II", payload, k) for k in (0, 84)]
+    assert heads == [(0x0104, 2), (0x0104, 8)]
+    # Past the mask and index, the bytes are the fixture's own.
+    expected = [bytes.fromhex(h) for h in MESSAGE_HEX]
+    assert payload[8:84] == expected[0][8:] and payload[92:] == expected[1][8:]
+
+
+@pytest.mark.parametrize(
+    "edit, match",
+    [
+        (
+            ("index = 1\nsolved_from", "index = 16\nsolved_from"),
+            "outside 0 to 15",
+        ),
+        (
+            ("index = 1\nsolved_from", "index = 0\nsolved_from"),
+            "appears twice",
+        ),
+    ],
+    ids=["index-16", "twice"],
+)
+def test_a_station_a_robot_has_no_slot_for_is_refused(tmp_path, edit, match):
+    with pytest.raises(ValueError, match=match):
+        read_lh2_calibration_payload(
+            _write(tmp_path, FIXTURE_TOML.replace(*edit))
+        )
+
+
+def test_a_station_without_its_rectangle_is_refused(tmp_path):
+    bare = FIXTURE_TOML.replace(
+        "valid_mm = [0, 0, 3330, 4000]\nhomography", "homography"
     )
-    with pytest.raises(ValueError, match="without gaps"):
-        read_lh2_calibration_payload(_write(tmp_path, gapped))
+    with pytest.raises(ValueError, match="has no valid_mm"):
+        read_lh2_calibration_payload(_write(tmp_path, bare))
 
 
 @pytest.mark.parametrize(
@@ -105,9 +141,12 @@ def test_a_gap_in_the_station_numbering_is_refused(tmp_path):
             ('name = "c405-arena"', 'name = "a-name-too-long-for-16"'),
             "1 to 16",
         ),
-        (('id = "19ed0cdb738cdfe5"', 'id = "19ed"'), "shorter than 16"),
+        (('id = "80285c9b7db82732"', 'id = "8028"'), "shorter than 16"),
         (
-            ("valid_mm = [0, 0, 3330, 4000]", "valid_mm = [0, 0, -1, 4000]"),
+            (
+                "valid_mm = [0, 0, 3330, 4000]\nhomography",
+                "valid_mm = [0, 0, -1, 4000]\nhomography",
+            ),
             "valid_mm",
         ),
     ],
@@ -123,7 +162,7 @@ def test_site_fields_a_robot_cannot_store_are_refused(tmp_path, edit, match):
 def test_a_declared_id_is_sent_as_is(tmp_path):
     """The low-level packer trusts metadata.id; PyDotBot is where it is checked."""
     edited = FIXTURE_TOML.replace(
-        'id = "19ed0cdb738cdfe5"', 'id = "0123456789abcdef"'
+        'id = "80285c9b7db82732"', 'id = "0123456789abcdef"'
     )
     payload = read_lh2_calibration_payload(_write(tmp_path, edited))
     assert payload[76:84] == bytes.fromhex("0123456789abcdef")

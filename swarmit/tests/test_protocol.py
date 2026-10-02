@@ -105,9 +105,9 @@ def test_decode_sfsr():
 
 
 def test_device_info_matches_firmware_wire_size():
-    # 178 bytes is the contract the firmware asserts on its own struct. If
+    # 179 bytes is the contract the firmware asserts on its own struct. If
     # this changes, swrmt_device_info_pkt_t must change with it.
-    assert PayloadDeviceInfo().size == 178
+    assert PayloadDeviceInfo().size == 179
 
 
 def test_calibration_data_matches_firmware_wire_size():
@@ -118,19 +118,23 @@ def test_calibration_data_matches_firmware_wire_size():
 
 def test_payload_device_info_carries_the_site_and_id():
     payload = PayloadDeviceInfo(
-        info_version=3,
+        info_version=4,
         info_gen=7,
-        lh2_homography_count=2,
+        lh2_station_mask=0b11,
         lh2_flags=0b11,
         lh2_site_name=b"c405-arena".ljust(16, b"\x00"),
         lh2_calibration_id=bytes.fromhex("ac893d2d85e3068c"),
     )
     raw = bytes(payload.to_bytes())
-    assert len(raw) == 178
+    assert len(raw) == 179
+    # lh2_station_mask is a uint16 at 152, so lh2_flags moves to 154.
+    assert raw[152:155] == bytes([0b11, 0, 0b11])
+    assert raw[155:171] == b"c405-arena".ljust(16, b"\x00")
 
     parsed = PayloadDeviceInfo().from_bytes(raw)
     info = DeviceInfo.from_payload(parsed)
-    assert info.info_version == 3
+    assert info.info_version == 4
+    assert info.lh2_stations == [0, 1]
     assert info.lh2_site_name == "c405-arena"
     assert info.lh2_calibration_id == "ac893d2d85e3068c"
 
@@ -138,13 +142,13 @@ def test_payload_device_info_carries_the_site_and_id():
 def test_an_older_device_info_reply_keeps_only_its_version_and_generation():
     v1 = bytes(
         PayloadDeviceInfo(
-            info_version=1, info_gen=7, lh2_homography_count=1
+            info_version=1, info_gen=7, lh2_station_mask=0b1
         ).to_bytes()
     )[:154]
 
     info = DeviceInfo.from_payload(PayloadDeviceInfo().from_bytes(v1))
     assert (info.info_version, info.info_gen) == (1, 7)
-    assert info.lh2_homography_count == 0
+    assert info.lh2_station_mask == 0
     assert info.too_old
 
 
@@ -165,14 +169,14 @@ def test_lh2_calibration_travels_as_0xa3_and_0xa1_stays_retired():
 
 def test_an_all_zero_id_reads_as_none():
     parsed = PayloadDeviceInfo().from_bytes(
-        bytes(PayloadDeviceInfo(info_version=3).to_bytes())
+        bytes(PayloadDeviceInfo(info_version=4).to_bytes())
     )
     assert DeviceInfo.from_payload(parsed).lh2_calibration_id == ""
 
 
 def test_payload_device_info_round_trip():
     payload = PayloadDeviceInfo(
-        info_version=3,
+        info_version=4,
         info_gen=42,
         boot_count=37,
         uptime_s=4324,
@@ -184,7 +188,7 @@ def test_payload_device_info_round_trip():
         image_digest=bytes.fromhex("3f9a2c81d4e5b607"),
         image_name=encode_string_field("lakers-sandbox.bin"),
         image_version=encode_string_field("0.9.0-12-g1a2b3c4"),
-        lh2_homography_count=4,
+        lh2_station_mask=0b1111,
         lh2_flags=0b11,
     )
     parsed = PayloadDeviceInfo().from_bytes(bytes(payload.to_bytes()))
@@ -197,7 +201,7 @@ def test_payload_device_info_round_trip():
     assert decode_string_field(parsed.image_name) == "lakers-sandbox.bin"
     assert decode_string_field(parsed.image_version) == "0.9.0-12-g1a2b3c4"
     assert decode_string_field(parsed.bl_version) == "0.9.0-3-g29e2704"
-    assert parsed.lh2_homography_count == 4
+    assert parsed.lh2_station_mask == 0b1111
     assert parsed.lh2_flags == 0b11
 
 
@@ -206,15 +210,15 @@ def test_payload_device_info_short_payload_raises():
     # Zero-filling it invented a device record; raising lets the adapter drop
     # the frame and leaves the cached info untouched.
     with pytest.raises(ValueError):
-        PayloadDeviceInfo().from_bytes(b"\x03\x05")
+        PayloadDeviceInfo().from_bytes(b"\x04\x05")
 
 
 def test_payload_device_info_tolerates_trailing_bytes():
     # A device on a newer schema appends fields. The known prefix still parses
     # and the rest is ignored, so the host does not need its own truncation.
-    full = bytes(PayloadDeviceInfo(info_version=3, info_gen=42).to_bytes())
+    full = bytes(PayloadDeviceInfo(info_version=4, info_gen=42).to_bytes())
     parsed = PayloadDeviceInfo().from_bytes(full + b"\xde\xad\xbe\xef")
-    assert parsed.info_version == 3
+    assert parsed.info_version == 4
     assert parsed.info_gen == 42
 
 
