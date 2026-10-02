@@ -23,28 +23,29 @@ void lh2_select_rect_resolve(const uint32_t stored[LH2_SELECT_RECT_LEN], uint32_
     memcpy(out, stored, LH2_SELECT_RECT_LEN * sizeof(out[0]));
 }
 
-void lh2_select_rect_union(const uint32_t rects[LH2_SELECT_STATIONS][LH2_SELECT_RECT_LEN], uint32_t mask, uint32_t out[LH2_SELECT_RECT_LEN]) {
-    bool any = false;
-    memset(out, 0, LH2_SELECT_RECT_LEN * sizeof(out[0]));
-    for (uint8_t i = 0; i < LH2_SELECT_STATIONS; i++) {
-        if (((mask >> i) & 1U) == 0) {
-            continue;
-        }
-        uint32_t r[LH2_SELECT_RECT_LEN];
-        lh2_select_rect_resolve(rects[i], r);
-        if (!any) {
-            memcpy(out, r, sizeof(r));
-            any = true;
-            continue;
-        }
-        out[0] = (r[0] < out[0]) ? r[0] : out[0];
-        out[1] = (r[1] < out[1]) ? r[1] : out[1];
-        out[2] = (r[2] > out[2]) ? r[2] : out[2];
-        out[3] = (r[3] > out[3]) ? r[3] : out[3];
-    }
-}
-
 bool lh2_select_rect_contains(const uint32_t rect[LH2_SELECT_RECT_LEN], double x, double y) {
     // Every comparison with NaN is false, so a NaN coordinate is outside
     return x >= rect[0] && x <= rect[2] && y >= rect[1] && y <= rect[3];
+}
+
+void lh2_select_reset(lh2_select_best_t *best) {
+    memset(best, 0, sizeof(*best));
+}
+
+bool lh2_select_offer(lh2_select_best_t *best, uint8_t station, double x, double y, const uint32_t rect[LH2_SELECT_RECT_LEN]) {
+    if (!lh2_select_rect_contains(rect, x, y)) {
+        return false;
+    }
+    double dx = x - 0.5 * ((double)rect[0] + (double)rect[2]);
+    double dy = y - 0.5 * ((double)rect[1] + (double)rect[3]);
+    double d2 = dx * dx + dy * dy;
+    if (best->found && !(d2 < best->d2)) {
+        return false;
+    }
+    best->found   = true;
+    best->station = station;
+    best->x       = x;
+    best->y       = y;
+    best->d2      = d2;
+    return true;
 }

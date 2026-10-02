@@ -20,7 +20,6 @@ typedef struct {
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 static uint32_t _station_mask = 0;
 static uint32_t _valid_mm[LH2_BASESTATION_COUNT_MAX][LH2_VALID_MM_LEN] = { 0 };  ///< resolved, by slot
-static uint32_t _fence[LH2_VALID_MM_LEN] = { 0 };                                ///< union of the rectangles in the mask
 static bool _lh2_started = false;
 
 void localization_start(void) {
@@ -34,7 +33,7 @@ void localization_start(void) {
 
 void localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]) {
     station_mask &= (1U << LH2_BASESTATION_COUNT_MAX) - 1U;
-    printf("Initialize localization with station mask 0x%04X\n", station_mask);
+    printf("LH2 station mask 0x%04X\n", station_mask);
     localization_start();
 
     for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT_MAX; lh_index++) {
@@ -42,7 +41,7 @@ void localization_init(float homographies[][3][3], uint32_t station_mask, const 
             continue;
         }
         lh2_select_rect_resolve(valid_mm[lh_index], _valid_mm[lh_index]);
-        printf("Store homography matrix for LH%u, valid x in [%u, %u], y in [%u, %u] mm:\n", lh_index, _valid_mm[lh_index][0], _valid_mm[lh_index][2], _valid_mm[lh_index][1], _valid_mm[lh_index][3]);
+        printf("LH%u x [%u, %u] y [%u, %u] mm, H:\n", lh_index, _valid_mm[lh_index][0], _valid_mm[lh_index][2], _valid_mm[lh_index][1], _valid_mm[lh_index][3]);
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 printf("%f ", (double)homographies[lh_index][i][j]);
@@ -51,7 +50,6 @@ void localization_init(float homographies[][3][3], uint32_t station_mask, const 
         }
         db_lh2_store_homography(&_localization_data.lh2, lh_index, homographies[lh_index]);
     }
-    lh2_select_rect_union(_valid_mm, station_mask, _fence);
     _station_mask = station_mask;
 }
 
@@ -65,45 +63,62 @@ bool localization_process_data(void) {
     return false;
 }
 
+/// Copy and clear both sweeps of a station when both are fresh
+static bool _take_pair(uint8_t lh_index, uint32_t *count1, uint32_t *count2) {
+    db_lh2_t *lh2 = &_localization_data.lh2;
+    if (lh2->data_ready[0][lh_index] != DB_LH2_PROCESSED_DATA_AVAILABLE || lh2->data_ready[1][lh_index] != DB_LH2_PROCESSED_DATA_AVAILABLE) {
+        return false;
+    }
+    db_lh2_stop();
+    bool fresh = lh2->data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && lh2->data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE;
+    if (fresh) {
+        *count1                      = lh2->locations[0][lh_index].lfsr_counts;
+        *count2                      = lh2->locations[1][lh_index].lfsr_counts;
+        lh2->data_ready[0][lh_index] = DB_LH2_NO_NEW_DATA;
+        lh2->data_ready[1][lh_index] = DB_LH2_NO_NEW_DATA;
+    }
+    db_lh2_start();
+    return fresh;
+}
+
 bool localization_get_position(position_2d_t *position) {
-    if (_station_mask != 0) {
-        bool solved = false;
-        db_lh2_stop();
-        for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT; lh_index++) {
-            if (_localization_data.lh2.data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE) {
-                db_lh2_calculate_position(_localization_data.lh2.locations[0][lh_index].lfsr_counts, _localization_data.lh2.locations[1][lh_index].lfsr_counts, lh_index, _localization_data.coordinates);
-                _localization_data.lh2.data_ready[0][lh_index] = DB_LH2_NO_NEW_DATA;
-                _localization_data.lh2.data_ready[1][lh_index] = DB_LH2_NO_NEW_DATA;
-                solved = true;
-                break;
-            }
-        }
-        db_lh2_start();
-
-        // No basestation had both sweeps decoded: coordinates[] still holds
-        // the previous solve (zero before the first), which must not be
-        // published under a new sequence number.
-        if (!solved) {
-            return false;
-        }
-
-        double x = _localization_data.coordinates[0];
-        double y = _localization_data.coordinates[1];
-        if (!lh2_select_rect_contains(_fence, x, y)) {
-            printf("Invalid position (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
-            return false;
-        }
-
-        _localization_data.position.x = (uint32_t)_localization_data.coordinates[0];
-        _localization_data.position.y = (uint32_t)_localization_data.coordinates[1];
-
-        position->x = _localization_data.position.x;
-        position->y = _localization_data.position.y;
-        printf("Position (%u,%u)\n", position->x, position->y);
-        return true;
+    if (_station_mask == 0) {
+        return false;
     }
 
-    return false;
+    lh2_select_best_t best;
+    lh2_select_reset(&best);
+    for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT_MAX; lh_index++) {
+        // Every fresh pair is taken, whatever its station, so none is used
+        // stale by a later call; the decoder stops only for the copy
+        uint32_t count1, count2;
+        if (!_take_pair(lh_index, &count1, &count2)) {
+            continue;
+        }
+        // A station without a homography would solve to NaN, or worse
+        if (((_station_mask >> lh_index) & 1U) == 0) {
+            continue;
+        }
+        db_lh2_calculate_position(count1, count2, lh_index, _localization_data.coordinates);
+        double x = _localization_data.coordinates[0];
+        double y = _localization_data.coordinates[1];
+        if (!lh2_select_rect_contains(_valid_mm[lh_index], x, y)) {
+            printf("LH%u (%f,%f) outside\n", lh_index, x, y);
+            continue;
+        }
+        lh2_select_offer(&best, lh_index, x, y, _valid_mm[lh_index]);
+    }
+    if (!best.found) {
+        return false;
+    }
+
+    // Inside its station's rectangle, so within uint32
+    _localization_data.position.x = (uint32_t)best.x;
+    _localization_data.position.y = (uint32_t)best.y;
+    position->x                   = _localization_data.position.x;
+    position->y                   = _localization_data.position.y;
+    printf("Position (%u,%u) from LH%u\n", position->x, position->y, best.station);
+    return true;
 }
 
 uint8_t localization_get_raw_counts(lh2_raw_sample_t *out, uint8_t max) {
