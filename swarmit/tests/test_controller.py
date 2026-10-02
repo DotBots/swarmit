@@ -514,10 +514,10 @@ def test_controller_sends_one_calibration_message_per_station():
         assert call.args[0] == 0x1
         assert bytes(call.args[1].to_bytes()) == message
     first = send_payload_mock.call_args_list[0].args[1]
-    assert (first.station_mask, first.station_index) == (0b11, 0)
-    assert (first.valid_x_max, first.valid_y_max) == (3330, 4000)
+    assert (first.station_mask, first.station_index) == (0x0104, 2)
+    assert (first.valid_x_max, first.valid_y_max) == (2500, 4000)
     assert first.site_name == b"c405-arena" + bytes(6)
-    assert bytes(first.calibration_id).hex() == "80285c9b7db82732"
+    assert bytes(first.calibration_id).hex() == "9b12f56f622f0fb6"
 
 
 @patch(
@@ -564,18 +564,13 @@ def test_controller_refuses_messages_that_are_not_one_push():
     "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
 )
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
-def test_controller_sends_stations_2_and_8_by_mask():
+def test_controller_refuses_an_empty_rectangle():
     import struct
 
     first, second = _calibration_messages()
-    two = struct.pack("<II", 0x0104, 2) + first[8:]
-    eight = struct.pack("<II", 0x0104, 8) + second[8:]
-    send_payload_mock = _send_calibration(two + eight)
-    sent = [call.args[1] for call in send_payload_mock.call_args_list]
-    assert [(p.station_mask, p.station_index) for p in sent] == [
-        (0x0104, 2),
-        (0x0104, 8),
-    ]
+    empty = second[:44] + struct.pack("<4I", 800, 0, 800, 4000) + second[60:]
+    with pytest.raises(ValueError, match="station 8's rectangle is empty"):
+        _send_calibration(first + empty)
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)

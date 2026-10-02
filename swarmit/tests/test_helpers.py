@@ -91,29 +91,27 @@ def test_a_file_without_site_or_validity_takes_pydotbots_defaults(tmp_path):
     assert payload == b"".join(bytes.fromhex(h) for h in DEFAULTS_MESSAGE_HEX)
 
 
-def test_stations_2_and_8_go_out_under_their_mask(tmp_path):
+def test_stations_2_and_8_go_out_under_their_mask_with_their_rectangles(
+    tmp_path,
+):
     import struct
 
-    gapped = FIXTURE_TOML.replace(
-        "index = 0\nsolved_from", "index = 2\nsolved_from"
-    ).replace("index = 1\nsolved_from", "index = 8\nsolved_from")
-    payload = read_lh2_calibration_payload(_write(tmp_path, gapped))
+    payload = read_lh2_calibration_payload(_write(tmp_path, FIXTURE_TOML))
     heads = [struct.unpack_from("<II", payload, k) for k in (0, 84)]
     assert heads == [(0x0104, 2), (0x0104, 8)]
-    # Past the mask and index, the bytes are the fixture's own.
-    expected = [bytes.fromhex(h) for h in MESSAGE_HEX]
-    assert payload[8:84] == expected[0][8:] and payload[92:] == expected[1][8:]
+    rects = [struct.unpack_from("<4I", payload, k + 44) for k in (0, 84)]
+    assert rects == [(0, 0, 2500, 4000), (800, 0, 3330, 4000)]
 
 
 @pytest.mark.parametrize(
     "edit, match",
     [
         (
-            ("index = 1\nsolved_from", "index = 16\nsolved_from"),
+            ("index = 8\nsolved_from", "index = 16\nsolved_from"),
             "outside 0 to 15",
         ),
         (
-            ("index = 1\nsolved_from", "index = 0\nsolved_from"),
+            ("index = 8\nsolved_from", "index = 2\nsolved_from"),
             "appears twice",
         ),
     ],
@@ -128,7 +126,7 @@ def test_a_station_a_robot_has_no_slot_for_is_refused(tmp_path, edit, match):
 
 def test_a_station_without_its_rectangle_is_refused(tmp_path):
     bare = FIXTURE_TOML.replace(
-        "valid_mm = [0, 0, 3330, 4000]\nhomography", "homography"
+        "valid_mm = [800, 0, 3330, 4000]\nhomography", "homography"
     )
     with pytest.raises(ValueError, match="has no valid_mm"):
         read_lh2_calibration_payload(_write(tmp_path, bare))
@@ -141,11 +139,11 @@ def test_a_station_without_its_rectangle_is_refused(tmp_path):
             ('name = "c405-arena"', 'name = "a-name-too-long-for-16"'),
             "1 to 16",
         ),
-        (('id = "80285c9b7db82732"', 'id = "8028"'), "shorter than 16"),
+        (('id = "9b12f56f622f0fb6"', 'id = "9b12"'), "shorter than 16"),
         (
             (
-                "valid_mm = [0, 0, 3330, 4000]\nhomography",
-                "valid_mm = [0, 0, -1, 4000]\nhomography",
+                "valid_mm = [800, 0, 3330, 4000]\nhomography",
+                "valid_mm = [800, 0, -1, 4000]\nhomography",
             ),
             "valid_mm",
         ),
@@ -162,7 +160,7 @@ def test_site_fields_a_robot_cannot_store_are_refused(tmp_path, edit, match):
 def test_a_declared_id_is_sent_as_is(tmp_path):
     """The low-level packer trusts metadata.id; PyDotBot is where it is checked."""
     edited = FIXTURE_TOML.replace(
-        'id = "80285c9b7db82732"', 'id = "0123456789abcdef"'
+        'id = "9b12f56f622f0fb6"', 'id = "0123456789abcdef"'
     )
     payload = read_lh2_calibration_payload(_write(tmp_path, edited))
     assert payload[76:84] == bytes.fromhex("0123456789abcdef")

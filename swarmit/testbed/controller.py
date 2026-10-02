@@ -1590,6 +1590,14 @@ class Controller:
                 f"of their mask 0x{mask:04X} once each, in index order"
             )
         for payload in payloads:
+            if (
+                payload.valid_x_min >= payload.valid_x_max
+                or payload.valid_y_min >= payload.valid_y_max
+            ):
+                raise ValueError(
+                    "Invalid calibration payload: station "
+                    f"{payload.station_index}'s rectangle is empty"
+                )
             if payload.push_fields != first.push_fields:
                 raise ValueError(
                     "Invalid calibration payload: the station mask, site name "
