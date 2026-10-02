@@ -514,10 +514,10 @@ def test_controller_sends_one_calibration_message_per_station():
         assert call.args[0] == 0x1
         assert bytes(call.args[1].to_bytes()) == message
     first = send_payload_mock.call_args_list[0].args[1]
-    assert first.homography_count == 2
-    assert (first.valid_x_max, first.valid_y_max) == (3330, 4000)
+    assert (first.station_mask, first.station_index) == (0x0104, 2)
+    assert (first.valid_x_max, first.valid_y_max) == (2500, 4000)
     assert first.site_name == b"c405-arena" + bytes(6)
-    assert bytes(first.calibration_id).hex() == "19ed0cdb738cdfe5"
+    assert bytes(first.calibration_id).hex() == "9b12f56f622f0fb6"
 
 
 @patch(
@@ -545,13 +545,32 @@ def test_controller_refuses_a_calibration_of_the_wrong_size(blob, match):
 @patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
 def test_controller_refuses_messages_that_are_not_one_push():
     first, second = _calibration_messages()
-    with pytest.raises(ValueError, match="count field"):
+    with pytest.raises(ValueError, match="once each, in index order"):
         _send_calibration(first)
-    with pytest.raises(ValueError, match="indices 0 to N-1"):
+    with pytest.raises(ValueError, match="once each, in index order"):
         _send_calibration(second + first)
     other_site = second[:60] + b"elsewhere".ljust(16, b"\x00") + second[76:]
-    with pytest.raises(ValueError, match="site fields differ"):
+    with pytest.raises(ValueError, match="differ between messages"):
         _send_calibration(first + other_site)
+    no_station = bytes(4) + first[4:]
+    with pytest.raises(ValueError, match="names no station"):
+        _send_calibration(no_station)
+    high = (1 << 16 | 1).to_bytes(4, "little") + first[4:]
+    with pytest.raises(ValueError, match="names no station, or one above 15"):
+        _send_calibration(high)
+
+
+@patch(
+    "swarmit.testbed.adapter.MarilibSerialAdapter", MarilibSerialAdapterMock
+)
+@patch("swarmit.testbed.controller.COMMAND_MAX_ATTEMPTS", 1)
+def test_controller_refuses_an_empty_rectangle():
+    import struct
+
+    first, second = _calibration_messages()
+    empty = second[:44] + struct.pack("<4I", 800, 0, 800, 4000) + second[60:]
+    with pytest.raises(ValueError, match="station 8's rectangle is empty"):
+        _send_calibration(first + empty)
 
 
 @patch("swarmit.testbed.controller.COMMAND_TIMEOUT", 0.1)
@@ -1031,7 +1050,7 @@ def test_device_info_reply_survives_a_concurrent_timeout():
 
     header = MagicMock()
     header.source = 0x22
-    packet = Packet.from_payload(PayloadDeviceInfo(info_version=3, info_gen=3))
+    packet = Packet.from_payload(PayloadDeviceInfo(info_version=4, info_gen=3))
     # status_data is deliberately empty: the device timed out between the
     # request going out and this reply arriving.
     controller.on_frame_received(header, packet)
@@ -1207,7 +1226,7 @@ def test_matching_generation_clears_the_backoff():
     header.source = 0x44
     controller.on_frame_received(
         header,
-        Packet.from_payload(PayloadDeviceInfo(info_version=3, info_gen=7)),
+        Packet.from_payload(PayloadDeviceInfo(info_version=4, info_gen=7)),
     )
 
     assert controller._device_info["00000044"].info_gen == 7
@@ -1323,7 +1342,7 @@ def test_info_panel_always_names_the_calibration_state():
         generate_info(never_asked, [])
     )
 
-    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=3))}
+    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=4))}
     out = _render(generate_info(uncalibrated, []))
     assert "LH2 calibration" in out
     assert "uncalibrated" in out
@@ -1331,11 +1350,11 @@ def test_info_panel_always_names_the_calibration_state():
     calibrated = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=3, lh2_homography_count=2, lh2_flags=0b11
+                info_version=4, lh2_station_mask=0b11, lh2_flags=0b11
             )
         )
     }
-    assert "2 basestations (valid, from flash)" in _render(
+    assert "stations 0, 1 (channels 1, 2; valid, from flash)" in _render(
         generate_info(calibrated, [])
     )
 
@@ -1344,8 +1363,8 @@ def test_info_panel_always_shows_the_site_and_the_id():
     held = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=3,
-                lh2_homography_count=2,
+                info_version=4,
+                lh2_station_mask=0b11,
                 lh2_site_name="c405-arena",
                 lh2_calibration_id="ac893d2d85e3068c",
             )
@@ -1355,7 +1374,7 @@ def test_info_panel_always_shows_the_site_and_the_id():
     assert "c405-arena" in out
     assert "ac893d2d85e3068c" in out
 
-    empty = {"AA": NodeStatus(info=DeviceInfo(info_version=3))}
+    empty = {"AA": NodeStatus(info=DeviceInfo(info_version=4))}
     out = _render(generate_info(empty, []))
     assert "site" in out and "none" in out
 
@@ -1365,9 +1384,9 @@ def test_info_panel_always_shows_the_site_and_the_id():
     assert "Sandbox fw" not in out
 
 
-def test_a_single_basestation_is_not_pluralised():
-    info = DeviceInfo(info_version=3, lh2_homography_count=1, lh2_flags=0b01)
-    assert info.lh2_summary == "1 basestation (valid)"
+def test_a_single_station_is_not_pluralised():
+    info = DeviceInfo(info_version=4, lh2_station_mask=0b1, lh2_flags=0b01)
+    assert info.lh2_summary == "station 0 (channel 1; valid)"
 
 
 def test_position_says_no_fix_instead_of_the_origin():
@@ -1394,7 +1413,7 @@ def test_position_tells_uncalibrated_apart_from_a_missing_fix():
     would have changed the cell. Device info already says which it is, so the
     cell says it too, in the same word as the `LH2 calibration` row.
     """
-    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=3))}
+    uncalibrated = {"AA": NodeStatus(info=DeviceInfo(info_version=4))}
     out = _render(generate_info(uncalibrated, []))
     assert "uncalibrated" in out
     assert "no fix" not in out
@@ -1403,10 +1422,10 @@ def test_position_tells_uncalibrated_apart_from_a_missing_fix():
     # named in the header line and the Position cell is the only place the
     # word can come from.
     fleet = {
-        "AA": NodeStatus(info=DeviceInfo(info_version=3)),
+        "AA": NodeStatus(info=DeviceInfo(info_version=4)),
         "BB": NodeStatus(
             info=DeviceInfo(
-                info_version=3, lh2_homography_count=2, lh2_flags=0b11
+                info_version=4, lh2_station_mask=0b11, lh2_flags=0b11
             )
         ),
     }
@@ -1433,16 +1452,19 @@ def test_status_collapses_calibration_when_the_fleet_agrees():
     Same treatment as the sandbox-firmware column: spending table width to
     repeat one string per row is what stops the fleet laying out side by side.
     """
-    info = DeviceInfo(info_version=3, lh2_homography_count=2, lh2_flags=0b11)
+    info = DeviceInfo(info_version=4, lh2_station_mask=0b11, lh2_flags=0b11)
     fleet = {
         "AA": NodeStatus(info=info),
         "BB": NodeStatus(info=info),
     }
     out = _render(generate_status(fleet))
 
-    assert "LH2 calibration: 2 basestations (valid, from flash)" in out
+    assert (
+        "LH2 calibration: stations 0, 1 (channels 1, 2; valid, from flash)"
+        in out
+    )
     # Stated once above the table, not once per row.
-    assert out.count("2 basestations") == 1
+    assert out.count("stations 0, 1 (channels 1, 2") == 1
 
 
 def test_status_shows_the_calibration_column_when_the_fleet_disagrees():
@@ -1456,10 +1478,10 @@ def test_status_shows_the_calibration_column_when_the_fleet_disagrees():
     fleet = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=3, lh2_homography_count=2, lh2_flags=0b11
+                info_version=4, lh2_station_mask=0b11, lh2_flags=0b11
             )
         ),
-        "BB": NodeStatus(info=DeviceInfo(info_version=3)),
+        "BB": NodeStatus(info=DeviceInfo(info_version=4)),
         "CC": NodeStatus(info=None),
     }
     out = _render(generate_status(fleet))
@@ -1467,7 +1489,7 @@ def test_status_shows_the_calibration_column_when_the_fleet_disagrees():
     assert "LH2 calibration: " not in out  # no header line
     assert "LH2" in out  # the column
     # Compact, so it does not wrap: no row spells the summary out.
-    assert "2 basestations" not in out
+    assert "stations 0, 1 (channels" not in out
 
 
 def test_status_compares_calibration_on_the_summary_not_the_count():
@@ -1479,12 +1501,12 @@ def test_status_compares_calibration_on_the_summary_not_the_count():
     fleet = {
         "AA": NodeStatus(
             info=DeviceInfo(
-                info_version=3, lh2_homography_count=2, lh2_flags=0b11
+                info_version=4, lh2_station_mask=0b11, lh2_flags=0b11
             )
         ),
         "BB": NodeStatus(
             info=DeviceInfo(
-                info_version=3, lh2_homography_count=2, lh2_flags=0b01
+                info_version=4, lh2_station_mask=0b11, lh2_flags=0b01
             )
         ),
     }
@@ -1510,7 +1532,7 @@ def test_calibration_and_position_reach_the_panel_from_the_wire():
         address=0x77,
         adapter=test_adapter,
         info_gen=3,
-        lh2_homography_count=2,
+        lh2_station_mask=0b11,
         lh2_flags=0b11,
         pos_x=1200,
         pos_y=1300,
@@ -1525,11 +1547,11 @@ def test_calibration_and_position_reach_the_panel_from_the_wire():
     controller.fetch_device_info([addr])
     info = controller.status_data[addr].info
     assert info is not None
-    assert info.lh2_homography_count == 2
+    assert info.lh2_station_mask == 0b11
     assert info.lh2_flags == 0b11
 
     out = _render(generate_info(controller.status_data, []))
-    assert "2 basestations (valid, from flash)" in out
+    assert "stations 0, 1 (channels 1, 2; valid, from flash)" in out
     assert "1200, 1300" in out
 
     node.stop()

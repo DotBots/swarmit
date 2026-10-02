@@ -330,9 +330,9 @@ def test_parse_node_status_ignores_server_fields_the_client_does_not_know():
             "a_field_from_a_future_daemon": 1,
             "info": {
                 "image_name": "dotbot-sandbox-dotbot-v3.bin",
-                "lh2_homography_count": 1,
+                "lh2_station_mask": 1,
                 "lh2_flags": 3,
-                "lh2_summary": "1 basestation (valid, from flash)",
+                "lh2_summary": "station 0 (channel 1; valid, from flash)",
                 "image_state_name": "Idle",
                 "image_result_name": "Success",
                 "another_future_field": "x",
@@ -347,7 +347,7 @@ def test_parse_node_status_ignores_server_fields_the_client_does_not_know():
     assert node.info is not None
     assert node.info.image_name == "dotbot-sandbox-dotbot-v3.bin"
     # The property still derives it locally from the raw fields.
-    assert node.info.lh2_summary == "1 basestation (valid, from flash)"
+    assert node.info.lh2_summary == "station 0 (channel 1; valid, from flash)"
 
 
 def test_parse_node_status_still_reads_a_daemon_without_device_info():

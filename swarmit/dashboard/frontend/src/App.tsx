@@ -47,7 +47,7 @@ export type DeviceInfoData = {
   image_digest: string;
   image_name: string;
   image_version: string;
-  lh2_homography_count: number;
+  lh2_station_mask: number;
   lh2_flags: number;
 };
 

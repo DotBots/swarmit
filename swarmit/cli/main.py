@@ -742,8 +742,8 @@ def calibrate_lh2(ctx, lh2_calibration_file):
     # in the server process, not this terminal.
     first = PayloadCalibrationData().from_bytes(blob)
     console.print(
-        f"Sending [bold cyan]{first.homography_count}[/] calibration "
-        f"matrix/matrices ([bold]{len(blob)}B[/], site "
+        f"Sending the calibration of stations [bold cyan]"
+        f"{', '.join(map(str, first.stations))}[/] ([bold]{len(blob)}B[/], site "
         f"[bold]{decode_string_field(first.site_name)}[/], id "
         f"[bold]{bytes(first.calibration_id).hex()}[/]) to the swarm..."
     )

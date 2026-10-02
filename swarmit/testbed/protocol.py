@@ -303,7 +303,7 @@ INFO_STRING_LEN = 32
 IMAGE_DIGEST_LEN = 8
 # Schema version this host understands in SWARMIT_DEVICE_INFO_RESP. A bot
 # reporting an older one runs firmware to reflash.
-DEVICE_INFO_VERSION = 3
+DEVICE_INFO_VERSION = 4
 # The LH2 site name and calibration id, as the calibration message, the
 # config page and device info carry them.
 LH2_SITE_NAME_LEN = 16
@@ -574,19 +574,17 @@ class PayloadOTAChunk(Payload):
 class PayloadCalibrationData(Payload):
     """One station's LH2 homography, `swrmt_lh2_calibration_data_t`.
 
-    The matrix is nine little-endian float32, row-major. The validity
-    rectangle, site name and calibration id are the same in every message of
+    `station_mask` has bit i set for every station i of the push and
+    `station_index` names the one this message carries. The matrix is nine
+    little-endian float32, row-major, and the rectangle is this station's.
+    The mask, site name and calibration id are the same in every message of
     one push.
     """
 
     metadata: list[PayloadFieldMetadata] = dataclasses.field(
         default_factory=lambda: [
-            PayloadFieldMetadata(
-                name="homography_count", disp="count", length=4
-            ),
-            PayloadFieldMetadata(
-                name="homography_index", disp="idx", length=4
-            ),
+            PayloadFieldMetadata(name="station_mask", disp="mask", length=4),
+            PayloadFieldMetadata(name="station_index", disp="idx", length=4),
             PayloadFieldMetadata(
                 name="homography", type_=bytes, length=3 * 3 * 4
             ),
@@ -609,8 +607,8 @@ class PayloadCalibrationData(Payload):
         ]
     )
 
-    homography_count: int = 0
-    homography_index: int = 0
+    station_mask: int = 0
+    station_index: int = 0
     homography: bytes = dataclasses.field(default_factory=lambda: bytes(36))
     valid_x_min: int = 0
     valid_y_min: int = 0
@@ -624,16 +622,14 @@ class PayloadCalibrationData(Payload):
     )
 
     @property
-    def site_fields(self) -> tuple:
-        """The validity rectangle, site name and id, identical across one push."""
-        return (
-            self.valid_x_min,
-            self.valid_y_min,
-            self.valid_x_max,
-            self.valid_y_max,
-            self.site_name,
-            self.calibration_id,
-        )
+    def push_fields(self) -> tuple:
+        """The station mask, site name and id, identical across one push."""
+        return (self.station_mask, self.site_name, self.calibration_id)
+
+    @property
+    def stations(self) -> list[int]:
+        """The stations of the push, from the mask, in index order."""
+        return [i for i in range(32) if self.station_mask >> i & 1]
 
 
 @dataclass
@@ -809,7 +805,9 @@ class PayloadDeviceInfo(Payload):
                 type_=bytes,
                 length=INFO_STRING_LEN,
             ),
-            PayloadFieldMetadata(name="lh2_homography_count", disp="lh2"),
+            PayloadFieldMetadata(
+                name="lh2_station_mask", disp="lh2", length=2
+            ),
             PayloadFieldMetadata(name="lh2_flags", disp="lh2f"),
             PayloadFieldMetadata(
                 name="lh2_site_name",
@@ -848,7 +846,7 @@ class PayloadDeviceInfo(Payload):
     image_version: bytes = dataclasses.field(
         default_factory=lambda: bytes(INFO_STRING_LEN)
     )
-    lh2_homography_count: int = 0
+    lh2_station_mask: int = 0
     lh2_flags: int = 0
     lh2_site_name: bytes = dataclasses.field(
         default_factory=lambda: bytes(LH2_SITE_NAME_LEN)
