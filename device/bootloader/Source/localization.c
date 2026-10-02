@@ -20,6 +20,10 @@ typedef struct {
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 static uint32_t _station_mask = 0;
 static uint32_t _valid_mm[LH2_BASESTATION_COUNT_MAX][LH2_VALID_MM_LEN] = { 0 };  ///< resolved, by slot
+static float    _homographies[LH2_BASESTATION_COUNT_MAX][3][3] = { 0 };          ///< by slot, for the floor lines
+static db_lh2_floor_line_t _lines[LH2_LINES_MAX];                                ///< ring of lines not yet drained
+static uint8_t             _lines_head  = 0;                                     ///< next slot written
+static uint8_t             _lines_count = 0;                                     ///< lines held
 static bool _lh2_started = false;
 
 void localization_start(void) {
@@ -49,6 +53,7 @@ void localization_init(float homographies[][3][3], uint32_t station_mask, const 
             printf("\n");
         }
         db_lh2_store_homography(&_localization_data.lh2, lh_index, homographies[lh_index]);
+        memcpy(_homographies[lh_index], homographies[lh_index], sizeof(_homographies[0]));
     }
     _station_mask = station_mask;
 }
@@ -81,6 +86,28 @@ static bool _take_pair(uint8_t lh_index, uint32_t *count1, uint32_t *count2) {
     return fresh;
 }
 
+_Static_assert(LH2_LINES_MAX % 2 == 0, "pairs never straddle the end of the ring");
+
+/// Pairs go straight into the ring: the head is always even, and
+/// db_lh2_sweep_lines() writes nothing when it fails
+static void _lines_push(uint32_t count1, uint32_t count2, uint8_t lh_index) {
+    if (db_lh2_sweep_lines(count1, count2, lh_index, (const float(*)[3])_homographies[lh_index], &_lines[_lines_head]) != 2) {
+        return;
+    }
+    _lines_head  = (uint8_t)((_lines_head + 2) % LH2_LINES_MAX);
+    _lines_count = (_lines_count + 2 > LH2_LINES_MAX) ? LH2_LINES_MAX : (uint8_t)(_lines_count + 2);
+}
+
+uint8_t localization_get_lines(db_lh2_floor_line_t *out, uint8_t max) {
+    uint8_t n     = (max < _lines_count) ? max : _lines_count;
+    uint8_t first = (uint8_t)((_lines_head + LH2_LINES_MAX - _lines_count) % LH2_LINES_MAX);
+    for (uint8_t i = 0; i < n; i++) {
+        out[i] = _lines[(first + i) % LH2_LINES_MAX];
+    }
+    _lines_count -= n;
+    return n;
+}
+
 bool localization_get_position(position_2d_t *position) {
     if (_station_mask == 0) {
         return false;
@@ -107,6 +134,7 @@ bool localization_get_position(position_2d_t *position) {
             continue;
         }
         lh2_select_offer(&best, lh_index, x, y, _valid_mm[lh_index]);
+        _lines_push(count1, count2, lh_index);
     }
     if (!best.found) {
         return false;
