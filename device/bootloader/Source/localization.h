@@ -17,6 +17,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lh2_geometry.h"
+
 #define LH2_BASESTATION_COUNT_MAX (16)
 
 #define LH2_VALID_MM_LEN          (4U)       ///< x_min, y_min, x_max, y_max
@@ -66,6 +68,15 @@ void localization_start(void);
 bool localization_process_data(void);
 
 bool localization_get_position(position_2d_t *position);
+
+/// Floor lines one fix can produce: four stations recorded, two sweeps each
+#define LH2_LINES_MAX (8U)
+
+/// Drain up to max of the floor lines produced since the previous call,
+/// oldest first. Every calibrated station whose solve lands inside its own
+/// rectangle adds its pair's two lines; past LH2_LINES_MAX the oldest are
+/// overwritten.
+uint8_t localization_get_lines(db_lh2_floor_line_t *out, uint8_t max);
 
 /// Drain the raw LFSR counts of every basestation that has both sweeps ready.
 /// Returns the number of samples written to @p out (capped at @p max), clearing the consumed data_ready flags.
