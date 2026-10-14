@@ -129,9 +129,7 @@ class PayloadType(IntEnum):
 
     # SwarmIT calibration data
     # 0xA1 is reserved, never reuse it: it carries another camera model's homographies.
-    # Host -> node: trigger a raw LH2 capture (READY mode only). DEPRECATED: the
-    # calibrate app's button capture replaces it.
-    SWARMIT_LH2_CAPTURE = 0xA2
+    # 0xA2 is reserved likewise: hosts before the raw-capture removal send it.
     SWARMIT_LH2_CALIBRATION = 0xA3
 
     # Marilib metrics probe
@@ -148,14 +146,6 @@ BROADCAST_ADDRESS = 0xFFFFFFFFFFFFFFFF
 # that does not report 2 cannot be flashed over the air any more.
 OTA_PROTOCOL_VERSION_LEGACY = 1
 OTA_PROTOCOL_VERSION_BLOCK = 2
-
-
-# First byte of a raw LH2 capture sample carried inside a SWARMIT_EVENT_LOG
-# payload. Mirrors SWRMT_LH2_CALIB_TAG in the swarmit bootloader firmware; lets
-# the host tell a calibration sample apart from a regular text log line. Each
-# sample that follows is [lh_index:1][count1:4 LE][count2:4 LE]. DEPRECATED
-# with SWARMIT_LH2_CAPTURE, whose reply it tags.
-LH2_CALIB_TAG = 0xCA
 
 
 class FaultType(Enum):
@@ -473,11 +463,6 @@ class PayloadEmpty(Payload):
 @dataclass
 class PayloadStart(PayloadEmpty):
     """Dataclass that holds an application start request packet."""
-
-
-@dataclass
-class PayloadLH2Capture(PayloadEmpty):
-    """Dataclass that holds a raw LH2 capture trigger (no body)."""
 
 
 @dataclass
@@ -922,5 +907,4 @@ register_parser(PayloadType.SWARMIT_DEVICE_INFO_RESP, PayloadDeviceInfo)
 register_parser(PayloadType.SWARMIT_EVENT_LOG, PayloadEvent)
 register_parser(PayloadType.SWARMIT_MESSAGE, PayloadMessage)
 register_parser(PayloadType.SWARMIT_LH2_CALIBRATION, PayloadCalibrationData)
-register_parser(PayloadType.SWARMIT_LH2_CAPTURE, PayloadLH2Capture)
 register_parser(PayloadType.METRICS_PROBE, MetricsProbePayload)

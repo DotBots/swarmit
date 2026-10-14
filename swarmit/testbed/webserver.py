@@ -266,15 +266,6 @@ class Lh2CalibrationRequest(BaseModel):
     devices: list[str] | None = None
 
 
-class CaptureRequest(BaseModel):
-    """Trigger a raw LH2 capture on a single device (READY mode only).
-
-    `device` is the hex device address, e.g. "BC3D3C8A2A6F8E68".
-    """
-
-    device: str
-
-
 @api.post("/flash", dependencies=[Depends(verify_jwt)])
 async def flash_firmware(payload: FlashRequest, request: Request):
     controller: Controller = request.app.state.controller
@@ -668,14 +659,6 @@ async def lh2_calibration(request: Request, payload: Lh2CalibrationRequest):
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-    return JSONResponse(content={"response": "done"})
-
-
-@api.post("/lh2_capture", dependencies=[Depends(verify_jwt)])
-async def lh2_capture(request: Request, payload: CaptureRequest):
-    controller: Controller = request.app.state.controller
-    async with controller_lock:
-        await run_in_threadpool(controller.request_lh2_capture, payload.device)
     return JSONResponse(content={"response": "done"})
 
 
