@@ -4,10 +4,12 @@
 #include <string.h>
 
 #include "board_config.h"
+#include "gpio.h"
 #include "lh2.h"
 #include "localization.h"
 #include "lh2_calibration.h"
 #include "lh2_select.h"
+#include "timer_hf.h"
 
 _Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_BASESTATION_COUNT, "localization.h and lh2.h must agree on the basestation ceiling");
 _Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_SELECT_STATIONS, "lh2_select covers every basestation");
@@ -27,24 +29,70 @@ static db_lh2_floor_line_t _lines[LH2_LINES_MAX];                               
 static uint8_t             _lines_head  = 0;                                     ///< next slot written
 static uint8_t             _lines_count = 0;                                     ///< lines held
 static bool _lh2_started = false;
+static bool _lh2_sensor_ok = false;
 
 static int32_t _clamp_mm(double v) {
     return (v > INT32_MAX) ? INT32_MAX : ((v < INT32_MIN) ? INT32_MIN : (int32_t)v);
 }
 
-void localization_start(void) {
-    if (_lh2_started) {
-        return;
+#define LH2_POWER_CYCLES  (3U)       ///< init retries, each after an LH-EN power cycle
+#define LH2_POWER_OFF_US  (100000U)
+#define LH2_POWER_ON_US   (10000U)
+
+#if defined(BOARD_DOTBOT_V3)
+/// The TS4231 supply switch. db_lh2_init drives the same pin high: keep the two in step.
+static const gpio_t _lh2_en = { .port = 0, .pin = 16 };
+#endif
+
+/// The timer db_lh2_init initialises and delays on (LH2_TIMER_DEV in lh2_default.c): keep in step.
+#if defined(NRF5340_XXAA) && defined(NRF_APPLICATION)
+#define LH2_DRIVER_TIMER_DEV (2)
+#else
+#define LH2_DRIVER_TIMER_DEV (3)
+#endif
+
+static bool _lh2_init(void) {
+    if (db_lh2_init(&_localization_data.lh2, &db_lh2_d, &db_lh2_e)) {
+        return true;
     }
-    db_lh2_init(&_localization_data.lh2, &db_lh2_d, &db_lh2_e);
-    db_lh2_start();
-    _lh2_started = true;
+#if defined(BOARD_DOTBOT_V3)
+    // The TS4231 can latch a state its configuration sequence does not clear
+    // across a soft reset; dropping its supply does.
+    db_timer_hf_init(LH2_DRIVER_TIMER_DEV);
+    for (uint32_t cycle = 1; cycle <= LH2_POWER_CYCLES; cycle++) {
+        db_gpio_init(&db_lh2_d, DB_GPIO_IN);
+        db_gpio_init(&db_lh2_e, DB_GPIO_IN);
+        db_gpio_init(&_lh2_en, DB_GPIO_OUT);
+        db_gpio_clear(&_lh2_en);
+        db_timer_hf_delay_us(LH2_DRIVER_TIMER_DEV, LH2_POWER_OFF_US);
+        db_gpio_set(&_lh2_en);
+        db_timer_hf_delay_us(LH2_DRIVER_TIMER_DEV, LH2_POWER_ON_US);
+        if (db_lh2_init(&_localization_data.lh2, &db_lh2_d, &db_lh2_e)) {
+            printf("LH2 sensor recovered after %u power cycle(s)\n", (unsigned)cycle);
+            return true;
+        }
+    }
+#endif
+    puts("LH2 sensor failed");
+    return false;
 }
 
-void localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]) {
+bool localization_start(void) {
+    if (_lh2_started) {
+        return _lh2_sensor_ok;
+    }
+    _lh2_sensor_ok = _lh2_init();
+    if (_lh2_sensor_ok) {
+        db_lh2_start();
+    }
+    _lh2_started = true;
+    return _lh2_sensor_ok;
+}
+
+bool localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]) {
     station_mask &= (1U << LH2_BASESTATION_COUNT_MAX) - 1U;
     printf("LH2 station mask 0x%04X\n", station_mask);
-    localization_start();
+    bool sensor_ok = localization_start();
 
     for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT_MAX; lh_index++) {
         if (((station_mask >> lh_index) & 1U) == 0) {
@@ -62,6 +110,7 @@ void localization_init(float homographies[][3][3], uint32_t station_mask, const 
         memcpy(_homographies[lh_index], homographies[lh_index], sizeof(_homographies[0]));
     }
     _station_mask = station_mask;
+    return sensor_ok;
 }
 
 bool localization_process_data(void) {
