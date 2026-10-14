@@ -55,11 +55,13 @@ _Static_assert(offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is p
 
 /// Load slot i of homographies and valid_mm for every bit i of station_mask.
 /// A rectangle is x_min, y_min, x_max, y_max in mm; all 0xFF reads as 0 to
-/// LH2_VALID_MM_MAX_DEFAULT.
-void localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]);
+/// LH2_VALID_MM_MAX_DEFAULT. Returns whether the LH2 sensor initialised.
+bool localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]);
 
 /// Start the LH2 driver without loading any calibration (idempotent).
-void localization_start(void);
+/// On DotBot v3 a failed sensor init is retried after up to three LH-EN power cycles, about
+/// 0.5 s of boot when all fail. Returns whether the sensor initialised.
+bool localization_start(void);
 
 bool localization_process_data(void);
 
