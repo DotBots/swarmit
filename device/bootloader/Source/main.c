@@ -152,9 +152,6 @@ static void setup_ns_user(void) {
     // Enable div by zero usage fault
     SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-    // Enable not aligned access fault
-    SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;
-
     // Disable SAU in order to use SPU instead
     SAU->CTRL = 0;;
     SAU->CTRL |= 1 << 1;  // Make all memory non secure
