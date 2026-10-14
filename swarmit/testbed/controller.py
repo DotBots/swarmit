@@ -48,7 +48,6 @@ from swarmit.testbed.protocol import (
     ImageResult,
     ImageState,
     PayloadCalibrationData,
-    PayloadLH2Capture,
     PayloadMessage,
     PayloadOTAStart,
     PayloadRequestMessage,
@@ -1632,18 +1631,6 @@ class Controller:
                 time.sleep(
                     0.3
                 )  # give the device some time to process the payload
-
-    def request_lh2_capture(self, device_addr: str):
-        """Trigger a single raw LH2 capture on one device.
-
-        DEPRECATED: the calibrate app's button capture replaces it.
-
-        The bot replies (only while READY) with a SWARMIT_EVENT_LOG whose
-        payload starts with LH2_CALIB_TAG. Delivery is best-effort: callers
-        await that log event and re-issue on timeout rather than relying on
-        this single send.
-        """
-        self.send_payload(int(device_addr, 16), PayloadLH2Capture())
 
     def _send_start_ota(
         self,

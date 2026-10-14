@@ -213,9 +213,6 @@ class LocalSwarmitClient:
     ) -> None:
         self._controller.send_lh2_calibration(bytearray(blob), devices)
 
-    def request_lh2_capture(self, device_addr: str) -> None:
-        self._controller.request_lh2_capture(device_addr)
-
     def refresh_device_info(self, devices: list[str] | None = None) -> None:
         """Ask the selected devices for their device-info block and wait."""
         self._controller.fetch_device_info(devices)
