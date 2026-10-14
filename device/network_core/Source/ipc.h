@@ -96,7 +96,7 @@ typedef struct {
     uint8_t  image_result;                          ///< swrmt_image_result_t
     uint8_t  reserved;                              ///< aligns lh2_station_mask
     uint16_t lh2_station_mask;                      ///< net core writes
-    uint8_t  lh2_flags;                             ///< net core writes
+    uint8_t  lh2_flags;                             ///< net core writes, except SWRMT_LH2_FLAG_SENSOR_FAILED, which the app core does
     uint8_t  reserved_end;                          ///< keeps the size a multiple of 4
 } ipc_device_info_t;
 

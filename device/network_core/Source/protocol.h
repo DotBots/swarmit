@@ -60,6 +60,7 @@ typedef enum {
 /// Bits of swrmt_device_info_pkt_t.lh2_flags.
 #define SWRMT_LH2_FLAG_VALID        (1U << 0)   // set exactly when lh2_station_mask is non-zero
 #define SWRMT_LH2_FLAG_FROM_FLASH   (1U << 1)   // it came from the provisioned config page
+#define SWRMT_LH2_FLAG_SENSOR_FAILED (1U << 2)  // the LH2 sensor did not initialise this boot; the app core sets it
 
 typedef enum {
     SWRMT_DEVICE_TYPE_UNKNOWN = 0,

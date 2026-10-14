@@ -274,6 +274,15 @@ static void _read_battery(void) {
     _bootloader_vars.battery_update = true;
 }
 
+/// Publish whether the LH2 sensor initialised, in the device info.
+static void _report_lh2_sensor(bool sensor_ok) {
+    if (sensor_ok) {
+        ipc_shared_data.device_info.lh2_flags &= (uint8_t)~SWRMT_LH2_FLAG_SENSOR_FAILED;
+    } else {
+        ipc_shared_data.device_info.lh2_flags |= SWRMT_LH2_FLAG_SENSOR_FAILED;
+    }
+}
+
 /// Load the calibration the net core published, when it holds one.
 static void _load_calibration(void) {
     uint32_t station_mask = ipc_shared_data.lh2_calibration.station_mask;
@@ -281,7 +290,7 @@ static void _load_calibration(void) {
         printf("No LH2 calibration, station mask 0x%08X\n", station_mask);
         return;
     }
-    localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, station_mask, (const uint32_t (*)[LH2_VALID_MM_LEN])ipc_shared_data.lh2_calibration.valid_mm);
+    _report_lh2_sensor(localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, station_mask, (const uint32_t (*)[LH2_VALID_MM_LEN])ipc_shared_data.lh2_calibration.valid_mm));
 }
 
 int main(void) {
@@ -462,7 +471,7 @@ int main(void) {
         // DEPRECATED: the calibrate app's button capture replaces this READY-mode capture request.
         if (_bootloader_vars.lh2_capture_request) {
             _bootloader_vars.lh2_capture_request = false;
-            localization_start();  // idempotent: starts LH2 even when no calibration is loaded
+            _report_lh2_sensor(localization_start());  // idempotent: starts LH2 even when no calibration is loaded
             _bootloader_vars.lh2_capturing = true;
         }
 
