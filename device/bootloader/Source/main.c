@@ -66,8 +66,6 @@ typedef struct {
     bool            ota_chunk_request;
     bool            ota_finalize_request;
     bool            lh2_calibration_ready;
-    bool            lh2_capture_request;
-    bool            lh2_capturing;
     bool            start_application;
     bool            system_reset_requested;
     position_2d_t   last_position;
@@ -262,14 +260,6 @@ static void _update_position(void) {
     _bootloader_vars.position_update = true;
 }
 
-/// Store @p value little-endian at @p dst and return the bytes written.
-static uint8_t _put_u32_le(volatile uint8_t *dst, uint32_t value) {
-    for (uint8_t shift = 0; shift < 32; shift += 8) {
-        *dst++ = (uint8_t)(value >> shift);
-    }
-    return sizeof(value);
-}
-
 static void _read_battery(void) {
     _bootloader_vars.battery_update = true;
 }
@@ -307,8 +297,7 @@ int main(void) {
                             1 << IPC_CHAN_OTA_FINALIZE |
                             1 << IPC_CHAN_APPLICATION_START |
                             1 << IPC_CHAN_SOC_RESET |
-                            1 << IPC_CHAN_CALIBRATION_DATA |
-                            1 << IPC_CHAN_LH2_CAPTURE
+                            1 << IPC_CHAN_CALIBRATION_DATA
                         );
     NRF_IPC_S->SEND_CNF[IPC_CHAN_REQ]                   = 1 << IPC_CHAN_REQ;
     NRF_IPC_S->SEND_CNF[IPC_CHAN_LOG_EVENT]             = 1 << IPC_CHAN_LOG_EVENT;
@@ -320,7 +309,6 @@ int main(void) {
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_CHUNK]          = 1 << IPC_CHAN_OTA_CHUNK;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_OTA_FINALIZE]       = 1 << IPC_CHAN_OTA_FINALIZE;
     NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_CALIBRATION_DATA]   = 1 << IPC_CHAN_CALIBRATION_DATA;
-    NRF_IPC_S->RECEIVE_CNF[IPC_CHAN_LH2_CAPTURE]        = 1 << IPC_CHAN_LH2_CAPTURE;
     NVIC_EnableIRQ(IPC_IRQn);
     NVIC_ClearPendingIRQ(IPC_IRQn);
     NVIC_SetPriority(IPC_IRQn, IPC_IRQ_PRIORITY);
@@ -459,13 +447,6 @@ int main(void) {
             _load_calibration();
         }
 
-        // DEPRECATED: the calibrate app's button capture replaces this READY-mode capture request.
-        if (_bootloader_vars.lh2_capture_request) {
-            _bootloader_vars.lh2_capture_request = false;
-            localization_start();  // idempotent: starts LH2 even when no calibration is loaded
-            _bootloader_vars.lh2_capturing = true;
-        }
-
         if (_bootloader_vars.ota_start_request) {
             _bootloader_vars.ota_start_request = false;
             device_info_set_image_state(SWRMT_IMAGE_STATE_DOWNLOADING);
@@ -598,30 +579,6 @@ int main(void) {
         // Process available lighthouse data
         bool data_available = localization_process_data();
 
-        // DEPRECATED with the capture request above. Raw LH2 capture for OTA
-        // calibration: drain the freshest counts and ship them to the host
-        // inside a LOG_EVENT. Cap samples so 1 tag + the wire record per
-        // sample fits in ipc_shared_data.log.data (INT8_MAX bytes).
-        if (_bootloader_vars.lh2_capturing && data_available) {
-            const uint8_t  max_samples = (INT8_MAX - 1) / LH2_RAW_SAMPLE_WIRE_SIZE;
-            lh2_raw_sample_t samples[LH2_BASESTATION_COUNT_MAX] = { 0 };
-            uint8_t count = localization_get_raw_counts(samples, max_samples < LH2_BASESTATION_COUNT_MAX ? max_samples : LH2_BASESTATION_COUNT_MAX);
-            if (count > 0) {
-                mutex_lock();
-                uint8_t length = 0;
-                ipc_shared_data.log.data[length++] = SWRMT_LH2_CALIB_TAG;
-                for (uint8_t i = 0; i < count; i++) {
-                    ipc_shared_data.log.data[length++] = samples[i].lh_index;
-                    length += _put_u32_le(&ipc_shared_data.log.data[length], samples[i].count1);
-                    length += _put_u32_le(&ipc_shared_data.log.data[length], samples[i].count2);
-                }
-                ipc_shared_data.log.length = length;
-                mutex_unlock();
-                NRF_IPC_S->TASKS_SEND[IPC_CHAN_LOG_EVENT] = 1;
-                _bootloader_vars.lh2_capturing = false;
-            }
-        }
-
         if (_bootloader_vars.position_update && data_available) {
             position_2d_t position = { 0 };
             bool valid_position = localization_get_position(&position);
@@ -669,10 +626,5 @@ void IPC_IRQHandler(void) {
     if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_CALIBRATION_DATA]) {
         NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_CALIBRATION_DATA] = 0;
         _bootloader_vars.lh2_calibration_ready = true;
-    }
-
-    if (NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_LH2_CAPTURE]) {
-        NRF_IPC_S->EVENTS_RECEIVE[IPC_CHAN_LH2_CAPTURE] = 0;
-        _bootloader_vars.lh2_capture_request = true;
     }
 }

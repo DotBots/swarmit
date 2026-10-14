@@ -99,8 +99,7 @@ typedef enum {
     // for the moment, the LH2 messages follow SWRMT_MESSAGE.
     SWRMT_MESSAGE = 0xA0, // custom message type
     // 0xA1 is reserved and must never be accepted: it carries homographies for
-    // another camera model.
-    SWRMT_MSG_LH2_CAPTURE = 0xA2, // host -> node: capture one raw LH2 sample (READY mode only). DEPRECATED: the calibrate app replaces it.
+    // another camera model. 0xA2 is reserved likewise: old hosts send it.
     SWRMT_MSG_LH2_CALIBRATION = 0xA3,
 } swrmt_message_type_t;
 

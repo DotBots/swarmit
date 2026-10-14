@@ -126,7 +126,7 @@ static void _handle_packet(uint64_t dst_address, uint8_t *packet, uint8_t length
         return;
     }
 
-    if (((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) || (packet_type == SWRMT_MSG_LH2_CALIBRATION) || (packet_type == SWRMT_MSG_LH2_CAPTURE) ||
+    if (((packet_type >= SWRMT_MSG_STATUS) && (packet_type <= SWRMT_MSG_OTA_CHUNK)) || (packet_type == SWRMT_MSG_LH2_CALIBRATION) ||
         (packet_type == SWRMT_MSG_OTA_BLOCK_REPORT_REQ) || (packet_type == SWRMT_MSG_OTA_FINALIZE) ||
         (packet_type == SWRMT_MSG_REQUEST_MESSAGE)) {
         memcpy(_app_vars.req_buffer, packet, length);
@@ -326,7 +326,6 @@ int main(void) {
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_CHUNK]         = 1 << IPC_CHAN_OTA_CHUNK;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_OTA_FINALIZE]      = 1 << IPC_CHAN_OTA_FINALIZE;
     NRF_IPC_NS->SEND_CNF[IPC_CHAN_CALIBRATION_DATA]  = 1 << IPC_CHAN_CALIBRATION_DATA;
-    NRF_IPC_NS->SEND_CNF[IPC_CHAN_LH2_CAPTURE]       = 1 << IPC_CHAN_LH2_CAPTURE;
     NRF_IPC_NS->RECEIVE_CNF[IPC_CHAN_REQ]            = 1 << IPC_CHAN_REQ;
     NRF_IPC_NS->RECEIVE_CNF[IPC_CHAN_LOG_EVENT]      = 1 << IPC_CHAN_LOG_EVENT;
 
@@ -615,16 +614,6 @@ int main(void) {
                         _commit_config_and_reboot();
                     }
                 } break;
-                case SWRMT_MSG_LH2_CAPTURE:
-                    // DEPRECATED: the calibrate app's button capture replaces this READY-mode capture request.
-                    // Raw LH2 capture only makes sense while the secure bootloader owns
-                    // the main loop (READY). In RUNNING the secure side has jumped to the
-                    // non-secure image and never services this channel.
-                    if (ipc_shared_data.status != SWRMT_APPLICATION_READY) {
-                        break;
-                    }
-                    NRF_IPC_NS->TASKS_SEND[IPC_CHAN_LH2_CAPTURE] = 1;
-                    break;
                 default:
                     break;
             }
