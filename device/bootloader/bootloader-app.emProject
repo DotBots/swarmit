@@ -23,7 +23,6 @@
       <file file_name="Source/device_info.h" />
       <file file_name="Source/ipc.c" />
       <file file_name="Source/ipc.h" />
-      <file file_name="Source/lh2_calibration.h" />
       <file file_name="Source/lh2_select.c" />
       <file file_name="Source/lh2_select.h" />
       <file file_name="Source/localization.c" />
