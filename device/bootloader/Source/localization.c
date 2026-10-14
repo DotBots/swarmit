@@ -6,7 +6,6 @@
 #include "board_config.h"
 #include "lh2.h"
 #include "localization.h"
-#include "lh2_calibration.h"
 #include "lh2_select.h"
 
 _Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_BASESTATION_COUNT, "localization.h and lh2.h must agree on the basestation ceiling");
