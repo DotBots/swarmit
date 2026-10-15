@@ -1,3 +1,5 @@
+#include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -22,6 +24,10 @@ static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 
 static bool _calibration_loaded = false;
 static uint32_t _valid_mm[LH2_VALID_MM_LEN] = { 0, 0, LH2_VALID_MM_MAX_DEFAULT, LH2_VALID_MM_MAX_DEFAULT };
 static bool _lh2_started = false;
+
+static int32_t _clamp_mm(double v) {
+    return (v > INT32_MAX) ? INT32_MAX : ((v < INT32_MIN) ? INT32_MIN : (int32_t)v);
+}
 
 void localization_start(void) {
     if (_lh2_started) {
@@ -72,6 +78,12 @@ bool localization_get_position(position_2d_t *position) {
         db_lh2_stop();
         for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT; lh_index++) {
             if (_localization_data.lh2.data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE) {
+                if (!_localization_data.lh2.lh2_calibration_complete[lh_index]) {
+                    // No homography for this station: its solve would be 0/0
+                    _localization_data.lh2.data_ready[0][lh_index] = DB_LH2_NO_NEW_DATA;
+                    _localization_data.lh2.data_ready[1][lh_index] = DB_LH2_NO_NEW_DATA;
+                    continue;
+                }
                 db_lh2_calculate_position(_localization_data.lh2.locations[0][lh_index].lfsr_counts, _localization_data.lh2.locations[1][lh_index].lfsr_counts, lh_index, _localization_data.coordinates);
                 _localization_data.lh2.data_ready[0][lh_index] = DB_LH2_NO_NEW_DATA;
                 _localization_data.lh2.data_ready[1][lh_index] = DB_LH2_NO_NEW_DATA;
@@ -90,9 +102,14 @@ bool localization_get_position(position_2d_t *position) {
 
         double x = _localization_data.coordinates[0];
         double y = _localization_data.coordinates[1];
-        // Written as a negated conjunction so a NaN coordinate is rejected
+        // Reject a non-finite solve before the (long) casts below, which are
+        // undefined for NaN and inf
+        if (!isfinite(x) || !isfinite(y)) {
+            printf("Invalid position (not finite)\n");
+            return false;
+        }
         if (!(x >= _valid_mm[0] && x <= _valid_mm[2] && y >= _valid_mm[1] && y <= _valid_mm[3])) {
-            printf("Invalid position (%f,%f)\n", _localization_data.coordinates[0], _localization_data.coordinates[1]);
+            printf("Invalid position (%ld,%ld)\n", (long)_clamp_mm(x), (long)_clamp_mm(y));
             return false;
         }
 
