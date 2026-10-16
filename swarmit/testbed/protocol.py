@@ -386,6 +386,7 @@ def boot_reason(reset_reason: int, fault: int) -> BootReason:
 # Bits of the lh2_flags field.
 LH2_FLAG_VALID = 1 << 0
 LH2_FLAG_FROM_FLASH = 1 << 1
+LH2_FLAG_SENSOR_FAILED = 1 << 2
 
 
 def decode_string_field(raw: bytes) -> str:

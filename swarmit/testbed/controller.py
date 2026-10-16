@@ -40,6 +40,7 @@ from swarmit.testbed.protocol import (
     BROADCAST_ADDRESS,
     DEVICE_INFO_VERSION,
     LH2_FLAG_FROM_FLASH,
+    LH2_FLAG_SENSOR_FAILED,
     LH2_FLAG_VALID,
     OTA_PROTOCOL_VERSION_BLOCK,
     OTA_PROTOCOL_VERSION_LEGACY,
@@ -239,12 +240,19 @@ class DeviceInfo:
         return [i for i in range(16) if self.lh2_station_mask >> i & 1]
 
     @property
+    def lh2_sensor_failed(self) -> bool:
+        """Whether the bot's LH2 receiver did not initialise this boot."""
+        return bool(self.lh2_flags & LH2_FLAG_SENSOR_FAILED)
+
+    @property
     def lh2_summary(self) -> str:
         if self.too_old:
             return FIRMWARE_TOO_OLD
         stations = self.lh2_stations
         if not stations:
             return "uncalibrated"
+        if self.lh2_sensor_failed:
+            return f"LH2 sensor failed, {len(stations)} station(s) loaded"
         # The station console names a station by its channel, the firmware by
         # its index, channel - 1: both, so either can be checked.
         many = "s" if len(stations) > 1 else ""
@@ -582,6 +590,8 @@ def format_position(status: NodeStatus) -> str:
     if status.pos_x == 0 and status.pos_y == 0:
         if status.info is not None and not status.info.lh2_station_mask:
             return "uncalibrated"
+        if status.info is not None and status.info.lh2_sensor_failed:
+            return "LH2 sensor failed"
         return "no fix"
     return f"{status.pos_x}, {status.pos_y}"
 
