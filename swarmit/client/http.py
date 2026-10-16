@@ -214,9 +214,6 @@ class HTTPSwarmitClient:
         }
         self._request("POST", "/lh2_calibration", body=body)
 
-    def request_lh2_capture(self, device_addr: str) -> None:
-        self._request("POST", "/lh2_capture", body={"device": device_addr})
-
     def refresh_device_info(self, devices: list[str] | None = None) -> None:
         """Ask the selected devices for their device-info block and wait.
 
