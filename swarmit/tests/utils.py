@@ -94,7 +94,7 @@ class SwarmitNode(threading.Thread):
         image_name: str = "",
         image_version: str = "",
         answers_device_info: bool = True,
-        lh2_homography_count: int = 0,
+        lh2_station_mask: int = 0,
         lh2_flags: int = 0,
         pos_x: int = 0,
         pos_y: int = 0,
@@ -123,7 +123,7 @@ class SwarmitNode(threading.Thread):
         # basestation count, and the flags say the calibration is usable and
         # where it came from. Defaults are the uncalibrated bot, which is also
         # a bot that can never produce a fix - hence the (0, 0) position.
-        self.lh2_homography_count = lh2_homography_count
+        self.lh2_station_mask = lh2_station_mask
         self.lh2_flags = lh2_flags
         self.pos_x = pos_x
         self.pos_y = pos_y
@@ -265,7 +265,7 @@ class SwarmitNode(threading.Thread):
             self.send_packet(
                 Packet().from_payload(
                     PayloadDeviceInfo(
-                        info_version=3,
+                        info_version=4,
                         info_gen=self.info_gen,
                         boot_count=self.boot_count,
                         uptime_s=42,
@@ -277,7 +277,7 @@ class SwarmitNode(threading.Thread):
                         ),
                         image_name=encode_string_field(self.image_name),
                         image_version=encode_string_field(self.image_version),
-                        lh2_homography_count=self.lh2_homography_count,
+                        lh2_station_mask=self.lh2_station_mask,
                         lh2_flags=self.lh2_flags,
                     )
                 )

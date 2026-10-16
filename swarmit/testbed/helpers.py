@@ -9,11 +9,9 @@ from swarmit.testbed.protocol import (
 
 # Bump in lockstep with the writer in PyDotBot's
 # dotbot/calibration/lighthouse2.py (CALIBRATION_SCHEMA_VERSION).
-CALIBRATION_SCHEMA_VERSION = 3
+CALIBRATION_SCHEMA_VERSION = 4
 
 LH2_BASESTATION_COUNT_MAX = 16
-# What PyDotBot's reader assumes for a file without [validity]; keep in step.
-VALID_MM_DEFAULT = (0, 0, 10000, 10000)
 SITE_DEFAULT = "default"
 
 
@@ -25,7 +23,7 @@ def load_toml_config(path):
 
 
 def read_calibration(path):
-    """Parse a schema 3 LH2 calibration file into its tables.
+    """Parse a schema 4 LH2 calibration file into its tables.
 
     Raises ValueError for bad TOML, an unknown schema version, or a file with
     no solved station, so the CLI can report it rather than passing garbage
@@ -70,28 +68,30 @@ def reference_points(data):
     return points
 
 
+def _rectangle(values, where):
+    """A `valid_mm` as uint32 `[x_min, y_min, x_max, y_max]`, refused otherwise."""
+    rect = [int(v) for v in values]
+    if (
+        len(rect) != 4
+        or any(v < 0 or v > 0xFFFFFFFF for v in rect)
+        or rect[0] >= rect[2]
+        or rect[1] >= rect[3]
+    ):
+        raise ValueError(
+            f"{where}: valid_mm must be [x_min, y_min, x_max, y_max] in "
+            f"uint32 mm, got {rect}"
+        )
+    return rect
+
+
 def site_fields(data, path=""):
-    """valid_mm, site name and calibration id, as `PayloadCalibrationData` fields.
+    """Site name and calibration id, as `PayloadCalibrationData` fields.
 
     PyDotBot's `site_fields_as_bytes` packs the same bytes; the fixture test
     in each repo pins them for the same file. metadata.id is packed as the
     file declares it, never checked against the content; PyDotBot refuses a
     file whose id is not its content's own.
     """
-    valid_mm = [
-        int(v)
-        for v in data.get("validity", {}).get("valid_mm", VALID_MM_DEFAULT)
-    ]
-    if (
-        len(valid_mm) != 4
-        or any(v < 0 or v > 0xFFFFFFFF for v in valid_mm)
-        or valid_mm[0] > valid_mm[2]
-        or valid_mm[1] > valid_mm[3]
-    ):
-        raise ValueError(
-            f"{path}: valid_mm must be [x_min, y_min, x_max, y_max] in "
-            f"uint32 mm, got {valid_mm}"
-        )
     name = data.get("site", {}).get("name", SITE_DEFAULT)
     try:
         raw_name = name.encode("ascii")
@@ -115,10 +115,6 @@ def site_fields(data, path=""):
             f"{2 * LH2_CALIBRATION_ID_LEN} hex characters"
         )
     return {
-        "valid_x_min": valid_mm[0],
-        "valid_y_min": valid_mm[1],
-        "valid_x_max": valid_mm[2],
-        "valid_y_max": valid_mm[3],
         "site_name": raw_name.ljust(LH2_SITE_NAME_LEN, b"\x00"),
         "calibration_id": raw_id,
     }
@@ -127,19 +123,20 @@ def site_fields(data, path=""):
 def read_lh2_calibration_payload(path):
     """The calibration messages for `path`, one 84-byte message per station.
 
-    Built at send time from `[[station]].homography` and the site fields.
-    The receiver trusts slots 0 to count - 1, so stations must be numbered
-    from zero without gaps.
+    Built at send time from each `[[station]]`'s homography and rectangle,
+    with the station mask and the site fields every message repeats.
     """
     data = read_calibration(path)
     stations = sorted(data["station"], key=lambda s: int(s["index"]))
-    indices = [int(s["index"]) for s in stations]
-    if indices != list(range(len(stations))):
-        got = ", ".join(str(i) for i in indices)
-        raise ValueError(
-            f"{path}: stations must be numbered from zero without gaps to be "
-            f"pushed, got {got}"
-        )
+    mask = 0
+    for station in stations:
+        index = int(station["index"])
+        if not 0 <= index < LH2_BASESTATION_COUNT_MAX or mask >> index & 1:
+            raise ValueError(
+                f"{path}: station index {index} is outside 0 to "
+                f"{LH2_BASESTATION_COUNT_MAX - 1} or appears twice"
+            )
+        mask |= 1 << index
     fields = site_fields(data, path)
     payload = bytearray()
     for station in stations:
@@ -148,10 +145,21 @@ def read_lh2_calibration_payload(path):
             raise ValueError(
                 f"{path}: station {station['index']} homography is not 3x3"
             )
+        if "valid_mm" not in station:
+            raise ValueError(
+                f"{path}: station {station['index']} has no valid_mm"
+            )
+        rect = _rectangle(
+            station["valid_mm"], f"{path}: station {station['index']}"
+        )
         payload += PayloadCalibrationData(
-            homography_count=len(stations),
-            homography_index=int(station["index"]),
+            station_mask=mask,
+            station_index=int(station["index"]),
             homography=struct.pack("<9f", *flat),
+            valid_x_min=rect[0],
+            valid_y_min=rect[1],
+            valid_x_max=rect[2],
+            valid_y_max=rect[3],
             **fields,
         ).to_bytes()
     return bytes(payload)

@@ -420,7 +420,7 @@ def test_serialise_node_carries_the_display_strings_the_cli_renders():
     node = NodeStatus(
         reset_reason=1 << 25,  # watchdog1 = a commanded stop
         info=DeviceInfo(
-            lh2_homography_count=2,
+            lh2_station_mask=0b11,
             lh2_flags=0b11,  # valid + from flash
             image_state=0,
             image_result=1,
@@ -430,7 +430,10 @@ def test_serialise_node_carries_the_display_strings_the_cli_renders():
 
     assert out["reset_cause"] == "stopped" == format_reset_cause(node)
     assert out["fault_name"] == "NoFault"
-    assert out["info"]["lh2_summary"] == "2 basestations (valid, from flash)"
+    assert (
+        out["info"]["lh2_summary"]
+        == "stations 0, 1 (channels 1, 2; valid, from flash)"
+    )
     assert out["info"]["image_state_name"] == "Idle"
     assert out["info"]["image_result_name"] == "Success"
     # The raw fields stay: the strings are additive, not a replacement.

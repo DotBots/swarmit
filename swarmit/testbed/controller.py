@@ -157,7 +157,7 @@ class DeviceInfo:
     image_digest: str = ""  # hex, first 8 bytes of the image SHA256
     image_name: str = ""
     image_version: str = ""
-    lh2_homography_count: int = 0
+    lh2_station_mask: int = 0  # bit i: the bot holds station i's homography
     lh2_flags: int = 0
     lh2_site_name: str = ""  # "" when the bot holds none
     lh2_calibration_id: str = ""  # 16 hex characters, "" when none
@@ -179,7 +179,7 @@ class DeviceInfo:
             image_digest=bytes(payload.image_digest).hex(),
             image_name=decode_string_field(payload.image_name),
             image_version=decode_string_field(payload.image_version),
-            lh2_homography_count=payload.lh2_homography_count,
+            lh2_station_mask=payload.lh2_station_mask,
             lh2_flags=payload.lh2_flags,
             lh2_site_name=decode_string_field(payload.lh2_site_name),
             lh2_calibration_id=(
@@ -234,24 +234,30 @@ class DeviceInfo:
             return f"result{self.image_result}"
 
     @property
+    def lh2_stations(self) -> list[int]:
+        """The stations the bot holds a homography for, by index."""
+        return [i for i in range(16) if self.lh2_station_mask >> i & 1]
+
+    @property
     def lh2_summary(self) -> str:
         if self.too_old:
             return FIRMWARE_TOO_OLD
-        if not self.lh2_homography_count:
+        stations = self.lh2_stations
+        if not stations:
             return "uncalibrated"
-        # One homography is stored per basestation index, so the count is the
-        # number of lighthouses - which is what an operator can check against
-        # the room, where "homographies" needs translating first.
-        noun = (
-            "basestation" if self.lh2_homography_count == 1 else "basestations"
-        )
+        # The station console names a station by its channel, the firmware by
+        # its index, channel - 1: both, so either can be checked.
+        many = "s" if len(stations) > 1 else ""
         flags = []
         if self.lh2_flags & LH2_FLAG_VALID:
             flags.append("valid")
         if self.lh2_flags & LH2_FLAG_FROM_FLASH:
             flags.append("from flash")
-        suffix = f" ({', '.join(flags)})" if flags else ""
-        return f"{self.lh2_homography_count} {noun}{suffix}"
+        suffix = f"; {', '.join(flags)}" if flags else ""
+        return (
+            f"station{many} {', '.join(map(str, stations))} "
+            f"(channel{many} {', '.join(str(i + 1) for i in stations)}{suffix})"
+        )
 
 
 @dataclass
@@ -558,9 +564,9 @@ def format_lh2_cell(info: DeviceInfo | None) -> str:
         return "-"
     if info.too_old:
         return "too old"
-    if not info.lh2_homography_count:
+    if not info.lh2_station_mask:
         return "none"
-    return str(info.lh2_homography_count)
+    return ",".join(map(str, info.lh2_stations))
 
 
 def format_position(status: NodeStatus) -> str:
@@ -574,7 +580,7 @@ def format_position(status: NodeStatus) -> str:
     placement.
     """
     if status.pos_x == 0 and status.pos_y == 0:
-        if status.info is not None and not status.info.lh2_homography_count:
+        if status.info is not None and not status.info.lh2_station_mask:
             return "uncalibrated"
         return "no fix"
     return f"{status.pos_x}, {status.pos_y}"
@@ -1571,30 +1577,32 @@ class Controller:
             PayloadCalibrationData().from_bytes(bytes(messages[i : i + size]))
             for i in range(0, len(messages), size)
         ]
-        homography_count = len(payloads)
-        if homography_count > LH2_BASESTATION_COUNT_MAX:
+        first = payloads[0]
+        mask = first.station_mask
+        if mask == 0 or mask >> LH2_BASESTATION_COUNT_MAX:
             raise ValueError(
-                "Invalid calibration payload: homography count exceeds LH2 "
-                f"limit ({LH2_BASESTATION_COUNT_MAX})"
+                f"Invalid calibration payload: station mask 0x{mask:08X} names "
+                f"no station, or one above {LH2_BASESTATION_COUNT_MAX - 1}"
             )
-        for index, payload in enumerate(payloads):
-            if payload.homography_count != homography_count:
+        if [p.station_index for p in payloads] != first.stations:
+            raise ValueError(
+                "Invalid calibration payload: messages must carry the stations "
+                f"of their mask 0x{mask:04X} once each, in index order"
+            )
+        for payload in payloads:
+            if (
+                payload.valid_x_min >= payload.valid_x_max
+                or payload.valid_y_min >= payload.valid_y_max
+            ):
                 raise ValueError(
-                    "Invalid calibration payload: message count field "
-                    f"{payload.homography_count} does not match the "
-                    f"{homography_count} messages sent"
+                    "Invalid calibration payload: station "
+                    f"{payload.station_index}'s rectangle is empty"
                 )
-            if payload.homography_index != index:
+            if payload.push_fields != first.push_fields:
                 raise ValueError(
-                    "Invalid calibration payload: messages must carry "
-                    "indices 0 to N-1 in order"
+                    "Invalid calibration payload: the station mask, site name "
+                    "or calibration id differ between messages"
                 )
-            if payload.site_fields != payloads[0].site_fields:
-                raise ValueError(
-                    "Invalid calibration payload: the site fields differ "
-                    "between messages"
-                )
-
         ready_devices = (
             [device.upper() for device in devices]
             if devices
@@ -1602,15 +1610,15 @@ class Controller:
         )
         if not ready_devices:
             print(
-                f"Sending {homography_count} calibration matrix/matrices to {BROADCAST_ADDRESS}..."
+                f"Sending the calibration of stations {first.stations} to {BROADCAST_ADDRESS}..."
             )
         else:
             print(
-                f"Sending {homography_count} calibration matrix/matrices to {len(ready_devices)} devices: {str(ready_devices)}..."
+                f"Sending the calibration of stations {first.stations} to {len(ready_devices)} devices: {str(ready_devices)}..."
             )
 
         for payload in payloads:
-            print(f"Sending calibration matrix {payload.homography_index}...")
+            print(f"Sending calibration of station {payload.station_index}...")
             if self.settings.verbose:
                 print(payload)
                 print(Packet.from_payload(payload).to_bytes())
