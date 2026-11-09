@@ -94,17 +94,19 @@ typedef struct {
     uint8_t  info_gen;                              ///< bumped on boot and on OTA finalize; the host refetches on any change
     uint8_t  image_state;                           ///< swrmt_image_state_t
     uint8_t  image_result;                          ///< swrmt_image_result_t
-    uint8_t  lh2_homography_count;                  ///< net core writes
+    uint8_t  reserved;                              ///< aligns lh2_station_mask
+    uint16_t lh2_station_mask;                      ///< net core writes
     uint8_t  lh2_flags;                             ///< net core writes
+    uint8_t  reserved_end;                          ///< keeps the size a multiple of 4
 } ipc_device_info_t;
 
 /// LH2 calibration data
 typedef struct __attribute__((packed)) {
-    uint32_t homography_count; // number of homography matrices used for localization
-    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; // homography matrices for localization, float32 in mm
-    uint32_t valid_mm[4]; // x_min, y_min, x_max, y_max in mm; all 0xFF when the calibration carries none
-    char     site_name[SWRMT_LH2_SITE_NAME_LEN]; // all zero when absent
-    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN]; // all zero when absent
+    uint32_t station_mask;                                          ///< bit i: slot i holds a calibration; 0 = uncalibrated
+    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3];         ///< by slot, camera point to frame mm, float32
+    uint32_t valid_mm[LH2_BASESTATION_COUNT_MAX][4];                ///< by slot: x_min, y_min, x_max, y_max mm; all 0xFF for the default
+    char     site_name[SWRMT_LH2_SITE_NAME_LEN];                    ///< all zero when absent
+    uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];          ///< all zero when absent
 } ipc_lh2_calibration_t;
 
 /// DotBot protocol LH2 computed location
@@ -168,8 +170,14 @@ _Static_assert(offsetof(ipc_shared_data_t, current_position) % 4 == 0,
                "current_position must be 4-byte aligned");
 _Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) % 4 == 0,
                "lh2_calibration must be 4-byte aligned");
-_Static_assert(sizeof(ipc_lh2_calibration_t) == 620,
+_Static_assert(sizeof(ipc_lh2_calibration_t) == 860,
                "ipc_lh2_calibration_t size must match the other core's copy");
+_Static_assert(offsetof(ipc_lh2_calibration_t, homographies) == 4, "ipc_lh2_calibration_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_lh2_calibration_t, valid_mm) == 580, "ipc_lh2_calibration_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_lh2_calibration_t, site_name) == 836, "ipc_lh2_calibration_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_lh2_calibration_t, calibration_id) == 852, "ipc_lh2_calibration_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_device_info_t, lh2_station_mask) % 2 == 0, "lh2_station_mask is read with halfword accesses");
+_Static_assert(sizeof(ipc_device_info_t) == 152, "ipc_device_info_t size must match the other core's copy");
 _Static_assert(sizeof(ipc_device_info_t) % 4 == 0,
                "ipc_device_info_t size must be a multiple of 4");
 _Static_assert(offsetof(ipc_shared_data_t, device_info) % 4 == 0,
@@ -197,11 +205,11 @@ _Static_assert(offsetof(ipc_shared_data_t, current_position) == 400, "ipc_shared
 _Static_assert(offsetof(ipc_shared_data_t, tx_pdu) == 408, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, rx_pdu) == 664, "ipc_shared_data_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) == 920, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, device_info) == 1540, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, crash_report) == 1692, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, reserved) == 1722, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_shared_data_t, network_info) == 1724, "ipc_shared_data_t layout must match the other core's copy");
-_Static_assert(sizeof(ipc_shared_data_t) == 1736, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, device_info) == 1780, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, crash_report) == 1932, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, reserved) == 1962, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_shared_data_t, network_info) == 1964, "ipc_shared_data_t layout must match the other core's copy");
+_Static_assert(sizeof(ipc_shared_data_t) == 1976, "ipc_shared_data_t layout must match the other core's copy");
 
 /**
  * @brief Lock the mutex, blocks until the mutex is locked

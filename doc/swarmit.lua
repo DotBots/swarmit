@@ -88,6 +88,8 @@ local IMAGE_RESULT = {
 
 local INFO_STRING_LEN = 32
 local IMAGE_DIGEST_LEN = 8
+local LH2_SITE_NAME_LEN = 16
+local LH2_CALIBRATION_ID_LEN = 8
 local OTA_CHUNK_SIZE = 128
 local SHA256_LEN = 32
 -- Body lengths of STATUS as it grew: fields were appended, so a short frame
@@ -145,10 +147,12 @@ f.image_result = ProtoField.uint8("swarmit.image_result", "Image result", base.D
 f.image_digest = ProtoField.bytes("swarmit.image_digest", "Image digest (first 8 of SHA256)")
 f.image_name = ProtoField.stringz("swarmit.image_name", "Image name")
 f.image_version = ProtoField.stringz("swarmit.image_version", "Image version")
-f.lh2_count = ProtoField.uint8("swarmit.lh2_homography_count", "LH2 homographies", base.DEC)
+f.lh2_station_mask = ProtoField.uint16("swarmit.lh2_station_mask", "LH2 station mask", base.HEX)
 f.lh2_flags = ProtoField.uint8("swarmit.lh2_flags", "LH2 flags", base.HEX)
 f.lh2_valid = ProtoField.bool("swarmit.lh2_valid", "Calibration valid", 8, nil, 0x01)
 f.lh2_from_flash = ProtoField.bool("swarmit.lh2_from_flash", "Loaded from flash", 8, nil, 0x02)
+f.lh2_site_name = ProtoField.stringz("swarmit.lh2_site_name", "LH2 site name")
+f.lh2_calibration_id = ProtoField.bytes("swarmit.lh2_calibration_id", "LH2 calibration id")
 
 -- Events
 f.timestamp = ProtoField.uint32("swarmit.timestamp", "Timestamp", base.DEC, nil, nil, "us")
@@ -160,10 +164,10 @@ f.gpio_pin = ProtoField.uint8("swarmit.gpio_pin", "GPIO pin", base.DEC)
 f.gpio_value = ProtoField.uint8("swarmit.gpio_value", "GPIO value", base.DEC)
 
 -- LH2 calibration
-f.homography_count = ProtoField.uint32("swarmit.homography_count", "Homography count", base.DEC)
-f.homography_index = ProtoField.uint32("swarmit.homography_index", "Homography index", base.DEC)
+f.station_mask = ProtoField.uint32("swarmit.station_mask", "Station mask", base.HEX)
+f.station_index = ProtoField.uint32("swarmit.station_index", "Station index", base.DEC)
 f.homography = ProtoField.bytes("swarmit.homography", "Homography matrix (3x3 float32)")
-f.valid_mm = ProtoField.bytes("swarmit.valid_mm", "Valid rectangle (4x uint32, mm)")
+f.valid_mm = ProtoField.bytes("swarmit.valid_mm", "Station rectangle (4x uint32, mm)")
 f.site_name = ProtoField.stringz("swarmit.site_name", "Site name")
 f.calibration_id = ProtoField.bytes("swarmit.calibration_id", "Calibration id")
 
@@ -256,13 +260,17 @@ local function dissect_device_info(buf, tree, len)
     o = add_string_field(tree, f.image_name, buf, o, INFO_STRING_LEN)
     if not room(INFO_STRING_LEN) then return o end
     o = add_string_field(tree, f.image_version, buf, o, INFO_STRING_LEN)
-    if not room(1) then return o end
-    tree:add_le(f.lh2_count, buf(o, 1)); o = o + 1
+    if not room(2) then return o end
+    tree:add_le(f.lh2_station_mask, buf(o, 2)); o = o + 2
     if not room(1) then return o end
     local flags = tree:add_le(f.lh2_flags, buf(o, 1))
     flags:add_le(f.lh2_valid, buf(o, 1))
     flags:add_le(f.lh2_from_flash, buf(o, 1))
     o = o + 1
+    if not room(LH2_SITE_NAME_LEN) then return o end
+    o = add_string_field(tree, f.lh2_site_name, buf, o, LH2_SITE_NAME_LEN)
+    if not room(LH2_CALIBRATION_ID_LEN) then return o end
+    tree:add(f.lh2_calibration_id, buf(o, LH2_CALIBRATION_ID_LEN)); o = o + LH2_CALIBRATION_ID_LEN
     return o
 end
 
@@ -392,7 +400,7 @@ local function dissect_message(buf, pinfo, root)
         consumed = 2
     elseif msg_type == 0x8F then
         consumed = dissect_device_info(body, tree, body_len)
-        if body_len < 154 then
+        if body_len < 179 then
             tree:append_text(" [truncated: older schema or a short frame]")
             tree:add_proto_expert_info(ef_short)
             return len
@@ -405,8 +413,8 @@ local function dissect_message(buf, pinfo, root)
         end
         consumed = 1 + math.min(count, body_len - 1)
     elseif msg_type == 0xA3 and body_len >= 84 then
-        tree:add_le(f.homography_count, body(0, 4))
-        tree:add_le(f.homography_index, body(4, 4))
+        tree:add_le(f.station_mask, body(0, 4))
+        tree:add_le(f.station_index, body(4, 4))
         tree:add(f.homography, body(8, 36))
         tree:add(f.valid_mm, body(44, 16))
         tree:add(f.site_name, body(60, 16))

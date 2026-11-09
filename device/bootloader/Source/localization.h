@@ -55,9 +55,10 @@ _Static_assert(offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is p
 #define LH2_RAW_SAMPLE_WIRE_SIZE (9U)
 _Static_assert(LH2_RAW_SAMPLE_WIRE_SIZE == sizeof(uint8_t) + 2 * sizeof(uint32_t), "wire record is lh_index, count1, count2");
 
-/// Load the homographies and the rectangle outside which a solve is dropped
-/// (x_min, y_min, x_max, y_max in mm; all 0xFF selects 0 to LH2_VALID_MM_MAX_DEFAULT).
-void localization_init(float homographies[][3][3], uint32_t homography_count, const uint32_t valid_mm[LH2_VALID_MM_LEN]);
+/// Load slot i of homographies and valid_mm for every bit i of station_mask.
+/// A rectangle is x_min, y_min, x_max, y_max in mm; all 0xFF reads as 0 to
+/// LH2_VALID_MM_MAX_DEFAULT.
+void localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]);
 
 /// Start the LH2 driver without loading any calibration (idempotent). Used for raw capture in READY mode.
 void localization_start(void);

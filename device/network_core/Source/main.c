@@ -9,11 +9,13 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <nrf.h>
 // Include BSP headers
 #include "ipc.h"
+#include "lh2_session.h"
 #include "nvmc.h"
 #include "protocol.h"
 #include "rng.h"
@@ -39,7 +41,7 @@ _Static_assert(sizeof(SWRMT_FW_VERSION) <= SWRMT_INFO_STRING_LEN,
 
 #define SWARMIT_NET_CONFIG_START_ADDRESS    (0x0103f800) // start of the last page (2KB) of the flash (0x01000000 + 0x00040000 - 0x800)
 #define SWARMIT_NET_CONFIG_PAGE             (127)       // page index for config (last page)
-#define SWARMIT_CONFIG_MAGIC_VALUE          (0x5753524F) // "SWRO" - float32 pinhole-model homographies; mari's gateway page keeps 0x5753524D
+#define SWARMIT_CONFIG_MAGIC_VALUE          (0x57535250) // "SWRP" - station mask, homographies and rectangles by slot; mari's gateway page keeps 0x5753524D
 // Important: select a Network ID according to the specific deployment you are making,
 // see the registry at https://crystalfree.atlassian.net/wiki/spaces/Mari/pages/3324903426/Registry+of+Mari+Network+IDs
 #define SWARMIT_DEFAULT_NET_ID              (0xA000)
@@ -51,15 +53,21 @@ typedef struct __attribute__((packed)) {
     uint32_t magic;                                         ///< must equal SWARMIT_CONFIG_MAGIC_VALUE if the page is valid
     uint32_t has_net_id;                                    ///< 1 if net_id is provisioned; otherwise fall back to SWARMIT_DEFAULT_NET_ID
     uint32_t net_id;                                        ///< Mari network ID, meaningful only when has_net_id == 1
-    uint32_t homography_count;                              ///< number of LH2 homography matrices (0 if no calibration baked in)
-    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< homography matrices for localization, float32 in mm
-    uint32_t valid_mm[4];                                   ///< x_min, y_min, x_max, y_max in mm; all 0xFF when absent
+    uint32_t station_mask;                                  ///< bit i: slot i holds a calibration; 0 = uncalibrated
+    float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< by slot, camera point to frame mm, float32; slots outside the mask ignored
+    uint32_t valid_mm[LH2_BASESTATION_COUNT_MAX][4];        ///< by slot: x_min, y_min, x_max, y_max mm; all 0xFF for the default
     char     site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< all 0xFF when absent
     uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< all 0xFF when absent
 } swarmit_config_t;
 
-_Static_assert(sizeof(swarmit_config_t) == 632,
+_Static_assert(sizeof(swarmit_config_t) == 872,
                "swarmit_config_t is the layout the host writes to the config page");
+_Static_assert(offsetof(swarmit_config_t, station_mask) == 12, "swarmit_config_t is the layout the host writes to the config page");
+_Static_assert(offsetof(swarmit_config_t, homographies) == 16, "swarmit_config_t is the layout the host writes to the config page");
+_Static_assert(offsetof(swarmit_config_t, valid_mm) == 592, "swarmit_config_t is the layout the host writes to the config page");
+_Static_assert(offsetof(swarmit_config_t, site_name) == 848, "swarmit_config_t is the layout the host writes to the config page");
+_Static_assert(offsetof(swarmit_config_t, calibration_id) == 864, "swarmit_config_t is the layout the host writes to the config page");
+_Static_assert(LH2_BASESTATION_COUNT_MAX == SWRMT_LH2_STATIONS, "one config slot per station index");
 
 typedef struct {
     // The flags below are set from ISR context and consumed by the main loop.
@@ -83,8 +91,9 @@ typedef struct {
     uint32_t    metrics_rx_counter;
     uint32_t    metrics_tx_counter;
     volatile bool metrics_received;
-    swarmit_config_t config;
+    swarmit_config_t config __attribute__((aligned(4)));  ///< aligned: its slot arrays are passed as float and uint32_t pointers
     volatile bool lh2_calibration_ready;
+    lh2_session_t lh2_session;  ///< the calibration push being received
 } swrmt_app_data_t;
 
 static swrmt_app_data_t _app_vars = { 0 };
@@ -188,7 +197,7 @@ static bool _is_erased(const void *field, size_t length) {
 
 static void _load_config(void) {
     // load config into RAM. On virgin flash every field reads back as 0xFFFFFFFFu.
-    // magic gates the whole page; has_net_id and homography_count gate their
+    // magic gates the whole page; has_net_id and station_mask gate their
     // respective fields independently, so an OTA-calibrated-but-never-provisioned
     // device sees a valid page with only calibration populated (has_net_id stays
     // 0xFFFFFFFFu via the round-trip, so we still fall back to the default net_id).
@@ -202,18 +211,31 @@ static void _load_config(void) {
         _app_vars.mari_net_id = SWARMIT_DEFAULT_NET_ID;
     }
 
-    // set lighthouse calibration data (only trust the matrix bytes if magic gates the whole page)
+    // set lighthouse calibration data (only trust the matrix bytes if magic gates the whole page);
+    // an erased mask reads 0xFFFFFFFF and fails the high-bits test
+    uint32_t mask = _app_vars.config.station_mask;
     bool calibrated = cfg_flash->magic == SWARMIT_CONFIG_MAGIC_VALUE
-        && _app_vars.config.homography_count > 0
-        && _app_vars.config.homography_count <= LH2_BASESTATION_COUNT_MAX;
+        && mask != 0
+        && (mask >> LH2_BASESTATION_COUNT_MAX) == 0;
+    if (!calibrated) {
+        mask = 0;
+    }
 
     // Shared memory survives resets, so every calibration field is written
-    // either way: an erased value is reported as absent (zero), the rectangle
-    // keeps its erased 0xFF so the app core falls back to its default.
+    // either way: an erased value is reported as absent (zero), a rectangle
+    // outside the mask keeps an erased 0xFF so the app core falls back to its default.
     bool site_name_erased = _is_erased(_app_vars.config.site_name, sizeof(_app_vars.config.site_name));
     bool calibration_id_erased = _is_erased(_app_vars.config.calibration_id, sizeof(_app_vars.config.calibration_id));
-    for (size_t i = 0; i < 4; i++) {
-        ipc_shared_data.lh2_calibration.valid_mm[i] = calibrated ? _app_vars.config.valid_mm[i] : UINT32_MAX;
+    for (uint32_t slot = 0; slot < LH2_BASESTATION_COUNT_MAX; slot++) {
+        bool held = (mask >> slot) & 1U;
+        for (uint32_t row = 0; row < 3; row++) {
+            for (uint32_t col = 0; col < 3; col++) {
+                ipc_shared_data.lh2_calibration.homographies[slot][row][col] = held ? _app_vars.config.homographies[slot][row][col] : 0.0f;
+            }
+        }
+        for (size_t i = 0; i < 4; i++) {
+            ipc_shared_data.lh2_calibration.valid_mm[slot][i] = held ? _app_vars.config.valid_mm[slot][i] : UINT32_MAX;
+        }
     }
     for (size_t i = 0; i < SWRMT_LH2_SITE_NAME_LEN; i++) {
         ipc_shared_data.lh2_calibration.site_name[i] = (calibrated && !site_name_erased) ? _app_vars.config.site_name[i] : '\0';
@@ -221,23 +243,13 @@ static void _load_config(void) {
     for (size_t i = 0; i < SWRMT_LH2_CALIBRATION_ID_LEN; i++) {
         ipc_shared_data.lh2_calibration.calibration_id[i] = (calibrated && !calibration_id_erased) ? _app_vars.config.calibration_id[i] : 0;
     }
-    ipc_shared_data.lh2_calibration.homography_count = 0;
+    ipc_shared_data.lh2_calibration.station_mask = mask;
     // Reported as part of the device inventory. Position alone cannot answer
     // this: (0, 0) reads the same for "uncalibrated" and "at the origin".
-    ipc_shared_data.device_info.lh2_homography_count = calibrated ? (uint8_t)_app_vars.config.homography_count : 0;
+    ipc_shared_data.device_info.lh2_station_mask = (uint16_t)mask;
     ipc_shared_data.device_info.lh2_flags = calibrated ? (SWRMT_LH2_FLAG_VALID | SWRMT_LH2_FLAG_FROM_FLASH) : 0;
 
     if (calibrated) {
-        // copy homography matrices to shared memory without casting away volatile
-        for (uint32_t idx = 0; idx < _app_vars.config.homography_count; idx++) {
-            for (uint32_t row = 0; row < 3; row++) {
-                for (uint32_t col = 0; col < 3; col++) {
-                    ipc_shared_data.lh2_calibration.homographies[idx][row][col] =
-                        _app_vars.config.homographies[idx][row][col];
-                }
-            }
-        }
-        ipc_shared_data.lh2_calibration.homography_count = _app_vars.config.homography_count;
         _app_vars.lh2_calibration_ready = true;
     }
 }
@@ -567,7 +579,7 @@ int main(void) {
                     _copy_from_shared(info.net_version, ipc_shared_data.device_info.net_version, SWRMT_INFO_STRING_LEN);
                     _copy_from_shared(info.image_name, ipc_shared_data.device_info.image_name, SWRMT_INFO_STRING_LEN);
                     _copy_from_shared(info.image_version, ipc_shared_data.device_info.image_version, SWRMT_INFO_STRING_LEN);
-                    info.lh2_homography_count = ipc_shared_data.device_info.lh2_homography_count;
+                    info.lh2_station_mask = ipc_shared_data.device_info.lh2_station_mask;
                     info.lh2_flags = ipc_shared_data.device_info.lh2_flags;
                     for (size_t i = 0; i < SWRMT_LH2_SITE_NAME_LEN; i++) {
                         info.lh2_site_name[i] = ipc_shared_data.lh2_calibration.site_name[i];
@@ -593,43 +605,11 @@ int main(void) {
                         break;
                     }
                     const swrmt_lh2_calibration_data_t *pkt = (const swrmt_lh2_calibration_data_t *)req->data;
-                    if (pkt->homography_index >= LH2_BASESTATION_COUNT_MAX) {
-                        // printf("Invalid calibration index %u\n", pkt->homography_index);
-                        break;
-                    }
-                    if (pkt->homography_count == 0 || pkt->homography_count > LH2_BASESTATION_COUNT_MAX) {
-                        // printf("Invalid calibration count %u\n", pkt->homography_count);
-                        break;
-                    }
-                    if (pkt->homography_index >= pkt->homography_count) {
-                        // printf("Invalid calibration tuple (idx=%u, count=%u)\n",
-                        //        pkt->homography_index,
-                        //        pkt->homography_count);
-                        break;
-                    }
-
-                    /* Keep receiving matrices in RAM and commit once on the last index.
-                       On the first packet of a new calibration session, zero the
-                       array so any unrecovered slot from the previous session
-                       does not silently survive into the flash commit. */
-                    if (pkt->homography_index == 0) {
-                        memset(_app_vars.config.homographies, 0, sizeof(_app_vars.config.homographies));
-                    }
-                    _app_vars.config.homography_count = pkt->homography_count;
-                    memcpy(_app_vars.config.homographies[pkt->homography_index], pkt->homography, sizeof(_app_vars.config.homographies[0]));
-
-                    // printf(
-                    //     "Calibration matrix received (count: %u, index: %u)\n",
-                    //     pkt->homography_count,
-                    //     pkt->homography_index
-                    // );
-
-                    // mr_gpio_set(&_debug1);
-
-                    /* User-defined protocol: last matrix index triggers flash commit + reboot.
-                       The site fields are identical in every message of a push. */
-                    if (pkt->homography_index == (pkt->homography_count - 1)) {
-                        memcpy(_app_vars.config.valid_mm, pkt->valid_mm, sizeof(_app_vars.config.valid_mm));
+                    // Slots fill in RAM; the page is written once, when every
+                    // station of the push's mask has arrived.
+                    lh2_session_result_t result = lh2_session_receive(&_app_vars.lh2_session, pkt, _app_vars.config.homographies, _app_vars.config.valid_mm);
+                    if (result == LH2_SESSION_COMPLETE) {
+                        _app_vars.config.station_mask = pkt->station_mask;
                         memcpy(_app_vars.config.site_name, pkt->site_name, sizeof(_app_vars.config.site_name));
                         memcpy(_app_vars.config.calibration_id, pkt->calibration_id, sizeof(_app_vars.config.calibration_id));
                         _commit_config_and_reboot();

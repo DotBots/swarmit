@@ -230,7 +230,7 @@ host; see "The generation counter" below for when to read it again.
 
 | Offset | Field | Size | Notes |
 |---|---|---|---|
-| 0 | `info_version` | 1 | schema version of this message; currently 1 |
+| 0 | `info_version` | 1 | schema version of this message; currently 4 |
 | 1 | `info_gen` | 1 | echoes the counter in `0x80` |
 | 2 | `boot_count` | 4 | reboots since the record was created |
 | 6 | `uptime_s` | 4 | seconds since this boot |
@@ -242,10 +242,12 @@ host; see "The generation counter" below for when to read it again.
 | 80 | `image_digest` | 8 | first 8 bytes of the image SHA256 |
 | 88 | `image_name` | 32 | display-only, NUL-padded |
 | 120 | `image_version` | 32 | display-only, NUL-padded |
-| 152 | `lh2_homography_count` | 1 | 0 means uncalibrated |
-| 153 | `lh2_flags` | 1 | bit 0 calibration valid, bit 1 loaded from flash |
+| 152 | `lh2_station_mask` | 2 | bit i: the device holds station i's calibration; 0 means uncalibrated |
+| 154 | `lh2_flags` | 1 | bit 0 calibration valid (set exactly when the mask is non-zero), bit 1 loaded from flash |
+| 155 | `lh2_site_name` | 16 | site of the loaded calibration, NUL-padded; all zero when none |
+| 171 | `lh2_calibration_id` | 8 | leading bytes of the loaded calibration file's id; all zero when none |
 
-Total 154 bytes, leaving 80 spare in a 234-byte payload.
+Total 179 bytes, leaving 55 spare in a 234-byte payload.
 
 **`image_digest` is the identity. `image_name` and `image_version` are
 decoration.** A client compares digests; it must never make a decision on the
@@ -317,16 +319,20 @@ Deliberately **not** carried, so nobody adds them by reflex:
 
 | Offset | Field | Size | Notes |
 |---|---|---|---|
-| 0 | `homography_count` | 4 | total matrices in this session |
-| 4 | `homography_index` | 4 | 0-based |
+| 0 | `station_mask` | 4 | bit i: station i is in this calibration; bits 16 to 31 zero, 0 invalid |
+| 4 | `station_index` | 4 | the station this message carries, 0 to 15; its bit is set in the mask |
 | 8 | `homography` | 36 | 3x3 of little-endian `float32`, row-major, mapping the pinhole camera point to mm |
-| 44 | `valid_mm` | 16 | `x_min, y_min, x_max, y_max` of plausible positions, `uint32` mm |
-| 60 | `site_name` | 16 | NUL-padded |
-| 76 | `calibration_id` | 8 | leading bytes of the calibration file's id |
+| 44 | `valid_mm` | 16 | this station's rectangle, `x_min, y_min, x_max, y_max`, `uint32` mm |
+| 60 | `site_name` | 16 | NUL-padded; identical in every message of a push |
+| 76 | `calibration_id` | 8 | leading bytes of the calibration file's id; identical in every message of a push |
 
-The device accumulates matrices in RAM and commits to flash when
-`homography_index == homography_count - 1`, then resets the SoC so both cores
-come up with the new calibration.
+A push is one message per station of the mask, in any order. The network
+core keys the push by `station_mask` and `calibration_id`: a message carrying
+another mask or id starts the push over and drops what the previous one held.
+Messages fill their slots in RAM, a repeat overwrites its own slot, and once
+every station of the mask has arrived the core writes the config page and
+resets the SoC so both cores come up with the new calibration. A reset before
+then discards the half-received push and keeps the page that was there.
 
 ## The generation counter
 
