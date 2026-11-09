@@ -41,7 +41,7 @@ local MSG = {
     [0x8E] = "REQUEST_MESSAGE",
     [0x8F] = "DEVICE_INFO_RESP",
     [0xA0] = "MESSAGE",
-    [0xA2] = "LH2_CAPTURE",
+    [0xA2] = "LH2_CAPTURE (retired)",
     [0xA3] = "LH2_CALIBRATION",
 }
 
@@ -151,6 +151,7 @@ f.lh2_station_mask = ProtoField.uint16("swarmit.lh2_station_mask", "LH2 station 
 f.lh2_flags = ProtoField.uint8("swarmit.lh2_flags", "LH2 flags", base.HEX)
 f.lh2_valid = ProtoField.bool("swarmit.lh2_valid", "Calibration valid", 8, nil, 0x01)
 f.lh2_from_flash = ProtoField.bool("swarmit.lh2_from_flash", "Loaded from flash", 8, nil, 0x02)
+f.lh2_sensor_failed = ProtoField.bool("swarmit.lh2_sensor_failed", "LH2 sensor failed", 8, nil, 0x04)
 f.lh2_site_name = ProtoField.stringz("swarmit.lh2_site_name", "LH2 site name")
 f.lh2_calibration_id = ProtoField.bytes("swarmit.lh2_calibration_id", "LH2 calibration id")
 
@@ -170,12 +171,6 @@ f.homography = ProtoField.bytes("swarmit.homography", "Homography matrix (3x3 fl
 f.valid_mm = ProtoField.bytes("swarmit.valid_mm", "Station rectangle (4x uint32, mm)")
 f.site_name = ProtoField.stringz("swarmit.site_name", "Site name")
 f.calibration_id = ProtoField.bytes("swarmit.calibration_id", "Calibration id")
-
--- LH2 raw-capture samples ride inside EVENT_LOG behind this tag byte.
-local LH2_CALIB_TAG = 0xCA
-f.lh2_sample_index = ProtoField.uint8("swarmit.lh2_sample_index", "Basestation index", base.DEC)
-f.lh2_count1 = ProtoField.uint32("swarmit.lh2_count1", "Count 1", base.DEC)
-f.lh2_count2 = ProtoField.uint32("swarmit.lh2_count2", "Count 2", base.DEC)
 
 local ef_short = ProtoExpert.new("swarmit.short", "Body shorter than this message defines",
                                  expert.group.MALFORMED, expert.severity.NOTE)
@@ -266,6 +261,7 @@ local function dissect_device_info(buf, tree, len)
     local flags = tree:add_le(f.lh2_flags, buf(o, 1))
     flags:add_le(f.lh2_valid, buf(o, 1))
     flags:add_le(f.lh2_from_flash, buf(o, 1))
+    flags:add_le(f.lh2_sensor_failed, buf(o, 1))
     o = o + 1
     if not room(LH2_SITE_NAME_LEN) then return o end
     o = add_string_field(tree, f.lh2_site_name, buf, o, LH2_SITE_NAME_LEN)
@@ -274,7 +270,7 @@ local function dissect_device_info(buf, tree, len)
     return o
 end
 
---- EVENT_LOG carries either text or, behind a tag byte, raw LH2 samples.
+--- EVENT_LOG carries a text log line.
 local function dissect_event_log(buf, tree, len)
     local o = 0
     tree:add_le(f.timestamp, buf(o, 4)); o = o + 4
@@ -284,20 +280,7 @@ local function dissect_event_log(buf, tree, len)
         return o
     end
 
-    local body = buf(o, count)
-    if body(0, 1):uint() == LH2_CALIB_TAG then
-        local samples = tree:add(swarmit, body, "LH2 raw capture")
-        local so = 1
-        while so + 9 <= count do
-            local s = samples:add(swarmit, body(so, 9), "Sample")
-            s:add_le(f.lh2_sample_index, body(so, 1))
-            s:add_le(f.lh2_count1, body(so + 1, 4))
-            s:add_le(f.lh2_count2, body(so + 5, 4))
-            so = so + 9
-        end
-    else
-        tree:add(f.text, body)
-    end
+    tree:add(f.text, buf(o, count))
     return o + count
 end
 
@@ -421,7 +404,7 @@ local function dissect_message(buf, pinfo, root)
         tree:add(f.calibration_id, body(76, 8))
         consumed = 84
     else
-        -- START / STOP / LH2_CAPTURE have no body, and a retired or truncated
+        -- START / STOP have no body, and a retired or truncated
         -- message falls through here.
         consumed = 0
     end

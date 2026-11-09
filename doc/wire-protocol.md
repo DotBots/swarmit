@@ -47,7 +47,7 @@ corrupt frame - see "Compatibility" below.
 ## Message types
 
 `0x80`-`0x8F` is the core range; `0xA0`-`0xA3` were appended later for
-custom messages and LH2 calibration (`0xA1` is reserved and never accepted). Direction is `H->D` for host to device
+custom messages and LH2 calibration (`0xA1` and `0xA2` are reserved and never accepted). Direction is `H->D` for host to device
 and `D->H` for device to host.
 
 | ID | Name | Dir | Body | Purpose |
@@ -61,15 +61,15 @@ and `D->H` for device to host.
 | `0x86` | `OTA_START_ACK` | D->H | 1 B | erase done, protocol version |
 | `0x87` | `OTA_CHUNK_ACK` | - | - | **retired**, ID reserved |
 | `0x88` | `EVENT_GPIO` | D->H | 7 B | a GPIO transition, timestamped |
-| `0x89` | `EVENT_LOG` | D->H | 5..132 B | a log line or an LH2 sample |
+| `0x89` | `EVENT_LOG` | D->H | 5..132 B | a log line |
 | `0x8A` | `OTA_BLOCK_REPORT_REQ` | H->D | 5 B | which chunks of a block landed? |
 | `0x8B` | `OTA_BLOCK_REPORT_RESP` | D->H | 9 B | the received-chunk bitmap |
 | `0x8C` | `OTA_FINALIZE` | H->D | 32 B | verify the whole image |
 | `0x8D` | `OTA_FINALIZE_RESP` | D->H | 1 B | did the image hash match? |
 | `0x8E` | `REQUEST_MESSAGE` | H->D | 2 B | emit one message, once |
-| `0x8F` | `DEVICE_INFO_RESP` | D->H | 154 B | what this device is running |
+| `0x8F` | `DEVICE_INFO_RESP` | D->H | 179 B | what this device is running |
 | `0xA0` | `MESSAGE` | H->D | 1..N B | opaque text to the user image |
-| `0xA2` | `LH2_CAPTURE` | H->D | 0 B | capture one raw LH2 sample |
+| `0xA2` | `LH2_CAPTURE` | - | - | **retired**, ID reserved |
 | `0xA3` | `LH2_CALIBRATION` | H->D | 84 B | one station's homography |
 
 Mari's own metrics probes share the link but are **not** SwarmIT messages:
@@ -172,12 +172,7 @@ cannot be flashed over the air.
 |---|---|---|---|
 | 0 | `timestamp` | 4 | device high-frequency timer, microseconds |
 | 4 | `count` | 1 | bytes of `data` |
-| 5 | `data` | `count` | usually UTF-8 text |
-
-If `data[0]` is `0xCA` the payload is a raw LH2 capture rather than text, and
-the rest is a sequence of `[lh_index:1][count1:4][count2:4]` samples. That tag
-is what lets a host tell a calibration sample from a log line on one message
-type.
+| 5 | `data` | `count` | UTF-8 text |
 
 ### `0x8A` OTA_BLOCK_REPORT_REQ
 
@@ -243,7 +238,7 @@ host; see "The generation counter" below for when to read it again.
 | 88 | `image_name` | 32 | display-only, NUL-padded |
 | 120 | `image_version` | 32 | display-only, NUL-padded |
 | 152 | `lh2_station_mask` | 2 | bit i: the device holds station i's calibration; 0 means uncalibrated |
-| 154 | `lh2_flags` | 1 | bit 0 calibration valid (set exactly when the mask is non-zero), bit 1 loaded from flash |
+| 154 | `lh2_flags` | 1 | bit 0 calibration valid (set exactly when the mask is non-zero), bit 1 loaded from flash, bit 2 LH2 sensor failed to initialise this boot |
 | 155 | `lh2_site_name` | 16 | site of the loaded calibration, NUL-padded; all zero when none |
 | 171 | `lh2_calibration_id` | 8 | leading bytes of the loaded calibration file's id; all zero when none |
 
