@@ -6,16 +6,17 @@
 #include "board_config.h"
 #include "gpio.h"
 #include "lh2.h"
+#include "lh2_decoder.h"
 #include "localization.h"
 #include "lh2_select.h"
 #include "timer_hf.h"
 
-_Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_BASESTATION_COUNT, "localization.h and lh2.h must agree on the basestation ceiling");
+_Static_assert(LH2_BASESTATION_COUNT_MAX == DB_LH2_STATIONS, "localization.h and lh2_decoder.h must agree on the basestation ceiling");
 _Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_SELECT_STATIONS, "lh2_select covers every basestation");
 _Static_assert(LH2_VALID_MM_LEN == LH2_SELECT_RECT_LEN && LH2_VALID_MM_MAX_DEFAULT == LH2_SELECT_RECT_MAX_DEFAULT, "one rectangle layout");
 
 typedef struct {
-    db_lh2_t                lh2;
+    db_lh2_decoder_t        decoder;
     double                  coordinates[2];
     position_2d_t           position;
 } localization_data_t;
@@ -23,7 +24,7 @@ typedef struct {
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 static uint32_t _station_mask = 0;
 static uint32_t _valid_mm[LH2_BASESTATION_COUNT_MAX][LH2_VALID_MM_LEN] = { 0 };  ///< resolved, by slot
-static float    _homographies[LH2_BASESTATION_COUNT_MAX][3][3] = { 0 };          ///< by slot, for the floor lines
+static float    _homographies[LH2_BASESTATION_COUNT_MAX][3][3] = { 0 };          ///< by slot, for the solve and the floor lines
 static db_lh2_floor_line_t _lines[LH2_LINES_MAX];                                ///< ring of lines not yet drained
 static uint8_t             _lines_head  = 0;                                     ///< next slot written
 static uint8_t             _lines_count = 0;                                     ///< lines held
@@ -39,11 +40,11 @@ static int32_t _clamp_mm(double v) {
 #define LH2_POWER_ON_US   (10000U)
 
 #if defined(BOARD_DOTBOT_V3)
-/// The TS4231 supply switch. db_lh2_init drives the same pin high: keep the two in step.
+/// The TS4231 supply switch. db_lh2_capture_init drives the same pin high: keep the two in step.
 static const gpio_t _lh2_en = { .port = 0, .pin = 16 };
 #endif
 
-/// The timer db_lh2_init initialises and delays on (LH2_TIMER_DEV in lh2_default.c): keep in step.
+/// The timer db_lh2_capture_init initialises and delays on (LH2_TIMER_DEV in lh2_default.c): keep in step.
 #if defined(NRF5340_XXAA) && defined(NRF_APPLICATION)
 #define LH2_DRIVER_TIMER_DEV (2)
 #else
@@ -51,7 +52,7 @@ static const gpio_t _lh2_en = { .port = 0, .pin = 16 };
 #endif
 
 static bool _lh2_init(void) {
-    if (db_lh2_init(&_localization_data.lh2, &db_lh2_d, &db_lh2_e)) {
+    if (db_lh2_capture_init(&db_lh2_d, &db_lh2_e)) {
         return true;
     }
 #if defined(BOARD_DOTBOT_V3)
@@ -66,7 +67,7 @@ static bool _lh2_init(void) {
         db_timer_hf_delay_us(LH2_DRIVER_TIMER_DEV, LH2_POWER_OFF_US);
         db_gpio_set(&_lh2_en);
         db_timer_hf_delay_us(LH2_DRIVER_TIMER_DEV, LH2_POWER_ON_US);
-        if (db_lh2_init(&_localization_data.lh2, &db_lh2_d, &db_lh2_e)) {
+        if (db_lh2_capture_init(&db_lh2_d, &db_lh2_e)) {
             printf("LH2 sensor recovered after %u power cycle(s)\n", (unsigned)cycle);
             return true;
         }
@@ -80,9 +81,10 @@ bool localization_start(void) {
     if (_lh2_started) {
         return _lh2_sensor_ok;
     }
+    db_lh2_decoder_init(&_localization_data.decoder);
     _lh2_sensor_ok = _lh2_init();
     if (_lh2_sensor_ok) {
-        db_lh2_start();
+        db_lh2_capture_start();
     }
     _lh2_started = true;
     return _lh2_sensor_ok;
@@ -105,7 +107,6 @@ bool localization_init(float homographies[][3][3], uint32_t station_mask, const 
             }
             printf("\n");
         }
-        db_lh2_store_homography(&_localization_data.lh2, lh_index, homographies[lh_index]);
         memcpy(_homographies[lh_index], homographies[lh_index], sizeof(_homographies[0]));
     }
     _station_mask = station_mask;
@@ -113,9 +114,12 @@ bool localization_init(float homographies[][3][3], uint32_t station_mask, const 
 }
 
 bool localization_process_data(void) {
-    db_lh2_process_location(&_localization_data.lh2);
-    for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT; lh_index++) {
-        if (_localization_data.lh2.data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE) {
+    db_lh2_capture_t capture;
+    if (db_lh2_capture_pop(&capture)) {
+        db_lh2_decoder_feed(&_localization_data.decoder, &capture, db_lh2_capture_now_us());
+    }
+    for (uint8_t lh_index = 0; lh_index < DB_LH2_STATIONS; lh_index++) {
+        if (db_lh2_decoder_pair_ready(&_localization_data.decoder, lh_index)) {
             return true;
         }
     }
@@ -124,19 +128,17 @@ bool localization_process_data(void) {
 
 /// Copy and clear both sweeps of a station when both are fresh
 static bool _take_pair(uint8_t lh_index, uint32_t *count1, uint32_t *count2) {
-    db_lh2_t *lh2 = &_localization_data.lh2;
-    if (lh2->data_ready[0][lh_index] != DB_LH2_PROCESSED_DATA_AVAILABLE || lh2->data_ready[1][lh_index] != DB_LH2_PROCESSED_DATA_AVAILABLE) {
+    if (!db_lh2_decoder_pair_ready(&_localization_data.decoder, lh_index)) {
         return false;
     }
-    db_lh2_stop();
-    bool fresh = lh2->data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && lh2->data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE;
+    db_lh2_capture_stop();
+    db_lh2_pair_t pair;
+    bool          fresh = db_lh2_decoder_take_pair(&_localization_data.decoder, lh_index, &pair);
     if (fresh) {
-        *count1                      = lh2->locations[0][lh_index].lfsr_counts;
-        *count2                      = lh2->locations[1][lh_index].lfsr_counts;
-        lh2->data_ready[0][lh_index] = DB_LH2_NO_NEW_DATA;
-        lh2->data_ready[1][lh_index] = DB_LH2_NO_NEW_DATA;
+        *count1 = pair.count[0];
+        *count2 = pair.count[1];
     }
-    db_lh2_start();
+    db_lh2_capture_start();
     return fresh;
 }
 
@@ -180,7 +182,7 @@ bool localization_get_position(position_2d_t *position) {
         if (((_station_mask >> lh_index) & 1U) == 0) {
             continue;
         }
-        db_lh2_calculate_position(count1, count2, lh_index, _localization_data.coordinates);
+        db_lh2_solve(count1, count2, lh_index, (const float(*)[3])_homographies[lh_index], _localization_data.coordinates);
         double x = _localization_data.coordinates[0];
         double y = _localization_data.coordinates[1];
         // Reject a non-finite solve before the (long) casts below, which are
@@ -211,17 +213,16 @@ bool localization_get_position(position_2d_t *position) {
 
 uint8_t localization_get_raw_counts(lh2_raw_sample_t *out, uint8_t max) {
     uint8_t n = 0;
-    db_lh2_stop();
-    for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT && n < max; lh_index++) {
-        if (_localization_data.lh2.data_ready[0][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE && _localization_data.lh2.data_ready[1][lh_index] == DB_LH2_PROCESSED_DATA_AVAILABLE) {
+    db_lh2_capture_stop();
+    for (uint8_t lh_index = 0; lh_index < DB_LH2_STATIONS && n < max; lh_index++) {
+        db_lh2_pair_t pair;
+        if (db_lh2_decoder_take_pair(&_localization_data.decoder, lh_index, &pair)) {
             out[n].lh_index = lh_index;
-            out[n].count1   = _localization_data.lh2.locations[0][lh_index].lfsr_counts;
-            out[n].count2   = _localization_data.lh2.locations[1][lh_index].lfsr_counts;
-            _localization_data.lh2.data_ready[0][lh_index] = DB_LH2_NO_NEW_DATA;
-            _localization_data.lh2.data_ready[1][lh_index] = DB_LH2_NO_NEW_DATA;
+            out[n].count1   = pair.count[0];
+            out[n].count2   = pair.count[1];
             n++;
         }
     }
-    db_lh2_start();
+    db_lh2_capture_start();
     return n;
 }
