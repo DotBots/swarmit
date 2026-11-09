@@ -1389,6 +1389,15 @@ def test_a_single_station_is_not_pluralised():
     assert info.lh2_summary == "station 0 (channel 1; valid)"
 
 
+def test_a_failed_lh2_sensor_shows_in_the_summary_and_the_position():
+    info = DeviceInfo(info_version=4, lh2_station_mask=0b11, lh2_flags=0b111)
+    assert info.lh2_summary == "LH2 sensor failed, 2 station(s) loaded"
+    failed = {"AA": NodeStatus(info=info, last_updated_at=time.time())}
+    out = _render(generate_info(failed, []))
+    assert "LH2 sensor failed" in out
+    assert "no fix" not in out
+
+
 def test_position_says_no_fix_instead_of_the_origin():
     """(0, 0) is what an unlocated bot reports, not where it is.
 
