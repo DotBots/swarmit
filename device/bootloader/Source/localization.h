@@ -38,7 +38,7 @@ typedef struct __attribute__((packed)) {
     float   homography_matrix[3][3];  ///< homography matrix, float32 in mm
 } localization_homography_t;
 
-/// Raw LH2 LFSR counts for a single basestation (both sweeps), used for OTA calibration capture.
+/// Raw LH2 LFSR counts for a single basestation (both sweeps), as the raw-count NSC call returns them.
 /// Naturally aligned: the secure side stores into it through a veneer with the
 /// unaligned-access trap enabled, so the user image must pass a 4-byte-aligned buffer.
 typedef struct {
@@ -53,16 +53,12 @@ _Static_assert(offsetof(lh2_raw_sample_t, count1) == 0, "lh2_raw_sample_t is par
 _Static_assert(offsetof(lh2_raw_sample_t, count2) == 4, "lh2_raw_sample_t is part of the NSC ABI");
 _Static_assert(offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is part of the NSC ABI");
 
-/// Size of one sample on the wire: [lh_index:1][count1:4 LE][count2:4 LE]
-#define LH2_RAW_SAMPLE_WIRE_SIZE (9U)
-_Static_assert(LH2_RAW_SAMPLE_WIRE_SIZE == sizeof(uint8_t) + 2 * sizeof(uint32_t), "wire record is lh_index, count1, count2");
-
 /// Load slot i of homographies and valid_mm for every bit i of station_mask.
 /// A rectangle is x_min, y_min, x_max, y_max in mm; all 0xFF reads as 0 to
 /// LH2_VALID_MM_MAX_DEFAULT.
 void localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]);
 
-/// Start the LH2 driver without loading any calibration (idempotent). Used for raw capture in READY mode.
+/// Start the LH2 driver without loading any calibration (idempotent).
 void localization_start(void);
 
 bool localization_process_data(void);

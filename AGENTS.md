@@ -105,4 +105,3 @@ CI: matrix builds for 3 hardware targets × Debug/Release via Docker; multi-OS P
 - **Don't change Mari frame formats** without coordinating with `mari/` and `marilib/`.
 - **Don't break the TrustZone bootloader's NSC region layout** without verifying every dependent app loader.
 - **Don't push the OTA timeout/retry defaults lower** without a 200+ node test — the 725-bot deployment review identified those values as needing to grow with scale, not shrink.
-- **Don't commit modifications to `device/bootloader/Source/lh2_calibration.h`** — this file is regenerated locally by `dotbot-calibration-exporter` and contains the operator's per-machine, per-arena calibration. The committed version in `main` is a placeholder / dev value; any change you see in `git status` is local data that must stay local. If `git add .` is about to stage it, exclude it explicitly.
