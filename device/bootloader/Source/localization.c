@@ -21,6 +21,7 @@ typedef struct {
 
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
 static db_lh2_select_conf_t _select_conf = { 0 };  ///< the calibration, by station
+static db_lh2_select_state_t _select_state = { .kept = -1, .inside = 0 };  ///< carried from one fix to the next
 static db_lh2_lines_t       _lines       = { 0 };  ///< floor lines not yet drained
 static bool _lh2_started = false;
 static bool _lh2_sensor_ok = false;
@@ -149,7 +150,7 @@ bool localization_get_position(position_2d_t *position) {
             continue;
         }
         double xy[2];
-        switch (db_lh2_select_offer_pair(&_select_conf, &fix, &_lines, &pair, xy)) {
+        switch (db_lh2_select_offer_pair(&_select_conf, &_select_state, &fix, &_lines, &pair, xy)) {
             case DB_LH2_SELECT_NOT_FINITE:
                 printf("LH%u solve not finite\n", lh_index);
                 break;
@@ -160,6 +161,7 @@ bool localization_get_position(position_2d_t *position) {
                 break;
         }
     }
+    db_lh2_select_end(&_select_state, &fix);
     if (!fix.found) {
         return false;
     }
