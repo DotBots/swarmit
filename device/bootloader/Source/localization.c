@@ -1,33 +1,27 @@
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "board_config.h"
 #include "gpio.h"
 #include "lh2.h"
 #include "lh2_decoder.h"
-#include "localization.h"
 #include "lh2_select.h"
+#include "localization.h"
 #include "timer_hf.h"
 
 _Static_assert(LH2_BASESTATION_COUNT_MAX == DB_LH2_STATIONS, "localization.h and lh2_decoder.h must agree on the basestation ceiling");
-_Static_assert(LH2_BASESTATION_COUNT_MAX == LH2_SELECT_STATIONS, "lh2_select covers every basestation");
-_Static_assert(LH2_VALID_MM_LEN == LH2_SELECT_RECT_LEN && LH2_VALID_MM_MAX_DEFAULT == LH2_SELECT_RECT_MAX_DEFAULT, "one rectangle layout");
+_Static_assert(LH2_BASESTATION_COUNT_MAX == DB_LH2_SELECT_STATIONS, "lh2_select covers every basestation");
+_Static_assert(LH2_VALID_MM_LEN == DB_LH2_SELECT_RECT_LEN && LH2_VALID_MM_MAX_DEFAULT == DB_LH2_SELECT_RECT_MAX_DEFAULT, "one rectangle layout");
+_Static_assert(LH2_LINES_MAX == DB_LH2_SELECT_LINES_MAX, "one ring size");
 
 typedef struct {
     db_lh2_decoder_t        decoder;
-    double                  coordinates[2];
     position_2d_t           position;
 } localization_data_t;
 
 static __attribute__((aligned(4))) localization_data_t _localization_data = { 0 };
-static uint32_t _station_mask = 0;
-static uint32_t _valid_mm[LH2_BASESTATION_COUNT_MAX][LH2_VALID_MM_LEN] = { 0 };  ///< resolved, by slot
-static float    _homographies[LH2_BASESTATION_COUNT_MAX][3][3] = { 0 };          ///< by slot, for the solve and the floor lines
-static db_lh2_floor_line_t _lines[LH2_LINES_MAX];                                ///< ring of lines not yet drained
-static uint8_t             _lines_head  = 0;                                     ///< next slot written
-static uint8_t             _lines_count = 0;                                     ///< lines held
+static db_lh2_select_conf_t _select_conf = { 0 };  ///< the calibration, by station
+static db_lh2_lines_t       _lines       = { 0 };  ///< floor lines not yet drained
 static bool _lh2_started = false;
 static bool _lh2_sensor_ok = false;
 
@@ -95,21 +89,20 @@ bool localization_init(float homographies[][3][3], uint32_t station_mask, const 
     printf("LH2 station mask 0x%04X\n", station_mask);
     bool sensor_ok = localization_start();
 
+    db_lh2_select_conf_load(&_select_conf, station_mask, (const float(*)[3][3])homographies, valid_mm);
     for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT_MAX; lh_index++) {
         if (((station_mask >> lh_index) & 1U) == 0) {
             continue;
         }
-        lh2_select_rect_resolve(valid_mm[lh_index], _valid_mm[lh_index]);
-        printf("LH%u x [%u, %u] y [%u, %u] mm, H:\n", lh_index, _valid_mm[lh_index][0], _valid_mm[lh_index][2], _valid_mm[lh_index][1], _valid_mm[lh_index][3]);
+        const uint32_t *rect = _select_conf.rect_mm[lh_index];
+        printf("LH%u x [%u, %u] y [%u, %u] mm, H:\n", lh_index, rect[0], rect[2], rect[1], rect[3]);
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 printf("%f ", (double)homographies[lh_index][i][j]);
             }
             printf("\n");
         }
-        memcpy(_homographies[lh_index], homographies[lh_index], sizeof(_homographies[0]));
     }
-    _station_mask = station_mask;
     return sensor_ok;
 }
 
@@ -126,102 +119,71 @@ bool localization_process_data(void) {
     return false;
 }
 
-/// Copy and clear both sweeps of a station when both are fresh
-static bool _take_pair(uint8_t lh_index, uint32_t *count1, uint32_t *count2) {
+/// Take both sweeps of a station when both are fresh; the decoder stops only for the copy
+static bool _take_pair(uint8_t lh_index, db_lh2_pair_t *pair) {
     if (!db_lh2_decoder_pair_ready(&_localization_data.decoder, lh_index)) {
         return false;
     }
     db_lh2_capture_stop();
-    db_lh2_pair_t pair;
-    bool          fresh = db_lh2_decoder_take_pair(&_localization_data.decoder, lh_index, &pair);
-    if (fresh) {
-        *count1 = pair.count[0];
-        *count2 = pair.count[1];
-    }
+    bool fresh = db_lh2_decoder_take_pair(&_localization_data.decoder, lh_index, pair);
     db_lh2_capture_start();
     return fresh;
 }
 
-_Static_assert(LH2_LINES_MAX % 2 == 0, "pairs never straddle the end of the ring");
-
-/// Pairs go straight into the ring: the head is always even, and
-/// db_lh2_sweep_lines() writes nothing when it fails
-static void _lines_push(uint32_t count1, uint32_t count2, uint8_t lh_index) {
-    if (db_lh2_sweep_lines(count1, count2, lh_index, (const float(*)[3])_homographies[lh_index], &_lines[_lines_head]) != 2) {
-        return;
-    }
-    _lines_head  = (uint8_t)((_lines_head + 2) % LH2_LINES_MAX);
-    _lines_count = (_lines_count + 2 > LH2_LINES_MAX) ? LH2_LINES_MAX : (uint8_t)(_lines_count + 2);
-}
-
 uint8_t localization_get_lines(db_lh2_floor_line_t *out, uint8_t max) {
-    uint8_t n     = (max < _lines_count) ? max : _lines_count;
-    uint8_t first = (uint8_t)((_lines_head + LH2_LINES_MAX - _lines_count) % LH2_LINES_MAX);
-    for (uint8_t i = 0; i < n; i++) {
-        out[i] = _lines[(first + i) % LH2_LINES_MAX];
-    }
-    _lines_count -= n;
-    return n;
+    return db_lh2_lines_drain(&_lines, out, max);
 }
 
 bool localization_get_position(position_2d_t *position) {
-    if (_station_mask == 0) {
+    if (_select_conf.station_mask == 0) {
         return false;
     }
 
-    lh2_select_best_t best;
-    lh2_select_reset(&best);
+    db_lh2_fix_t fix;
+    db_lh2_select_begin(&fix);
     for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT_MAX; lh_index++) {
         // Every fresh pair is taken, whatever its station, so none is used
-        // stale by a later call; the decoder stops only for the copy
-        uint32_t count1, count2;
-        if (!_take_pair(lh_index, &count1, &count2)) {
+        // stale by a later call
+        db_lh2_pair_t pair;
+        if (!_take_pair(lh_index, &pair)) {
             continue;
         }
-        // A station without a homography would solve to NaN, or worse
-        if (((_station_mask >> lh_index) & 1U) == 0) {
-            continue;
+        double xy[2];
+        switch (db_lh2_select_offer_pair(&_select_conf, &fix, &_lines, &pair, xy)) {
+            case DB_LH2_SELECT_NOT_FINITE:
+                printf("LH%u solve not finite\n", lh_index);
+                break;
+            case DB_LH2_SELECT_OUTSIDE:
+                printf("LH%u (%ld,%ld) outside\n", lh_index, (long)_clamp_mm(xy[0]), (long)_clamp_mm(xy[1]));
+                break;
+            default:
+                break;
         }
-        db_lh2_solve(count1, count2, lh_index, (const float(*)[3])_homographies[lh_index], _localization_data.coordinates);
-        double x = _localization_data.coordinates[0];
-        double y = _localization_data.coordinates[1];
-        // Reject a non-finite solve before the (long) casts below, which are
-        // undefined for NaN and inf
-        if (!isfinite(x) || !isfinite(y)) {
-            printf("LH%u solve not finite\n", lh_index);
-            continue;
-        }
-        if (!lh2_select_rect_contains(_valid_mm[lh_index], x, y)) {
-            printf("LH%u (%ld,%ld) outside\n", lh_index, (long)_clamp_mm(x), (long)_clamp_mm(y));
-            continue;
-        }
-        lh2_select_offer(&best, lh_index, x, y, _valid_mm[lh_index]);
-        _lines_push(count1, count2, lh_index);
     }
-    if (!best.found) {
+    if (!fix.found) {
         return false;
     }
 
     // Inside its station's rectangle, so within uint32
-    _localization_data.position.x = (uint32_t)best.x;
-    _localization_data.position.y = (uint32_t)best.y;
+    _localization_data.position.x = (uint32_t)fix.x_mm;
+    _localization_data.position.y = (uint32_t)fix.y_mm;
     position->x                   = _localization_data.position.x;
     position->y                   = _localization_data.position.y;
-    printf("Position (%u,%u) from LH%u\n", position->x, position->y, best.station);
+    printf("Position (%u,%u) from LH%u\n", position->x, position->y, fix.station);
     return true;
 }
 
 uint8_t localization_get_raw_counts(lh2_raw_sample_t *out, uint8_t max) {
-    uint8_t n = 0;
+    uint8_t       n = 0;
+    db_lh2_pair_t pair;
     db_lh2_capture_stop();
-    for (uint8_t lh_index = 0; lh_index < DB_LH2_STATIONS && n < max; lh_index++) {
-        db_lh2_pair_t pair;
-        if (db_lh2_decoder_take_pair(&_localization_data.decoder, lh_index, &pair)) {
-            out[n].lh_index = lh_index;
-            out[n].count1   = pair.count[0];
-            out[n].count2   = pair.count[1];
-            n++;
-        }
+    // One pair per call keeps a single pair on the secure stack; each call
+    // takes the lowest station still ready, so the order is the walk's
+    while (n < max && db_lh2_select_take_pairs(&_localization_data.decoder, &pair, 1) == 1) {
+        out[n].lh_index = pair.station;
+        out[n].count1   = pair.count[0];
+        out[n].count2   = pair.count[1];
+        n++;
     }
     db_lh2_capture_start();
     return n;
