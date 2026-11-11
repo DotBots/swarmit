@@ -9,7 +9,7 @@ from swarmit.testbed.protocol import (
 
 # Bump in lockstep with the writer in PyDotBot's
 # dotbot/calibration/lighthouse2.py (CALIBRATION_SCHEMA_VERSION).
-CALIBRATION_SCHEMA_VERSION = 4
+CALIBRATION_SCHEMA_VERSION = 5
 
 LH2_BASESTATION_COUNT_MAX = 16
 SITE_DEFAULT = "default"
@@ -23,7 +23,7 @@ def load_toml_config(path):
 
 
 def read_calibration(path):
-    """Parse a schema 4 LH2 calibration file into its tables.
+    """Parse a schema 5 LH2 calibration file into its tables.
 
     Raises ValueError for bad TOML, an unknown schema version, or a file with
     no solved station, so the CLI can report it rather than passing garbage
@@ -69,7 +69,7 @@ def reference_points(data):
 
 
 def _rectangle(values, where):
-    """A `valid_mm` as uint32 `[x_min, y_min, x_max, y_max]`, refused otherwise."""
+    """A `coverage_mm` as uint32 `[x_min, y_min, x_max, y_max]`, refused otherwise."""
     rect = [int(v) for v in values]
     if (
         len(rect) != 4
@@ -78,7 +78,7 @@ def _rectangle(values, where):
         or rect[1] >= rect[3]
     ):
         raise ValueError(
-            f"{where}: valid_mm must be [x_min, y_min, x_max, y_max] in "
+            f"{where}: coverage_mm must be [x_min, y_min, x_max, y_max] in "
             f"uint32 mm, got {rect}"
         )
     return rect
@@ -145,21 +145,21 @@ def read_lh2_calibration_payload(path):
             raise ValueError(
                 f"{path}: station {station['index']} homography is not 3x3"
             )
-        if "valid_mm" not in station:
+        if "coverage_mm" not in station:
             raise ValueError(
-                f"{path}: station {station['index']} has no valid_mm"
+                f"{path}: station {station['index']} has no coverage_mm"
             )
         rect = _rectangle(
-            station["valid_mm"], f"{path}: station {station['index']}"
+            station["coverage_mm"], f"{path}: station {station['index']}"
         )
         payload += PayloadCalibrationData(
             station_mask=mask,
             station_index=int(station["index"]),
             homography=struct.pack("<9f", *flat),
-            valid_x_min=rect[0],
-            valid_y_min=rect[1],
-            valid_x_max=rect[2],
-            valid_y_max=rect[3],
+            coverage_x_min=rect[0],
+            coverage_y_min=rect[1],
+            coverage_x_max=rect[2],
+            coverage_y_max=rect[3],
             **fields,
         ).to_bytes()
     return bytes(payload)
