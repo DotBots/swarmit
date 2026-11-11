@@ -55,7 +55,7 @@ typedef struct __attribute__((packed)) {
     uint32_t net_id;                                        ///< Mari network ID, meaningful only when has_net_id == 1
     uint32_t station_mask;                                  ///< bit i: slot i holds a calibration; 0 = uncalibrated
     float    homographies[LH2_BASESTATION_COUNT_MAX][3][3]; ///< by slot, camera point to frame mm, float32; slots outside the mask ignored
-    uint32_t valid_mm[LH2_BASESTATION_COUNT_MAX][4];        ///< by slot: x_min, y_min, x_max, y_max mm; all 0xFF for the default
+    uint32_t coverage_mm[LH2_BASESTATION_COUNT_MAX][4];     ///< by slot: x_min, y_min, x_max, y_max mm; all 0xFF for the default
     char     site_name[SWRMT_LH2_SITE_NAME_LEN];            ///< all 0xFF when absent
     uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];  ///< all 0xFF when absent
 } swarmit_config_t;
@@ -64,7 +64,7 @@ _Static_assert(sizeof(swarmit_config_t) == 872,
                "swarmit_config_t is the layout the host writes to the config page");
 _Static_assert(offsetof(swarmit_config_t, station_mask) == 12, "swarmit_config_t is the layout the host writes to the config page");
 _Static_assert(offsetof(swarmit_config_t, homographies) == 16, "swarmit_config_t is the layout the host writes to the config page");
-_Static_assert(offsetof(swarmit_config_t, valid_mm) == 592, "swarmit_config_t is the layout the host writes to the config page");
+_Static_assert(offsetof(swarmit_config_t, coverage_mm) == 592, "swarmit_config_t is the layout the host writes to the config page");
 _Static_assert(offsetof(swarmit_config_t, site_name) == 848, "swarmit_config_t is the layout the host writes to the config page");
 _Static_assert(offsetof(swarmit_config_t, calibration_id) == 864, "swarmit_config_t is the layout the host writes to the config page");
 _Static_assert(LH2_BASESTATION_COUNT_MAX == SWRMT_LH2_STATIONS, "one config slot per station index");
@@ -234,7 +234,7 @@ static void _load_config(void) {
             }
         }
         for (size_t i = 0; i < 4; i++) {
-            ipc_shared_data.lh2_calibration.valid_mm[slot][i] = held ? _app_vars.config.valid_mm[slot][i] : UINT32_MAX;
+            ipc_shared_data.lh2_calibration.coverage_mm[slot][i] = held ? _app_vars.config.coverage_mm[slot][i] : UINT32_MAX;
         }
     }
     for (size_t i = 0; i < SWRMT_LH2_SITE_NAME_LEN; i++) {
@@ -606,7 +606,7 @@ int main(void) {
                     const swrmt_lh2_calibration_data_t *pkt = (const swrmt_lh2_calibration_data_t *)req->data;
                     // Slots fill in RAM; the page is written once, when every
                     // station of the push's mask has arrived.
-                    lh2_session_result_t result = lh2_session_receive(&_app_vars.lh2_session, pkt, _app_vars.config.homographies, _app_vars.config.valid_mm);
+                    lh2_session_result_t result = lh2_session_receive(&_app_vars.lh2_session, pkt, _app_vars.config.homographies, _app_vars.config.coverage_mm);
                     if (result == LH2_SESSION_COMPLETE) {
                         _app_vars.config.station_mask = pkt->station_mask;
                         memcpy(_app_vars.config.site_name, pkt->site_name, sizeof(_app_vars.config.site_name));
