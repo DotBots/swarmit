@@ -11,7 +11,7 @@
 
 _Static_assert(LH2_BASESTATION_COUNT_MAX == DB_LH2_STATIONS, "localization.h and lh2_decoder.h must agree on the basestation ceiling");
 _Static_assert(LH2_BASESTATION_COUNT_MAX == DB_LH2_SELECT_STATIONS, "lh2_select covers every basestation");
-_Static_assert(LH2_VALID_MM_LEN == DB_LH2_SELECT_RECT_LEN && LH2_VALID_MM_MAX_DEFAULT == DB_LH2_SELECT_RECT_MAX_DEFAULT, "one rectangle layout");
+_Static_assert(LH2_COVERAGE_MM_LEN == DB_LH2_SELECT_RECT_LEN && LH2_COVERAGE_MM_MAX_DEFAULT == DB_LH2_SELECT_RECT_MAX_DEFAULT, "one rectangle layout");
 _Static_assert(LH2_LINES_MAX == DB_LH2_SELECT_LINES_MAX, "one ring size");
 
 typedef struct {
@@ -85,12 +85,12 @@ bool localization_start(void) {
     return _lh2_sensor_ok;
 }
 
-bool localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]) {
+bool localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t coverage_mm[][LH2_COVERAGE_MM_LEN]) {
     station_mask &= (1U << LH2_BASESTATION_COUNT_MAX) - 1U;
     printf("LH2 station mask 0x%04X\n", station_mask);
     bool sensor_ok = localization_start();
 
-    db_lh2_select_conf_load(&_select_conf, station_mask, (const float(*)[3][3])homographies, valid_mm);
+    db_lh2_select_conf_load(&_select_conf, station_mask, (const float(*)[3][3])homographies, coverage_mm);
     for (uint8_t lh_index = 0; lh_index < LH2_BASESTATION_COUNT_MAX; lh_index++) {
         if (((station_mask >> lh_index) & 1U) == 0) {
             continue;

@@ -574,10 +574,10 @@ class PayloadCalibrationData(Payload):
             PayloadFieldMetadata(
                 name="homography", type_=bytes, length=3 * 3 * 4
             ),
-            PayloadFieldMetadata(name="valid_x_min", disp="x0", length=4),
-            PayloadFieldMetadata(name="valid_y_min", disp="y0", length=4),
-            PayloadFieldMetadata(name="valid_x_max", disp="x1", length=4),
-            PayloadFieldMetadata(name="valid_y_max", disp="y1", length=4),
+            PayloadFieldMetadata(name="coverage_x_min", disp="x0", length=4),
+            PayloadFieldMetadata(name="coverage_y_min", disp="y0", length=4),
+            PayloadFieldMetadata(name="coverage_x_max", disp="x1", length=4),
+            PayloadFieldMetadata(name="coverage_y_max", disp="y1", length=4),
             PayloadFieldMetadata(
                 name="site_name",
                 disp="site",
@@ -596,10 +596,10 @@ class PayloadCalibrationData(Payload):
     station_mask: int = 0
     station_index: int = 0
     homography: bytes = dataclasses.field(default_factory=lambda: bytes(36))
-    valid_x_min: int = 0
-    valid_y_min: int = 0
-    valid_x_max: int = 0
-    valid_y_max: int = 0
+    coverage_x_min: int = 0
+    coverage_y_min: int = 0
+    coverage_x_max: int = 0
+    coverage_y_max: int = 0
     site_name: bytes = dataclasses.field(
         default_factory=lambda: bytes(LH2_SITE_NAME_LEN)
     )

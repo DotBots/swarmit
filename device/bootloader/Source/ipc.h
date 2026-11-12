@@ -90,7 +90,7 @@ typedef struct {
 typedef struct __attribute__((packed)) {
     uint32_t station_mask;                                          ///< bit i: slot i holds a calibration; 0 = uncalibrated
     float    homographies[LH2_BASESTATION_COUNT_MAX][3][3];         ///< by slot, camera point to frame mm, float32
-    uint32_t valid_mm[LH2_BASESTATION_COUNT_MAX][4];                ///< by slot: x_min, y_min, x_max, y_max mm; all 0xFF for the default
+    uint32_t coverage_mm[LH2_BASESTATION_COUNT_MAX][4];             ///< by slot: x_min, y_min, x_max, y_max mm; all 0xFF for the default
     char     site_name[SWRMT_LH2_SITE_NAME_LEN];                    ///< all zero when absent
     uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];          ///< all zero when absent
 } ipc_lh2_calibration_t;
@@ -163,7 +163,7 @@ _Static_assert(offsetof(ipc_shared_data_t, lh2_calibration) % 4 == 0,
 _Static_assert(sizeof(ipc_lh2_calibration_t) == 860,
                "ipc_lh2_calibration_t size must match the other core's copy");
 _Static_assert(offsetof(ipc_lh2_calibration_t, homographies) == 4, "ipc_lh2_calibration_t layout must match the other core's copy");
-_Static_assert(offsetof(ipc_lh2_calibration_t, valid_mm) == 580, "ipc_lh2_calibration_t layout must match the other core's copy");
+_Static_assert(offsetof(ipc_lh2_calibration_t, coverage_mm) == 580, "ipc_lh2_calibration_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_lh2_calibration_t, site_name) == 836, "ipc_lh2_calibration_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_lh2_calibration_t, calibration_id) == 852, "ipc_lh2_calibration_t layout must match the other core's copy");
 _Static_assert(offsetof(ipc_device_info_t, lh2_station_mask) % 2 == 0, "lh2_station_mask is read with halfword accesses");
