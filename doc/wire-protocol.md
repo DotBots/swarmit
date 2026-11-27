@@ -317,7 +317,7 @@ Deliberately **not** carried, so nobody adds them by reflex:
 | 0 | `station_mask` | 4 | bit i: station i is in this calibration; bits 16 to 31 zero, 0 invalid |
 | 4 | `station_index` | 4 | the station this message carries, 0 to 15; its bit is set in the mask |
 | 8 | `homography` | 36 | 3x3 of little-endian `float32`, row-major, mapping the pinhole camera point to mm |
-| 44 | `valid_mm` | 16 | this station's rectangle, `x_min, y_min, x_max, y_max`, `uint32` mm |
+| 44 | `coverage_mm` | 16 | this station's rectangle, `x_min, y_min, x_max, y_max`, `uint32` mm |
 | 60 | `site_name` | 16 | NUL-padded; identical in every message of a push |
 | 76 | `calibration_id` | 8 | leading bytes of the calibration file's id; identical in every message of a push |
 

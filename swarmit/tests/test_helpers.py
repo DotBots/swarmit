@@ -20,9 +20,9 @@ baudrate = 1000000
 devices = ""
 """
 
-# A schema 4 calibration, for the tests that read its tables.
+# A schema 5 calibration, for the tests that read its tables.
 CALIBRATION_TOML = """\
-schema_version = 4
+schema_version = 5
 
 [metadata]
 created_at = "2026-09-10T09:12:00Z"
@@ -50,7 +50,7 @@ index = 0
 solved_from = "direct"
 points = 4
 residual_mm = 0.0
-valid_mm = [0, 0, 4000, 4500]
+coverage_mm = [0, 0, 4000, 4500]
 homography = [[1523.4, -38.2, 1012.7], [41.9, 1531.8, 988.3], [0.2134, -0.0871, 1.0]]
 """
 
@@ -126,9 +126,9 @@ def test_a_station_a_robot_has_no_slot_for_is_refused(tmp_path, edit, match):
 
 def test_a_station_without_its_rectangle_is_refused(tmp_path):
     bare = FIXTURE_TOML.replace(
-        "valid_mm = [800, 0, 3330, 4000]\nhomography", "homography"
+        "coverage_mm = [800, 0, 3330, 4000]\nhomography", "homography"
     )
-    with pytest.raises(ValueError, match="has no valid_mm"):
+    with pytest.raises(ValueError, match="has no coverage_mm"):
         read_lh2_calibration_payload(_write(tmp_path, bare))
 
 
@@ -139,13 +139,13 @@ def test_a_station_without_its_rectangle_is_refused(tmp_path):
             ('name = "c405-arena"', 'name = "a-name-too-long-for-16"'),
             "1 to 16",
         ),
-        (('id = "9b12f56f622f0fb6"', 'id = "9b12"'), "shorter than 16"),
+        (('id = "ce4b7890ba1fabef"', 'id = "ce4b"'), "shorter than 16"),
         (
             (
-                "valid_mm = [800, 0, 3330, 4000]\nhomography",
-                "valid_mm = [800, 0, -1, 4000]\nhomography",
+                "coverage_mm = [800, 0, 3330, 4000]\nhomography",
+                "coverage_mm = [800, 0, -1, 4000]\nhomography",
             ),
-            "valid_mm",
+            "coverage_mm",
         ),
     ],
     ids=["long-site", "short-id", "negative-valid-mm"],
@@ -160,7 +160,7 @@ def test_site_fields_a_robot_cannot_store_are_refused(tmp_path, edit, match):
 def test_a_declared_id_is_sent_as_is(tmp_path):
     """The low-level packer trusts metadata.id; PyDotBot is where it is checked."""
     edited = FIXTURE_TOML.replace(
-        'id = "9b12f56f622f0fb6"', 'id = "0123456789abcdef"'
+        'id = "ce4b7890ba1fabef"', 'id = "0123456789abcdef"'
     )
     payload = read_lh2_calibration_payload(_write(tmp_path, edited))
     assert payload[76:84] == bytes.fromhex("0123456789abcdef")

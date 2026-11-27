@@ -111,7 +111,7 @@ def test_device_info_matches_firmware_wire_size():
 
 
 def test_calibration_data_matches_firmware_wire_size():
-    # swrmt_lh2_calibration_data_t: count, index, 3x3 float32, valid_mm[4],
+    # swrmt_lh2_calibration_data_t: count, index, 3x3 float32, coverage_mm[4],
     # site_name[16], calibration_id[8].
     assert PayloadCalibrationData().size == 84
 

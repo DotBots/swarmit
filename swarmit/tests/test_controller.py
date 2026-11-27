@@ -515,9 +515,9 @@ def test_controller_sends_one_calibration_message_per_station():
         assert bytes(call.args[1].to_bytes()) == message
     first = send_payload_mock.call_args_list[0].args[1]
     assert (first.station_mask, first.station_index) == (0x0104, 2)
-    assert (first.valid_x_max, first.valid_y_max) == (2500, 4000)
+    assert (first.coverage_x_max, first.coverage_y_max) == (2500, 4000)
     assert first.site_name == b"c405-arena" + bytes(6)
-    assert bytes(first.calibration_id).hex() == "9b12f56f622f0fb6"
+    assert bytes(first.calibration_id).hex() == "ce4b7890ba1fabef"
 
 
 @patch(

@@ -280,7 +280,7 @@ static void _load_calibration(void) {
         printf("No LH2 calibration, station mask 0x%08X\n", station_mask);
         return;
     }
-    _report_lh2_sensor(localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, station_mask, (const uint32_t (*)[LH2_VALID_MM_LEN])ipc_shared_data.lh2_calibration.valid_mm));
+    _report_lh2_sensor(localization_init((float (*)[3][3])ipc_shared_data.lh2_calibration.homographies, station_mask, (const uint32_t (*)[LH2_COVERAGE_MM_LEN])ipc_shared_data.lh2_calibration.coverage_mm));
 }
 
 int main(void) {

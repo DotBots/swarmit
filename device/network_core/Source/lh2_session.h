@@ -44,11 +44,11 @@ typedef enum {
  * @param[in,out]   session         Session state
  * @param[in]       msg             The message
  * @param[in,out]   homographies    Slots, by station index
- * @param[in,out]   valid_mm        Rectangles, by station index
+ * @param[in,out]   coverage_mm     Rectangles, by station index
  *
  * @return  what was done
  */
 lh2_session_result_t lh2_session_receive(lh2_session_t *session, const swrmt_lh2_calibration_data_t *msg,
-                                         float homographies[SWRMT_LH2_STATIONS][3][3], uint32_t valid_mm[SWRMT_LH2_STATIONS][4]);
+                                         float homographies[SWRMT_LH2_STATIONS][3][3], uint32_t coverage_mm[SWRMT_LH2_STATIONS][4]);
 
 #endif

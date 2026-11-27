@@ -121,7 +121,7 @@ Commands:
 
 Once a robot is flashed and connected to the Mari network, you can update its
 Lighthouse v2 calibration without re-flashing the bootloader. The CLI pushes a
-schema 4 calibration TOML, as written by PyDotBot's
+schema 5 calibration TOML, as written by PyDotBot's
 `dotbot swarm calibrate-lh2 collect`, over Mari as one message per calibrated
 station. Once every station has arrived, the network core writes them to the
 config page in flash and the SoC resets so the bootloader loads them on the

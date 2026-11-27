@@ -21,8 +21,8 @@
 
 #define LH2_BASESTATION_COUNT_MAX (16)
 
-#define LH2_VALID_MM_LEN          (4U)       ///< x_min, y_min, x_max, y_max
-#define LH2_VALID_MM_MAX_DEFAULT  (100000U)  ///< mm; x_max and y_max when the calibration carries no rectangle
+#define LH2_COVERAGE_MM_LEN          (4U)       ///< x_min, y_min, x_max, y_max
+#define LH2_COVERAGE_MM_MAX_DEFAULT  (100000U)  ///< mm; x_max and y_max when the calibration carries no rectangle
 
 /// DotBot protocol LH2 computed location
 typedef struct __attribute__((packed)) {
@@ -53,10 +53,10 @@ _Static_assert(offsetof(lh2_raw_sample_t, count1) == 0, "lh2_raw_sample_t is par
 _Static_assert(offsetof(lh2_raw_sample_t, count2) == 4, "lh2_raw_sample_t is part of the NSC ABI");
 _Static_assert(offsetof(lh2_raw_sample_t, lh_index) == 8, "lh2_raw_sample_t is part of the NSC ABI");
 
-/// Load slot i of homographies and valid_mm for every bit i of station_mask.
+/// Load slot i of homographies and coverage_mm for every bit i of station_mask.
 /// A rectangle is x_min, y_min, x_max, y_max in mm; all 0xFF reads as 0 to
-/// LH2_VALID_MM_MAX_DEFAULT. Returns whether the LH2 sensor initialised.
-bool localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t valid_mm[][LH2_VALID_MM_LEN]);
+/// LH2_COVERAGE_MM_MAX_DEFAULT. Returns whether the LH2 sensor initialised.
+bool localization_init(float homographies[][3][3], uint32_t station_mask, const uint32_t coverage_mm[][LH2_COVERAGE_MM_LEN]);
 
 /// Start the LH2 driver without loading any calibration (idempotent).
 /// On DotBot v3 a failed sensor init is retried after up to three LH-EN power cycles, about

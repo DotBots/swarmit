@@ -1600,8 +1600,8 @@ class Controller:
             )
         for payload in payloads:
             if (
-                payload.valid_x_min >= payload.valid_x_max
-                or payload.valid_y_min >= payload.valid_y_max
+                payload.coverage_x_min >= payload.coverage_x_max
+                or payload.coverage_y_min >= payload.coverage_y_max
             ):
                 raise ValueError(
                     "Invalid calibration payload: station "

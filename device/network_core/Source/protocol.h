@@ -213,7 +213,7 @@ typedef struct __attribute__((packed)) {
     uint32_t station_mask;                  ///< bit i: station i is in this calibration; bits 16 to 31 zero, 0 invalid
     uint32_t station_index;                 ///< the station this message carries, 0 to 15, its bit set in the mask
     float    homography[3][3];              ///< camera point to frame mm, row-major float32
-    uint32_t valid_mm[4];                   ///< this station's rectangle: x_min, y_min, x_max, y_max, mm
+    uint32_t coverage_mm[4];                ///< this station's rectangle: x_min, y_min, x_max, y_max, mm
     char     site_name[SWRMT_LH2_SITE_NAME_LEN];                ///< identical in every message of a push
     uint8_t  calibration_id[SWRMT_LH2_CALIBRATION_ID_LEN];      ///< identical in every message of a push: the session key
 } swrmt_lh2_calibration_data_t;
@@ -221,7 +221,7 @@ typedef struct __attribute__((packed)) {
 _Static_assert(sizeof(swrmt_lh2_calibration_data_t) == 84,
                "swrmt_lh2_calibration_data_t is a wire format; its size is part of the contract");
 _Static_assert(offsetof(swrmt_lh2_calibration_data_t, homography) == 8, "swrmt_lh2_calibration_data_t is a wire format");
-_Static_assert(offsetof(swrmt_lh2_calibration_data_t, valid_mm) == 44, "swrmt_lh2_calibration_data_t is a wire format");
+_Static_assert(offsetof(swrmt_lh2_calibration_data_t, coverage_mm) == 44, "swrmt_lh2_calibration_data_t is a wire format");
 _Static_assert(offsetof(swrmt_lh2_calibration_data_t, site_name) == 60, "swrmt_lh2_calibration_data_t is a wire format");
 _Static_assert(offsetof(swrmt_lh2_calibration_data_t, calibration_id) == 76, "swrmt_lh2_calibration_data_t is a wire format");
 
